@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 训练产物与权重（体积大，勿提交；需要可 Git LFS 或网盘）
+*.pth
+*.pt
+*.ckpt
+*-checkpoints/
+*-checkpoints*/
+mnist-checkpoints/
+mnist-checkpoints*/
+cifar10-checkpoints/
+cifar100-checkpoints/
+imagenet-checkpoints/
+
+# 日志与测试输出
+*.log
+logs/
+*-test-accuracy/
+*-test-viz/
+mnist-test-viz*/
+
+# 数据与缓存（本地下载）
+data/
+datasets/
+**/MNIST/
+**/cifar-10-batches-py/
+**/cifar-100-python/
+
+# IDE
+.idea/
+.vscode/
+*.swp
