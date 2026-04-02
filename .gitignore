@@ -44,6 +44,9 @@ datasets/
 **/cifar-10-batches-py/
 **/cifar-100-python/
 
+# macOS
+*.textClipping
+
 # IDE
 .idea/
 .vscode/
