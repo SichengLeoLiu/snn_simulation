@@ -94,6 +94,62 @@ def train(model, device, train_loader, criterion, optimizer, T):
     return running_loss, 100 * correct / total
 
 
+def train_reg(model, device, train_loader, criterion, optimizer, T):
+    """回归任务：MSE；返回 (loss 累加和, 训练集 MAE)。"""
+    running_loss = 0.0
+    model.train()
+    total_abs = 0.0
+    total_n = 0
+    for images, labels in train_loader:
+        optimizer.zero_grad()
+        labels = labels.to(device, dtype=torch.float32)
+        images = images.to(device)
+        if T > 0:
+            outputs = model(images).mean(0)
+        else:
+            outputs = model(images)
+        loss = criterion(outputs.view(-1), labels.view(-1))
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item()
+        total_abs += (outputs.view(-1) - labels.view(-1)).abs().sum().item()
+        total_n += labels.numel()
+    return running_loss, total_abs / max(total_n, 1)
+
+
+def val_reg(model, test_loader, T, device, sample_iter=None, verbose=True):
+    """回归：返回 RMSE（越小越好）。"""
+    model.eval()
+    total_se = 0.0
+    total_n = 0
+    start_time = time.time()
+    if sample_iter is None:
+        sample_iter = len(test_loader)
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(test_loader):
+            inputs = inputs.to(device)
+            targets = targets.to(device, dtype=torch.float32)
+            outputs = model(inputs)
+            if outputs.dim() == 3:
+                outputs = outputs.mean(0)
+            pred = outputs.view(-1)
+            t = targets.view(-1)
+            total_se += ((pred - t) ** 2).sum().item()
+            total_n += t.numel()
+            if verbose and (batch_idx + 1) % 20 == 0:
+                rmse = (total_se / max(total_n, 1)) ** 0.5
+                print(
+                    f"batch idx={batch_idx + 1}: current RMSE: {rmse:.6f}"
+                )
+            if batch_idx == sample_iter:
+                break
+    rmse = (total_se / max(total_n, 1)) ** 0.5
+    elapsed = time.time() - start_time
+    if verbose:
+        print(f"validate_model elapsed time: {elapsed} seconds")
+    return rmse
+
+
 def val(model, test_loader, T, device, sample_iter=None, verbose=True):
     start_time = time.time()  # Start the timer
 

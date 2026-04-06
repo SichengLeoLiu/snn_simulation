@@ -3,14 +3,15 @@ import os
 import torch
 
 from Models import modelpool
+from Models.toy_diff1d import format_diff1d_trace
 from Models.cnn_mnist import remap_legacy_cnn2_state_dict
 from Models.VGG import remap_legacy_vgg_state_dict
 from Models.spike_temporal_adjust import SPIKE_SCHEDULE_MODES
 from Preprocess import datapool
-from utils import val, seed_all, get_logger, calibrate_thresholds, get_torch_device
+from utils import val, val_reg, seed_all, get_logger, calibrate_thresholds, get_torch_device
 
 SPIKE_SCHEDULE_CHOICES = sorted(SPIKE_SCHEDULE_MODES) + ["all"]
-DATASET_CHOICES = ["mnist", "cifar10", "cifar100"]
+DATASET_CHOICES = ["mnist", "cifar10", "cifar100", "diff1d"]
 
 parser = argparse.ArgumentParser(
     description="测试（MNIST: CNN2；CIFAR: VGG 等）"
@@ -70,7 +71,7 @@ parser.add_argument(
     default=None,
     type=str,
     choices=DATASET_CHOICES,
-    help="校准数据集（默认同 --dataset）",
+    help="校准数据集（默认同 --dataset；diff1d 一般不校准）",
 )
 parser.add_argument(
     "-w",
@@ -117,13 +118,23 @@ parser.add_argument(
 )
 parser.add_argument("--viz_feat_vmin", type=float, default=None)
 parser.add_argument("--viz_feat_vmax", type=float, default=None)
+parser.add_argument(
+    "--diff1d_trace_samples",
+    type=int,
+    default=0,
+    metavar="N",
+    help="diff1d：取 test 第一个 batch 的前 N 个样本，打印中间计算（需模型有 forward_trace_dict）",
+)
 
 args = parser.parse_args()
 
 
 def _resolved_model_name(dataset, model):
     m = model.lower()
-    if dataset.lower() != "mnist" and m in ("cnn2", "cnn2_mnist"):
+    d = dataset.lower().replace("-", "").replace("_", "")
+    if d in ("diff1d", "toydiff1d"):
+        return "diff1d"
+    if d != "mnist" and m in ("cnn2", "cnn2_mnist"):
         return "vgg16"
     return model
 
@@ -191,10 +202,14 @@ def main():
     print(args)
 
     ds = args.dataset.lower()
-    log_dir = "%s-test-accuracy" % ds
+    log_ds = "diff1d" if ds.replace("_", "").replace("-", "") in (
+        "diff1d",
+        "toydiff1d",
+    ) else ds
+    log_dir = "%s-test-accuracy" % log_ds
     os.makedirs(log_dir, exist_ok=True)
-    model_dir = "%s-checkpoints" % ds
-    viz_out = args.viz_out_dir or ("%s-test-viz" % ds)
+    model_dir = "%s-checkpoints" % log_ds
+    viz_out = args.viz_out_dir or ("%s-test-viz" % log_ds)
 
     arch = _resolved_model_name(args.dataset, args.model)
     if arch != args.model:
@@ -204,7 +219,7 @@ def main():
     if args.time > 0:
         identifier += "_T[%d]" % (args.time,)
     save_acc_filename = "%s_%s_L%s_T%s" % (
-        ds,
+        log_ds,
         identifier.replace("[", "").replace("]", ""),
         args.L,
         args.time,
@@ -237,6 +252,8 @@ def main():
         state_dict, legacy = remap_legacy_cnn2_state_dict(state_dict)
         if legacy:
             logger.info("已兼容旧版 CNN2 checkpoint")
+    elif ds in ("diff1d", "toy_diff1d", "diff_1d"):
+        pass
     else:
         state_dict = remap_legacy_vgg_state_dict(state_dict)
     model.load_state_dict(state_dict, strict=True)
@@ -257,8 +274,12 @@ def main():
             % (len(schedules), ", ".join(schedules))
         )
 
+    is_diff1d = ds in ("diff1d", "toy_diff1d", "diff_1d")
+
     if args.calibrate:
-        if args.time == 0:
+        if is_diff1d:
+            logger.warning("diff1d 回归任务不支持当前 CE 校准流程，跳过")
+        elif args.time == 0:
             logger.warning("校准需 T>0，跳过")
         else:
             calib_ds = args.calib_data or args.dataset
@@ -297,23 +318,68 @@ def main():
             )
 
     val_verbose = len(schedules) <= 1
+
+    if (
+        is_diff1d
+        and args.diff1d_trace_samples > 0
+        and hasattr(model, "forward_trace_dict")
+    ):
+        first_mode = schedules[0]
+        if hasattr(model, "set_spike_schedule"):
+            model.set_spike_schedule(first_mode)
+        it0 = iter(test_loader)
+        inputs, targets = next(it0)
+        n = min(args.diff1d_trace_samples, inputs.size(0))
+        inputs = inputs[:n].to(device)
+        targets = targets[:n].to(device, dtype=torch.float32)
+        model.eval()
+        with torch.no_grad():
+            steps = model.forward_trace_dict(inputs)
+        trace_txt = format_diff1d_trace(
+            steps, n, args.time, y_true=targets.view(-1)
+        )
+        hdr = (
+            "\n--- diff1d 样本计算过程 (spike_schedule=%s, T=%d, n=%d) ---\n%s\n"
+            % (first_mode, args.time, n, trace_txt)
+        )
+        # 仅 logger：避免 print + StreamHandler 在终端重复打印同一段
+        logger.info(hdr)
+
     results = []
     for mode in schedules:
         if hasattr(model, "set_spike_schedule"):
             model.set_spike_schedule(mode)
         logger.info("spike_schedule=%s" % (mode,))
-        acc = val(model, test_loader, args.time, device, verbose=val_verbose)
-        results.append((mode, acc))
-        print("spike_schedule=%s  Test acc = %.3f" % (mode, acc))
-        logger.info("spike_schedule=%s  Test acc = %.3f" % (mode, acc))
+        if is_diff1d:
+            acc = val_reg(
+                model, test_loader, args.time, device, verbose=val_verbose
+            )
+            results.append((mode, acc))
+            print("spike_schedule=%s  Test RMSE = %.6f" % (mode, acc))
+            logger.info(
+                "spike_schedule=%s  Test RMSE = %.6f" % (mode, acc)
+            )
+        else:
+            acc = val(
+                model, test_loader, args.time, device, verbose=val_verbose
+            )
+            results.append((mode, acc))
+            print("spike_schedule=%s  Test acc = %.3f" % (mode, acc))
+            logger.info(
+                "spike_schedule=%s  Test acc = %.3f" % (mode, acc)
+            )
 
     print("\n--- 汇总 dataset=%s T=%d ---" % (args.dataset, args.time))
     for mode, acc in results:
-        print("  %-26s  %.3f" % (mode, acc))
-    logger.info(
-        "汇总: %s"
-        % (", ".join("%s=%.3f" % (m, a) for m, a in results),)
-    )
+        if is_diff1d:
+            print("  %-26s  RMSE %.6f" % (mode, acc))
+        else:
+            print("  %-26s  %.3f" % (mode, acc))
+    if is_diff1d:
+        summ = ", ".join("%s=%.6f" % (m, a) for m, a in results)
+    else:
+        summ = ", ".join("%s=%.3f" % (m, a) for m, a in results)
+    logger.info("汇总: %s" % (summ,))
 
     if args.viz:
         if ds != "mnist":

@@ -146,6 +146,58 @@ def GetCifar100(batchsize, num_workers=8, pin_memory=True):
     return train_dataloader, test_dataloader
 
 
+class Diff1DDataset(Dataset):
+    """
+    玩具回归：输入 [1, 2]（单通道、长度 2，无高度维）。
+    采样满足 ``low <= x2 <= x1 <= high``（默认 ``[0,1]`` 上 ``x1 > x2`` 几乎处处成立），
+    标签 ``y = x1 - x2``，∈ ``[0, high-low]``（在 ``[0,1]`` 上为 ``[0,1]``）。
+    """
+
+    def __init__(self, n_samples, low=0.0, high=1.0, seed=0):
+        g = torch.Generator().manual_seed(seed)
+        span = high - low
+        x1 = torch.rand(n_samples, generator=g) * span + low
+        u = torch.rand(n_samples, generator=g)
+        x2 = low + u * (x1 - low)
+        self.x = torch.stack([x1, x2], dim=-1).unsqueeze(1).float()
+        self.y = (x1 - x2).unsqueeze(-1).float()
+
+    def __len__(self):
+        return len(self.x)
+
+    def __getitem__(self, idx):
+        return self.x[idx], self.y[idx]
+
+
+def GetDiff1D(
+    batch_size,
+    train_n=50000,
+    test_n=5000,
+    seed=0,
+    low=0.0,
+    high=1.0,
+    num_workers=0,
+    pin_memory=False,
+):
+    train_ds = Diff1DDataset(train_n, low=low, high=high, seed=seed)
+    test_ds = Diff1DDataset(test_n, low=low, high=high, seed=seed + 100000)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    return train_loader, test_loader
+
+
 normalize_imagenet = transforms.Normalize(
     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
 )

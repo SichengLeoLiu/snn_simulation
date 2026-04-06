@@ -1,11 +1,15 @@
 from .layer import *
 from .cnn_mnist import cnn2_mnist
+from .toy_diff1d import toy_diff1d
 from .VGG import vgg16, vgg19, vgg16_wobn
 
 
 def modelpool(model_name, dataset_name="mnist"):
     m = model_name.lower()
-    d = dataset_name.lower().replace("-", "")
+    d = dataset_name.lower().replace("-", "").replace("_", "")
+
+    if d in ("diff1d", "toydiff1d"):
+        return toy_diff1d()
 
     if d == "mnist":
         if m in ("cnn2", "cnn2_mnist"):

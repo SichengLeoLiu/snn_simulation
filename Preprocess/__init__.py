@@ -1,6 +1,12 @@
 import torch
 
-from .getdataloader import GetMNIST, GetCifar10, GetCifar100, GetImageNet
+from .getdataloader import (
+    GetMNIST,
+    GetCifar10,
+    GetCifar100,
+    GetDiff1D,
+    GetImageNet,
+)
 
 
 def datapool(
@@ -12,7 +18,7 @@ def datapool(
 ):
     if pin_memory is None:
         pin_memory = torch.cuda.is_available()
-    name = dataset_name.lower().replace("-", "")
+    name = dataset_name.lower().replace("-", "").replace("_", "")
     if name == "mnist":
         return GetMNIST(
             batch_size, num_workers=num_workers, pin_memory=pin_memory
@@ -25,6 +31,12 @@ def datapool(
         return GetCifar100(
             batch_size, num_workers=num_workers, pin_memory=pin_memory
         )
+    if name in ("diff1d", "toydiff1d"):
+        return GetDiff1D(
+            batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+        )
     if name in ("imagenet", "imagenet1k"):
         return GetImageNet(
             train_batch_size=batch_size,
@@ -33,6 +45,6 @@ def datapool(
             dist_sample=dist_sample,
         )
     raise ValueError(
-        "datapool 支持: mnist | cifar10 | cifar100 | imagenet，收到: %s"
+        "datapool 支持: mnist | cifar10 | cifar100 | diff1d | toy_diff1d | imagenet，收到: %s"
         % (dataset_name,)
     )
