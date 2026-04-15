@@ -24,15 +24,15 @@ class CNN2MNIST(nn.Module):
         self.spike_schedule = "normal"
 
         self.input_if = IF()
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(16)
+        self.conv1 = nn.Conv2d(1, 4, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(4)
         self.if1 = IF()
         self.pool1 = nn.MaxPool2d(2)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(8)
         self.if2 = IF()
         self.pool2 = nn.MaxPool2d(2)
-        self.classifier = nn.Linear(32 * 7 * 7, num_classes)
+        self.classifier = nn.Linear(8 * 7 * 7, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
