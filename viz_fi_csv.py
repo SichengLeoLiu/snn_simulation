@@ -4,7 +4,7 @@ import os
 import math
 
 # 全局设置字体
-plt.rcParams.update({'font.size': 14})
+plt.rcParams.update({'font.size': 18})
 
 def plot_fi_csv(file_path):
     if not os.path.exists(file_path):
@@ -27,10 +27,10 @@ def plot_fi_csv(file_path):
     rows = math.ceil(num_l / cols)
     
     # 创建画布
-    fig, axes = plt.subplots(rows, cols, figsize=(22, 7 * rows))
+    fig, axes = plt.subplots(rows, cols, figsize=(24, 8 * rows))
     axes_flat = axes.flatten() if rows > 1 or cols > 1 else [axes]
     
-    fig.suptitle(f"Fisher Information Dynamics: {os.path.basename(file_path)}", fontsize=28, y=0.99, fontweight='bold')
+    fig.suptitle(f"Fisher Information Dynamics: {os.path.basename(file_path)}", fontsize=34, y=0.99, fontweight='bold')
 
     for i, L in enumerate(l_values):
         ax = axes_flat[i]
@@ -47,18 +47,18 @@ def plot_fi_csv(file_path):
                 continue
                 
             timesteps = range(1, len(fi_values) + 1)
-            ax.plot(timesteps, fi_values, marker='o', label=mode, alpha=0.8, linewidth=2.5, markersize=7)
+            ax.plot(timesteps, fi_values, marker='o', label=mode, alpha=0.8, linewidth=2.8, markersize=8)
         
-        ax.set_title(f"Quantization Level L = {L}", fontsize=20, fontweight='bold', pad=12)
-        ax.set_xlabel("Timestep (T)", fontsize=16)
-        ax.set_ylabel("FI Trace (Log Scale)", fontsize=16)
+        ax.set_title(f"Quantization Level L = {L}", fontsize=24, fontweight='bold', pad=12)
+        ax.set_xlabel("Timestep (T)", fontsize=20)
+        ax.set_ylabel("FI Trace (Log Scale)", fontsize=20)
         ax.set_yscale('log')
         
-        ax.tick_params(axis='both', which='major', labelsize=14)
+        ax.tick_params(axis='both', which='major', labelsize=16)
         ax.grid(True, which="both", ls="-", alpha=0.5)
         
         # 图例放在子图内部
-        ax.legend(fontsize=10, loc='best', framealpha=0.6)
+        ax.legend(fontsize=14, loc='best', framealpha=0.6)
 
     # 隐藏多余的空白子图
     for j in range(num_l, len(axes_flat)):
@@ -73,16 +73,14 @@ def plot_fi_csv(file_path):
     print(f"Plot saved with {num_l} L levels to: {output_png}")
 
 if __name__ == "__main__":
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    fi_dir = os.path.join(base_dir, "Fisher Information")
     files = [
-        "fi_summary_results_variable_T_c2_c4.csv",
-        "fi_summary_results_variable_T_c4_c8.csv",
-        "fi_summary_results_variable_T_c16_c32.csv"
+        "fi_summary_results_variable_T_with_L32_c2_c4.csv",
+        "fi_summary_results_variable_T_with_L32_c4_c8.csv",
+        "fi_summary_results_variable_T_with_L32_c16_c32.csv"
     ]
     
     for f in files:
-        if os.path.exists(f):
-            plot_fi_csv(f)
-        else:
-            alt_path = os.path.join("QCFS_simulation", f)
-            if os.path.exists(alt_path):
-                plot_fi_csv(alt_path)
+        file_path = os.path.join(fi_dir, f)
+        plot_fi_csv(file_path)

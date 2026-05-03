@@ -1,4 +1,5 @@
 import argparse
+import csv
 import os
 import torch
 
@@ -82,10 +83,10 @@ parser.add_argument(
 )
 parser.add_argument(
     "--spike_schedule",
-    default="all",
+    default="normal",
     type=str,
     choices=SPIKE_SCHEDULE_CHOICES,
-    help="T>0 且模型支持时多模式；否则只测一轮",
+    help="默认 normal（与训练一致）；可设 all 在 T>0 时评测多模式",
 )
 parser.add_argument(
     "--viz",
@@ -124,6 +125,54 @@ parser.add_argument(
     default=0,
     metavar="N",
     help="diff1d：取 test 第一个 batch 的前 N 个样本，打印中间计算（需模型有 forward_trace_dict）",
+)
+parser.add_argument(
+    "--first_layer_noise_sigma",
+    type=float,
+    default=0.0,
+    help="第一层输入高斯噪声标准差（input_if 后、conv1 前）",
+)
+parser.add_argument(
+    "--first_layer_noise_type",
+    type=str,
+    default="gaussian",
+    choices=["gaussian", "pink"],
+    help="第一层输入噪声类型（input_if 后、conv1 前）",
+)
+parser.add_argument(
+    "--noise_sweep",
+    action="store_true",
+    help="扫描 sigma，寻找准确率首次降到目标阈值的点（仅分类任务）",
+)
+parser.add_argument(
+    "--noise_target_acc",
+    type=float,
+    default=90.0,
+    help="--noise_sweep 目标准确率阈值（百分比）",
+)
+parser.add_argument(
+    "--noise_sigma_start",
+    type=float,
+    default=0.0,
+    help="--noise_sweep 起始 sigma",
+)
+parser.add_argument(
+    "--noise_sigma_end",
+    type=float,
+    default=1.0,
+    help="--noise_sweep 结束 sigma（含）",
+)
+parser.add_argument(
+    "--noise_sigma_step",
+    type=float,
+    default=0.02,
+    help="--noise_sweep sigma 步长",
+)
+parser.add_argument(
+    "--noise_output_dir",
+    type=str,
+    default="Noise_exp",
+    help="--noise_sweep 结果 CSV 输出目录",
 )
 
 args = parser.parse_args()
@@ -197,6 +246,134 @@ def _schedules_to_run(args, model):
     return [args.spike_schedule]
 
 
+def _build_sigma_values(start, end, step):
+    if step <= 0:
+        raise ValueError("noise_sigma_step 必须 > 0")
+    if end < start:
+        raise ValueError("noise_sigma_end 必须 >= noise_sigma_start")
+    vals = []
+    cur = float(start)
+    eps = 1e-12
+    while cur <= end + eps:
+        vals.append(round(cur, 10))
+        cur += step
+    return vals
+
+
+def _sigma_key(sigma):
+    return ("%.6f" % float(sigma)).rstrip("0").rstrip(".") or "0"
+
+
+def _write_noise_matrix_csv(matrix_csv_path, l_value, sigma_to_acc):
+    """
+    写入/更新矩阵表：
+    行 = L；列 = sigma；值 = acc
+    """
+    matrix = {}
+    sigma_cols = set()
+
+    if os.path.exists(matrix_csv_path):
+        with open(matrix_csv_path, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            old_cols = [c for c in (reader.fieldnames or []) if c != "L"]
+            sigma_cols.update(old_cols)
+            for row in reader:
+                l_raw = row.get("L", "").strip()
+                if not l_raw:
+                    continue
+                try:
+                    l_key = int(float(l_raw))
+                except ValueError:
+                    continue
+                matrix[l_key] = {}
+                for c in old_cols:
+                    val = row.get(c, "")
+                    if val is None or str(val).strip() == "":
+                        continue
+                    matrix[l_key][c] = val
+
+    l_int = int(l_value)
+    if l_int not in matrix:
+        matrix[l_int] = {}
+    for sigma, acc in sigma_to_acc.items():
+        s_key = _sigma_key(sigma)
+        sigma_cols.add(s_key)
+        matrix[l_int][s_key] = "%.6f" % float(acc)
+
+    def _sigma_sort_key(x):
+        try:
+            return float(x)
+        except ValueError:
+            return float("inf")
+
+    ordered_sigmas = sorted(sigma_cols, key=_sigma_sort_key)
+    fieldnames = ["L"] + ordered_sigmas
+
+    with open(matrix_csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for l_key in sorted(matrix.keys()):
+            row = {"L": l_key}
+            row.update(matrix[l_key])
+            writer.writerow(row)
+
+
+def _upsert_noise_combined_csv(combined_csv_path, l_value, t_value, sigma_to_acc):
+    """
+    维护总表：
+    行 = (L, T)；列 = sigma；值 = acc
+    若 (L,T) 已存在则覆盖对应 sigma 值；否则新增行。
+    """
+    table = {}
+    sigma_cols = set()
+
+    if os.path.exists(combined_csv_path):
+        with open(combined_csv_path, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            old_cols = [c for c in (reader.fieldnames or []) if c not in ("L", "T")]
+            sigma_cols.update(old_cols)
+            for row in reader:
+                l_raw = str(row.get("L", "")).strip()
+                t_raw = str(row.get("T", "")).strip()
+                if not l_raw or not t_raw:
+                    continue
+                try:
+                    key = (int(float(l_raw)), int(float(t_raw)))
+                except ValueError:
+                    continue
+                table[key] = {}
+                for c in old_cols:
+                    v = row.get(c, "")
+                    if v is None or str(v).strip() == "":
+                        continue
+                    table[key][c] = v
+
+    key = (int(l_value), int(t_value))
+    if key not in table:
+        table[key] = {}
+    for sigma, acc in sigma_to_acc.items():
+        s_key = _sigma_key(sigma)
+        sigma_cols.add(s_key)
+        table[key][s_key] = "%.6f" % float(acc)
+
+    def _sigma_sort_key(x):
+        try:
+            return float(x)
+        except ValueError:
+            return float("inf")
+
+    ordered_sigmas = sorted(sigma_cols, key=_sigma_sort_key)
+    fieldnames = ["L", "T"] + ordered_sigmas
+
+    with open(combined_csv_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for (l_key, t_key) in sorted(table.keys(), key=lambda x: (x[0], x[1])):
+            row = {"L": l_key, "T": t_key}
+            row.update(table[(l_key, t_key)])
+            writer.writerow(row)
+
+
 def main():
     global args
     print(args)
@@ -264,6 +441,18 @@ def main():
     if hasattr(model, "set_scaling_factor"):
         model.set_scaling_factor(args.scaling_factor)
     model.set_mode(args.mode)
+    if hasattr(model, "set_first_layer_input_noise_sigma"):
+        model.set_first_layer_input_noise_sigma(args.first_layer_noise_sigma)
+        if hasattr(model, "set_first_layer_input_noise_type"):
+            model.set_first_layer_input_noise_type(args.first_layer_noise_type)
+        logger.info(
+            "第一层输入噪声 type=%s sigma=%.6f (input_if 后、conv1 前)"
+            % (args.first_layer_noise_type, args.first_layer_noise_sigma)
+        )
+    elif args.first_layer_noise_sigma > 0:
+        logger.warning("当前模型不支持第一层输入噪声注入，忽略 --first_layer_noise_sigma")
+    elif args.first_layer_noise_type != "gaussian":
+        logger.warning("当前模型不支持第一层噪声类型设置，忽略 --first_layer_noise_type")
 
     schedules = _schedules_to_run(args, model)
     if args.time == 0 and args.spike_schedule == "all":
@@ -318,6 +507,84 @@ def main():
             )
 
     val_verbose = len(schedules) <= 1
+
+    if args.noise_sweep:
+        if is_diff1d:
+            logger.warning("--noise_sweep 仅支持分类任务，当前为 diff1d 回归，跳过")
+        elif not hasattr(model, "set_first_layer_input_noise_sigma"):
+            logger.warning("当前模型不支持第一层输入噪声注入，无法执行 --noise_sweep")
+        else:
+            sigma_values = _build_sigma_values(
+                args.noise_sigma_start, args.noise_sigma_end, args.noise_sigma_step
+            )
+            logger.info(
+                "开始噪声扫描: noise_type=%s, target_acc<=%.3f%%, sigma 从 %.6f 到 %.6f, step=%.6f"
+                % (
+                    args.first_layer_noise_type,
+                    args.noise_target_acc,
+                    args.noise_sigma_start,
+                    args.noise_sigma_end,
+                    args.noise_sigma_step,
+                )
+            )
+            os.makedirs(args.noise_output_dir, exist_ok=True)
+            sweep_summary = []
+            for mode in schedules:
+                if hasattr(model, "set_spike_schedule"):
+                    model.set_spike_schedule(mode)
+                hit = None
+                sigma_to_acc = {}
+                for sigma in sigma_values:
+                    model.set_first_layer_input_noise_sigma(sigma)
+                    acc = val(model, test_loader, args.time, device, verbose=False)
+                    print(
+                        "noise_sweep mode=%s sigma=%.6f acc=%.3f"
+                        % (mode, sigma, acc)
+                    )
+                    logger.info(
+                        "noise_sweep mode=%s sigma=%.6f acc=%.3f"
+                        % (mode, sigma, acc)
+                    )
+                    sigma_to_acc[sigma] = acc
+                    if hit is None and acc <= args.noise_target_acc:
+                        hit = (sigma, acc)
+                matrix_csv_path = os.path.join(
+                    args.noise_output_dir,
+                    "noise_sweep_matrix_%s_%s_T%d_mode_%s_schedule_%s_seed_%d.csv"
+                    % (ds, arch, args.time, args.mode, mode, args.seed),
+                )
+                _write_noise_matrix_csv(matrix_csv_path, args.L, sigma_to_acc)
+                combined_csv_path = os.path.join(
+                    args.noise_output_dir, "noise_sweep_combined_L_T.csv"
+                )
+                _upsert_noise_combined_csv(
+                    combined_csv_path, args.L, args.time, sigma_to_acc
+                )
+                if hit is None:
+                    msg = (
+                        "mode=%s 在 sigma<=%.6f 范围内未降到 %.3f%%"
+                        % (mode, args.noise_sigma_end, args.noise_target_acc)
+                    )
+                    print(msg)
+                    logger.info(msg)
+                    sweep_summary.append((mode, None, None))
+                else:
+                    sigma_hit, acc_hit = hit
+                    msg = (
+                        "mode=%s 首次达到 acc<=%.3f%%: sigma=%.6f, acc=%.3f"
+                        % (mode, args.noise_target_acc, sigma_hit, acc_hit)
+                    )
+                    print(msg)
+                    logger.info(msg)
+                    sweep_summary.append((mode, sigma_hit, acc_hit))
+                logger.info("noise_sweep 矩阵结果已更新: %s" % (matrix_csv_path,))
+                print("noise_sweep 矩阵结果已更新: %s" % (matrix_csv_path,))
+                logger.info("noise_sweep 总表已更新: %s" % (combined_csv_path,))
+                print("noise_sweep 总表已更新: %s" % (combined_csv_path,))
+            model.set_first_layer_input_noise_sigma(args.first_layer_noise_sigma)
+            if schedules and hasattr(model, "set_spike_schedule"):
+                model.set_spike_schedule(schedules[-1])
+            return sweep_summary
 
     if (
         is_diff1d

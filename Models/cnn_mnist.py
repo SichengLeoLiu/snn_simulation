@@ -22,17 +22,19 @@ class CNN2MNIST(nn.Module):
         self.merge = MergeTemporalDim(0)
         self.expand = ExpandTemporalDim(0)
         self.spike_schedule = "normal"
+        self.first_layer_input_noise_sigma = 0.0
+        self.first_layer_input_noise_type = "gaussian"
 
         self.input_if = IF()
-        self.conv1 = nn.Conv2d(1, 4, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(4)
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(16)
         self.if1 = IF()
         self.pool1 = nn.MaxPool2d(2)
-        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(8)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(32)
         self.if2 = IF()
         self.pool2 = nn.MaxPool2d(2)
-        self.classifier = nn.Linear(8 * 7 * 7, num_classes)
+        self.classifier = nn.Linear(32 * 7 * 7, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -76,6 +78,52 @@ class CNN2MNIST(nn.Module):
             if isinstance(module, IF):
                 module.mode = mode
 
+    def set_first_layer_input_noise_sigma(self, sigma=0.0):
+        """设置第一层输入噪声标准差（input_if 后、conv1 前）。"""
+        self.first_layer_input_noise_sigma = max(0.0, float(sigma))
+
+    def set_first_layer_input_noise_type(self, noise_type="gaussian"):
+        """设置第一层输入噪声类型：gaussian | pink。"""
+        nt = str(noise_type).strip().lower()
+        if nt not in ("gaussian", "pink"):
+            raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
+        self.first_layer_input_noise_type = nt
+
+    def _pink_noise_like(self, x, T):
+        """
+        在时间维生成近似 1/f 粉红噪声（每个像素/通道独立），返回与 x 同形状噪声。
+        x 形状要求为 [T*B, C, H, W]。
+        """
+        if T <= 1:
+            return torch.randn_like(x)
+        tb, c, h, w = x.shape
+        if tb % T != 0:
+            return torch.randn_like(x)
+        b = tb // T
+        # MPS 对 FFT 轴有限制：时间维放到最后一维再做 rfft。
+        white = torch.randn((b, c, h, w, T), device=x.device, dtype=x.dtype)
+        freq = torch.fft.rfft(white, dim=-1)
+        n_freq = freq.shape[-1]
+        f = torch.arange(n_freq, device=x.device, dtype=torch.float32)
+        scale = torch.ones_like(f)
+        scale[1:] = 1.0 / torch.sqrt(f[1:])
+        scale = scale.to(dtype=x.dtype).view(1, 1, 1, 1, n_freq)
+        pink = torch.fft.irfft(freq * scale, n=T, dim=-1)
+        std = pink.std(dim=-1, unbiased=False, keepdim=True).clamp(min=1e-6)
+        pink = pink / std
+        pink = pink.permute(4, 0, 1, 2, 3).contiguous()  # [T, B, C, H, W]
+        return pink.reshape(tb, c, h, w)
+
+    def _inject_first_layer_input_noise(self, x):
+        sigma = self.first_layer_input_noise_sigma
+        if sigma <= 0:
+            return x
+        if self.first_layer_input_noise_type == "pink":
+            noise = self._pink_noise_like(x, self.T) if self.T > 0 else torch.randn_like(x)
+        else:
+            noise = torch.randn_like(x)
+        return x + noise * sigma
+
     @staticmethod
     def _if_out_to_firing_map(x_tb, if_layer, T):
         """
@@ -102,6 +150,7 @@ class CNN2MNIST(nn.Module):
             x = self.merge(x)
 
         x = self.input_if(x)
+        x = self._inject_first_layer_input_noise(x)
 
         if T > 0:
             sch = self.spike_schedule
@@ -134,6 +183,7 @@ class CNN2MNIST(nn.Module):
             x = self.merge(x)
 
         x = self.input_if(x)
+        x = self._inject_first_layer_input_noise(x)
 
         if self.T > 0:
             sch = self.spike_schedule

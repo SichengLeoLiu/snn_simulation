@@ -145,6 +145,32 @@ class IF(nn.Module):
                     spike_pot.append(spike)
                 x = torch.stack(spike_pot, dim=0)
                 x = self.merge(x)
+            elif self.mode == 'rate_uniform':
+                # 原有的单向查表逻辑
+                thre = self.thresh.data
+                x = self.expand(x)
+                rate_table = get_rate_table(self.T, x.device)
+                z = x.sum(0)
+                if return_mem:
+                    # 对于rate_uniform模式，使用累积输入z作为膜电位的近似
+                    mem_final = z.clone()
+                n_spikes = torch.round(z / thre).long()
+                n_spikes = torch.clamp(n_spikes, 0, self.T)
+                
+                phase_offsets = torch.zeros_like(n_spikes, device=x.device)
+                
+                flat_n = n_spikes.view(-1)
+                flat_p = phase_offsets.view(-1)
+                out_flat = rate_table[flat_n, flat_p, :]
+                
+                target_shape = list(n_spikes.shape) + [self.T]
+                out = out_flat.view(target_shape)
+                out = out * thre
+                
+                dims = list(range(len(out.shape)))
+                new_dims = [dims[-1]] + dims[:-1]
+                out = out.permute(*new_dims).contiguous()
+                x = self.merge(out)
             
 
         else:
