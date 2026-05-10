@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 from Models.layer import *
 from Models.spike_temporal_adjust import (
     SPIKE_SCHEDULE_MODES,
@@ -25,11 +26,47 @@ def _first_if_and_next_conv_idx(seq):
     return if_idx, conv_idx
 
 
-def _forward_sequential_first_if_spike_schedule(seq, x, T, spike_schedule):
+def _pink_noise_like(x, T):
+    """
+    在时间维生成近似 1/f 粉红噪声（每个像素/通道独立），返回与 x 同形状噪声。
+    x 形状要求为 [T*B, C, H, W]。
+    """
+    if T <= 1:
+        return torch.randn_like(x)
+    tb, c, h, w = x.shape
+    if tb % T != 0:
+        return torch.randn_like(x)
+    b = tb // T
+    white = torch.randn((b, c, h, w, T), device=x.device, dtype=x.dtype)
+    freq = torch.fft.rfft(white, dim=-1)
+    n_freq = freq.shape[-1]
+    f = torch.arange(n_freq, device=x.device, dtype=torch.float32)
+    scale = torch.ones_like(f)
+    scale[1:] = 1.0 / torch.sqrt(f[1:])
+    scale = scale.to(dtype=x.dtype).view(1, 1, 1, 1, n_freq)
+    pink = torch.fft.irfft(freq * scale, n=T, dim=-1)
+    std = pink.std(dim=-1, unbiased=False, keepdim=True).clamp(min=1e-6)
+    pink = pink / std
+    pink = pink.permute(4, 0, 1, 2, 3).contiguous()  # [T, B, C, H, W]
+    return pink.reshape(tb, c, h, w)
+
+
+def _inject_noise_tensor(x, sigma, noise_type, T):
+    if sigma <= 0:
+        return x
+    if noise_type == "pink":
+        noise = _pink_noise_like(x, T) if T > 0 else torch.randn_like(x)
+    else:
+        noise = torch.randn_like(x)
+    return x + noise * sigma
+
+
+def _forward_sequential_first_if_spike_schedule(seq, x, T, spike_schedule, noise_sigma=0.0, noise_type="gaussian"):
     if_idx, conv_idx = _first_if_and_next_conv_idx(seq)
     for i in range(if_idx):
         x = seq[i](x)
     x = seq[if_idx](x)
+    x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
     sch = spike_schedule
     if sch in ("weight_sign_pos_front", "weight_sign_neg_front"):
         x = first_conv_with_weight_sign_schedule(x, T, seq[conv_idx], sch)
@@ -39,6 +76,20 @@ def _forward_sequential_first_if_spike_schedule(seq, x, T, spike_schedule):
         x = temporal_rearrange_after_first_if(x, T, sch)
         for j in range(if_idx + 1, len(seq)):
             x = seq[j](x)
+    return x
+
+
+def _forward_sequential_first_if_no_schedule(seq, x, noise_sigma=0.0, noise_type="gaussian"):
+    """
+    T=0 路径：在 layer1 的第一个 IF 后注入噪声，再继续后续层。
+    """
+    if_idx, _ = _first_if_and_next_conv_idx(seq)
+    for i in range(if_idx):
+        x = seq[i](x)
+    x = seq[if_idx](x)
+    x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
+    for j in range(if_idx + 1, len(seq)):
+        x = seq[j](x)
     return x
 
 
@@ -82,6 +133,8 @@ class VGG(nn.Module):
         self.merge = MergeTemporalDim(0)
         self.expand = ExpandTemporalDim(0)
         self.spike_schedule = "normal"
+        self.first_layer_input_noise_sigma = 0.0
+        self.first_layer_input_noise_type = "gaussian"
         self.loss = 0
         self.layer1 = self._make_layers(cfg[vgg_name][0], dropout)
         self.layer2 = self._make_layers(cfg[vgg_name][1], dropout)
@@ -169,15 +222,36 @@ class VGG(nn.Module):
                 module.mode = mode
                 # break # only set the first IF module's mode
 
+    def set_first_layer_input_noise_sigma(self, sigma=0.0):
+        """设置第一层输入噪声标准差（layer1 第一个 IF 后、后续 Conv 前）。"""
+        self.first_layer_input_noise_sigma = max(0.0, float(sigma))
+
+    def set_first_layer_input_noise_type(self, noise_type="gaussian"):
+        """设置第一层输入噪声类型：gaussian | pink。"""
+        nt = str(noise_type).strip().lower()
+        if nt not in ("gaussian", "pink"):
+            raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
+        self.first_layer_input_noise_type = nt
+
     def forward(self, x):
         if self.T > 0:
             x = add_dimention(x, self.T)
             x = self.merge(x)
             out = _forward_sequential_first_if_spike_schedule(
-                self.layer1, x, self.T, self.spike_schedule
+                self.layer1,
+                x,
+                self.T,
+                self.spike_schedule,
+                self.first_layer_input_noise_sigma,
+                self.first_layer_input_noise_type,
             )
         else:
-            out = self.layer1(x)
+            out = _forward_sequential_first_if_no_schedule(
+                self.layer1,
+                x,
+                self.first_layer_input_noise_sigma,
+                self.first_layer_input_noise_type,
+            )
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.layer4(out)
@@ -233,6 +307,8 @@ class VGG_woBN(nn.Module):
         self.merge = MergeTemporalDim(0)
         self.expand = ExpandTemporalDim(0)
         self.spike_schedule = "normal"
+        self.first_layer_input_noise_sigma = 0.0
+        self.first_layer_input_noise_type = "gaussian"
         self.layer1 = self._make_layers(cfg[vgg_name][0], dropout)
         self.layer2 = self._make_layers(cfg[vgg_name][1], dropout)
         self.layer3 = self._make_layers(cfg[vgg_name][2], dropout)
@@ -316,15 +392,34 @@ class VGG_woBN(nn.Module):
             if isinstance(module, IF):
                 module.mode = mode
 
+    def set_first_layer_input_noise_sigma(self, sigma=0.0):
+        self.first_layer_input_noise_sigma = max(0.0, float(sigma))
+
+    def set_first_layer_input_noise_type(self, noise_type="gaussian"):
+        nt = str(noise_type).strip().lower()
+        if nt not in ("gaussian", "pink"):
+            raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
+        self.first_layer_input_noise_type = nt
+
     def forward(self, x):
         if self.T > 0:
             x = add_dimention(x, self.T)
             x = self.merge(x)
             out = _forward_sequential_first_if_spike_schedule(
-                self.layer1, x, self.T, self.spike_schedule
+                self.layer1,
+                x,
+                self.T,
+                self.spike_schedule,
+                self.first_layer_input_noise_sigma,
+                self.first_layer_input_noise_type,
             )
         else:
-            out = self.layer1(x)
+            out = _forward_sequential_first_if_no_schedule(
+                self.layer1,
+                x,
+                self.first_layer_input_noise_sigma,
+                self.first_layer_input_noise_type,
+            )
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.layer4(out)
