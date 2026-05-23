@@ -16,7 +16,7 @@ class CNN2MNIST(nn.Module):
     weight_sign_pos_front / weight_sign_neg_front。
     """
 
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, c1=2, c2=4):
         super().__init__()
         self.T = 0
         self.merge = MergeTemporalDim(0)
@@ -24,17 +24,19 @@ class CNN2MNIST(nn.Module):
         self.spike_schedule = "normal"
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.c1 = int(c1)
+        self.c2 = int(c2)
 
         self.input_if = IF()
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(16)
+        self.conv1 = nn.Conv2d(1, self.c1, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(self.c1)
         self.if1 = IF()
         self.pool1 = nn.MaxPool2d(2)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(self.c1, self.c2, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(self.c2)
         self.if2 = IF()
         self.pool2 = nn.MaxPool2d(2)
-        self.classifier = nn.Linear(32 * 7 * 7, num_classes)
+        self.classifier = nn.Linear(self.c2 * 7 * 7, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -88,6 +90,27 @@ class CNN2MNIST(nn.Module):
         if nt not in ("gaussian", "pink"):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
+
+    def resolution_aware_noise_regularization(self, T=None, eps=1e-8):
+        """
+        R_rho = sum_l [ L_l^2 / (C_l * T * lambda_l^2) ] * ||W_l||_2^2
+
+        当前 CNN2 采用两层卷积对应两个 IF 阈值：
+        - conv1.weight <-> if1.thresh
+        - conv2.weight <-> if2.thresh
+        """
+        t_eff = int(self.T if T is None else T)
+        t_eff = max(t_eff, 1)
+
+        def _term(weight, if_layer):
+            c_l = weight.shape[0]
+            l_l = float(if_layer.L)
+            lambda_l = float(if_layer.thresh.detach().clamp(min=eps).item())
+            omega = (l_l * l_l) / (float(c_l) * float(t_eff) * (lambda_l * lambda_l))
+            return weight.pow(2).sum() * omega
+
+        reg = _term(self.conv1.weight, self.if1) + _term(self.conv2.weight, self.if2)
+        return reg
 
     def _pink_noise_like(self, x, T):
         """
@@ -211,8 +234,8 @@ class CNN2MNIST(nn.Module):
         return x
 
 
-def cnn2_mnist(num_classes=10):
-    return CNN2MNIST(num_classes=num_classes)
+def cnn2_mnist(num_classes=10, c1=2, c2=4):
+    return CNN2MNIST(num_classes=num_classes, c1=c1, c2=c2)
 
 
 # 旧版 checkpoint：nn.Sequential 命名为 features，下标与当前子模块对应关系

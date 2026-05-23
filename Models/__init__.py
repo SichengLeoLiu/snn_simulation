@@ -1,7 +1,30 @@
+import re
+
 from .layer import *
 from .cnn_mnist import cnn2_mnist
+from .fc_mnist import fc2_mnist
 from .toy_diff1d import toy_diff1d
 from .VGG import vgg16, vgg19, vgg16_wobn
+
+
+def _parse_mnist_cnn2_variant(model_name: str):
+    m = model_name.lower()
+    if m in ("cnn2", "cnn2_mnist"):
+        return 2, 4
+    match = re.fullmatch(r"cnn2(?:_mnist)?_c(\d+)_c(\d+)", m)
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    return None
+
+
+def _parse_mnist_fc2_variant(model_name: str):
+    m = model_name.lower()
+    if m in ("fc2", "fc2_mnist", "mlp2", "mlp2_mnist"):
+        return 256
+    match = re.fullmatch(r"(?:fc2|mlp2)(?:_mnist)?_h(\d+)", m)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def modelpool(model_name, dataset_name="mnist"):
@@ -12,9 +35,14 @@ def modelpool(model_name, dataset_name="mnist"):
         return toy_diff1d()
 
     if d == "mnist":
-        if m in ("cnn2", "cnn2_mnist"):
-            return cnn2_mnist(num_classes=10)
-        raise ValueError("MNIST 当前仅支持模型: cnn2")
+        channels = _parse_mnist_cnn2_variant(model_name)
+        if channels is not None:
+            c1, c2 = channels
+            return cnn2_mnist(num_classes=10, c1=c1, c2=c2)
+        hidden_dim = _parse_mnist_fc2_variant(model_name)
+        if hidden_dim is not None:
+            return fc2_mnist(num_classes=10, hidden_dim=hidden_dim)
+        raise ValueError("MNIST 当前仅支持模型: cnn2/cnn2_c{c1}_c{c2}/fc2/fc2_h{dim}")
 
     if d in ("cifar10", "cifa10"):
         num_classes = 10

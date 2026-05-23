@@ -9,6 +9,7 @@ import numpy as np
 import random
 import os
 import logging
+import re
 from Models import IF
 
 
@@ -70,7 +71,16 @@ def get_logger(filename, verbosity=1, name=None):
     logger.addHandler(sh)
     return logger
 
-def train(model, device, train_loader, criterion, optimizer, T):
+def train(
+    model,
+    device,
+    train_loader,
+    criterion,
+    optimizer,
+    T,
+    reg_loss_fn=None,
+    reg_coeff=1.0,
+):
     running_loss = 0
     model.train()
     M = len(train_loader)
@@ -85,6 +95,9 @@ def train(model, device, train_loader, criterion, optimizer, T):
         else:
             outputs = model(images)
         loss = criterion(outputs, labels)
+        if reg_loss_fn is not None:
+            reg = reg_loss_fn(model, T)
+            loss = loss + float(reg_coeff) * reg
         running_loss += loss.item()
         loss.mean().backward()
         optimizer.step()
@@ -94,7 +107,16 @@ def train(model, device, train_loader, criterion, optimizer, T):
     return running_loss, 100 * correct / total
 
 
-def train_reg(model, device, train_loader, criterion, optimizer, T):
+def train_reg(
+    model,
+    device,
+    train_loader,
+    criterion,
+    optimizer,
+    T,
+    reg_loss_fn=None,
+    reg_coeff=1.0,
+):
     """回归任务：MSE；返回 (loss 累加和, 训练集 MAE)。"""
     running_loss = 0.0
     model.train()
@@ -109,12 +131,122 @@ def train_reg(model, device, train_loader, criterion, optimizer, T):
         else:
             outputs = model(images)
         loss = criterion(outputs.view(-1), labels.view(-1))
+        if reg_loss_fn is not None:
+            reg = reg_loss_fn(model, T)
+            loss = loss + float(reg_coeff) * reg
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
         total_abs += (outputs.view(-1) - labels.view(-1)).abs().sum().item()
         total_n += labels.numel()
     return running_loss, total_abs / max(total_n, 1)
+
+
+def _resolve_bn_if_for_layer(layer_name, module_map):
+    """
+    根据层名启发式匹配该层后续的 BN 与 IF 层（用于 MNE-L2）。
+    优先匹配同级命名：conv1->bn1/if1, conv2->bn2/if2, fc1->bn1/if1 等。
+    """
+    parts = layer_name.split(".")
+    token = parts[-1]
+    parent = ".".join(parts[:-1])
+    m = re.search(r"(\d+)$", token)
+    idx = m.group(1) if m else ""
+
+    def _full(n):
+        return f"{parent}.{n}" if parent else n
+
+    bn_names = []
+    if_names = []
+
+    if token.startswith("conv"):
+        bn_names += [_full(token.replace("conv", "bn", 1))]
+        if_names += [_full(token.replace("conv", "if", 1))]
+    elif token.startswith("fc"):
+        bn_names += [_full(token.replace("fc", "bn", 1))]
+        if_names += [_full(token.replace("fc", "if", 1))]
+    elif token.startswith("classifier"):
+        bn_names += [_full(token.replace("classifier", "bn", 1))]
+        if_names += [_full(token.replace("classifier", "if", 1))]
+
+    if idx:
+        bn_names.append(_full(f"bn{idx}"))
+        if_names.append(_full(f"if{idx}"))
+
+    bn_mod = None
+    for n in bn_names:
+        mod = module_map.get(n, None)
+        if isinstance(mod, nn.modules.batchnorm._BatchNorm):
+            bn_mod = mod
+            break
+
+    if_mod = None
+    for n in if_names:
+        mod = module_map.get(n, None)
+        if isinstance(mod, IF):
+            if_mod = mod
+            break
+
+    return bn_mod, if_mod
+
+
+def compute_mne_l2_regularization(
+    model,
+    quant_level: int,
+    eps: float = 1e-6,
+    use_max: bool = False,
+):
+    """
+    Margin-Normalized Effective L2 (MNE-L2):
+
+      R_rho = sum_l  (L^2 * M_eff,l) / (lambda_l^2 + eps)
+
+    其中 BN-folded effective weight:
+      W_tilde = gamma / sqrt(var + eps) * W
+    若无 BN，则 W_tilde = W。
+
+    M_eff,l:
+      - mean 版本: mean_o ||W_tilde_{l,o}||_F^2
+      - max  版本: max_o  ||W_tilde_{l,o}||_F^2
+    """
+    module_map = dict(model.named_modules())
+    reg = None
+
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        w = layer.weight
+        w_eff = w
+
+        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        if bn_mod is not None:
+            gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
+            var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)
+            scale = gamma / torch.sqrt(var + eps)
+            view_shape = [scale.shape[0]] + [1] * (w.dim() - 1)
+            w_eff = w * scale.view(*view_shape)
+
+        w_flat = w_eff.view(w_eff.shape[0], -1)
+        per_out_norm_sq = (w_flat * w_flat).sum(dim=1)
+        m_eff = per_out_norm_sq.max() if use_max else per_out_norm_sq.mean()
+
+        if if_mod is not None and hasattr(if_mod, "thresh"):
+            lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=eps).view(-1)[0]
+        else:
+            lam = torch.ones((), device=w.device, dtype=w.dtype)
+
+        term = (float(quant_level) ** 2) * m_eff / (lam.pow(2) + eps)
+        reg = term if reg is None else (reg + term)
+
+    if reg is None:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return reg
 
 
 def val_reg(model, test_loader, T, device, sample_iter=None, verbose=True):

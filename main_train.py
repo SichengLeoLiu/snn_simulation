@@ -6,7 +6,16 @@ import torch.optim
 from Models import modelpool
 from Models.spike_temporal_adjust import SPIKE_SCHEDULE_MODES
 from Preprocess import datapool
-from utils import train, val, train_reg, val_reg, seed_all, get_logger, get_torch_device
+from utils import (
+    train,
+    val,
+    train_reg,
+    val_reg,
+    seed_all,
+    get_logger,
+    get_torch_device,
+    compute_mne_l2_regularization,
+)
 
 DATASET_CHOICES = ["mnist", "cifar10", "cifar100", "diff1d"]
 
@@ -59,6 +68,30 @@ parser.add_argument(
     default=0.0,
     type=float,
     help="权重衰减（CIFAR 常用 5e-4）",
+)
+parser.add_argument(
+    "--regularizer",
+    default="weight_decay",
+    type=str,
+    choices=["weight_decay", "resolution_aware", "mne_l2"],
+    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2",
+)
+parser.add_argument(
+    "--reg_coeff",
+    default=1.0,
+    type=float,
+    help="--regularizer=resolution_aware 或 mne_l2 时的全局系数 beta",
+)
+parser.add_argument(
+    "--mne_eps",
+    default=1e-6,
+    type=float,
+    help="--regularizer=mne_l2 时的 eps（用于 BN-fold 与 lambda 分母）",
+)
+parser.add_argument(
+    "--mne_use_max",
+    action="store_true",
+    help="--regularizer=mne_l2 时使用保守版 M_eff=max_o ||W_tilde_o||^2",
 )
 parser.add_argument("-L", "--L", default=8, type=int, help="量化步数 L")
 parser.add_argument(
@@ -127,25 +160,47 @@ def main():
 
     model.to(device)
 
+    reg_loss_fn = None
+
     is_diff1d = log_ds == "diff1d"
     if is_diff1d:
         criterion = nn.MSELoss().to(device)
         optimizer = torch.optim.Adam(
-            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=(args.weight_decay if args.regularizer == "weight_decay" else 0.0),
         )
     else:
         criterion = nn.CrossEntropyLoss().to(device)
         if ds == "mnist":
             optimizer = torch.optim.Adam(
-                model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+                model.parameters(),
+                lr=args.lr,
+                weight_decay=(args.weight_decay if args.regularizer == "weight_decay" else 0.0),
             )
         else:
             optimizer = torch.optim.SGD(
                 model.parameters(),
                 lr=args.lr,
                 momentum=0.9,
-                weight_decay=args.weight_decay,
+                weight_decay=(args.weight_decay if args.regularizer == "weight_decay" else 0.0),
             )
+
+    if args.regularizer == "resolution_aware":
+        if hasattr(model, "resolution_aware_noise_regularization"):
+            reg_loss_fn = lambda m, t: m.resolution_aware_noise_regularization(T=t)
+        else:
+            raise ValueError(
+                "模型 %s 不支持 resolution_aware 正则（缺少 resolution_aware_noise_regularization）"
+                % (arch,)
+            )
+    elif args.regularizer == "mne_l2":
+        reg_loss_fn = lambda m, t: compute_mne_l2_regularization(
+            m,
+            quant_level=args.L,
+            eps=args.mne_eps,
+            use_max=args.mne_use_max,
+        )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs
     )
@@ -163,6 +218,15 @@ def main():
     logger.info(
         "start training dataset=%s arch=%s T=%d" % (args.dataset, arch, args.time)
     )
+    logger.info(
+        "regularizer=%s, weight_decay=%.6g, reg_coeff=%.6g"
+        % (args.regularizer, args.weight_decay, args.reg_coeff)
+    )
+    if args.regularizer == "mne_l2":
+        logger.info(
+            "mne_l2: L=%d, eps=%.3e, use_max=%s"
+            % (args.L, args.mne_eps, str(bool(args.mne_use_max)))
+        )
     if ds not in ("mnist", "diff1d", "toy_diff1d", "diff_1d"):
         logger.info(
             "CIFAR 建议: -lr 0.1 -wd 5e-4 --epochs 300 -b 128"
@@ -175,7 +239,14 @@ def main():
     for epoch in range(args.epochs):
         if is_diff1d:
             loss, mae = train_reg(
-                model, device, train_loader, criterion, optimizer, args.time
+                model,
+                device,
+                train_loader,
+                criterion,
+                optimizer,
+                args.time,
+                reg_loss_fn=reg_loss_fn,
+                reg_coeff=args.reg_coeff,
             )
             logger.info(
                 "Epoch:[{}/{}]\t loss(sum)={:.5f}\t train_MAE={:.6f}".format(
@@ -204,6 +275,8 @@ def main():
                 criterion,
                 optimizer,
                 args.time,
+                reg_loss_fn=reg_loss_fn,
+                reg_coeff=args.reg_coeff,
             )
             logger.info(
                 "Epoch:[{}/{}]\t loss={:.5f}\t acc={:.3f}".format(
