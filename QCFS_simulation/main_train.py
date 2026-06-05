@@ -95,6 +95,16 @@ parser.add_argument(
     help="--regularizer=mne_l2 时使用保守版 M_eff=max_o ||W_tilde_o||^2",
 )
 parser.add_argument(
+    "--mne_detach_lambda",
+    action="store_true",
+    help="--regularizer=mne_l2 时对 IF 阈值 lambda 使用 stop-gradient",
+)
+parser.add_argument(
+    "--mne_no_detach_bn_stats",
+    action="store_true",
+    help="--regularizer=mne_l2 时允许正则梯度回传到 BN running_var/gamma",
+)
+parser.add_argument(
     "--conv_mne_no_detach_lambda",
     action="store_true",
     help="--regularizer=conv_mne_l2 时关闭 stop-gradient（默认开启 detach）",
@@ -208,6 +218,8 @@ def main():
             quant_level=(args.L if q is None else q),
             eps=args.mne_eps,
             use_max=args.mne_use_max,
+            detach_lambda=args.mne_detach_lambda,
+            detach_bn_stats=(not args.mne_no_detach_bn_stats),
         )
     elif args.regularizer == "conv_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_conv_mne_l2_regularization(
@@ -240,8 +252,14 @@ def main():
     )
     if args.regularizer == "mne_l2":
         logger.info(
-            "mne_l2: L=%d, eps=%.3e, use_max=%s"
-            % (args.L, args.mne_eps, str(bool(args.mne_use_max)))
+            "mne_l2: L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s"
+            % (
+                args.L,
+                args.mne_eps,
+                str(bool(args.mne_use_max)),
+                str(bool(args.mne_detach_lambda)),
+                str(bool(not args.mne_no_detach_bn_stats)),
+            )
         )
     if args.regularizer == "conv_mne_l2":
         logger.info(

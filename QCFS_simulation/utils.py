@@ -100,7 +100,7 @@ def train(
             reg = reg_loss_fn(model, T, quant_level)
             loss = loss + float(reg_coeff) * reg
         running_loss += loss.item()
-        loss.mean().backward()
+        loss.backward()
         optimizer.step()
         total += float(labels.size(0))
         _, predicted = outputs.cpu().max(1)
@@ -212,6 +212,8 @@ def compute_mne_l2_regularization(
     quant_level: int,
     eps: float = 1e-6,
     use_max: bool = False,
+    detach_lambda: bool = False,
+    detach_bn_stats: bool = True,
 ):
     """
     Margin-Normalized Effective L2 (MNE-L2):
@@ -240,9 +242,14 @@ def compute_mne_l2_regularization(
 
         bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
         if bn_mod is not None:
+            bn_eps = float(getattr(bn_mod, "eps", eps))
             gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
             var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)
-            scale = gamma / torch.sqrt(var + eps)
+            if detach_bn_stats:
+                gamma = gamma.detach()
+                var = var.detach()
+            var = var.clamp(min=bn_eps)
+            scale = gamma / torch.sqrt(var + bn_eps)
             view_shape = [scale.shape[0]] + [1] * (w.dim() - 1)
             w_eff = w * scale.view(*view_shape)
 
@@ -250,8 +257,11 @@ def compute_mne_l2_regularization(
         per_out_norm_sq = (w_flat * w_flat).sum(dim=1)
         m_eff = per_out_norm_sq.max() if use_max else per_out_norm_sq.mean()
 
+        lam_min = max(eps, 1e-3)
         if if_mod is not None and hasattr(if_mod, "thresh"):
-            lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=eps).view(-1)[0]
+            lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=lam_min).view(-1)[0]
+            if detach_lambda:
+                lam = lam.detach()
         else:
             lam = torch.ones((), device=w.device, dtype=w.dtype)
 

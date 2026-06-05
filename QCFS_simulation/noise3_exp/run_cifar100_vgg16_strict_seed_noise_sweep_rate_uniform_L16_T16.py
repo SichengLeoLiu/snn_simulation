@@ -26,6 +26,8 @@ IF_MODE = "rate_uniform"
 EPOCHS = 300
 LR = 0.1
 BATCH = 128
+# VGG/CIFAR 上 mne_l2 需更小系数；5e-2 会导致 BN gamma 爆炸→NaN
+MNE_REG_COEFF = 1e-3
 
 
 def coeff_tag(v: float) -> str:
@@ -35,7 +37,7 @@ def coeff_tag(v: float) -> str:
 def build_suffix(reg: str, seed: int) -> str:
     if reg == "weight_decay":
         return f"strict_seed{seed}_ablation_wd_l{LVAL}_{ARCH}"
-    return f"strict_seed{seed}_ablation_mne_l2_l{LVAL}_{ARCH}_rc{coeff_tag(5e-2)}"
+    return f"strict_seed{seed}_ablation_mne_l2_l{LVAL}_{ARCH}_rc{coeff_tag(MNE_REG_COEFF)}"
 
 
 def ckpt_path(reg: str, seed: int) -> Path:
@@ -50,7 +52,7 @@ def train_one(reg: str, seed: int) -> Path:
         return ckpt
 
     if reg == "mne_l2":
-        regularizer, wd, rc = "mne_l2", 0.0, 5e-2
+        regularizer, wd, rc = "mne_l2", 0.0, MNE_REG_COEFF
     else:
         regularizer, wd, rc = "weight_decay", 5e-4, 1.0
 
@@ -72,6 +74,8 @@ def train_one(reg: str, seed: int) -> Path:
         "--reg_coeff", str(rc),
         "--suffix", build_suffix(reg, seed),
     ]
+    if reg == "mne_l2":
+        cmd.append("--mne_detach_lambda")
     print(f"[TRAIN] {DATASET} {ARCH} {reg} seed={seed}", flush=True)
     subprocess.run(cmd, cwd=str(ROOT), check=True)
     if not ckpt.exists():
