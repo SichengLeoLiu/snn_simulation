@@ -1,0 +1,4 @@
+method,train_return_code,best_test_acc_T0,weight_file,log_file
+weight_decay,0,97.8,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_l16/cnn2_L[16]_ablation_wd_l16.pth,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_l16/cnn2_L[16]_ablation_wd_l16.log
+mne_l2,0,97.72,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_l16/cnn2_L[16]_ablation_mne_l2_l16.pth,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_l16/cnn2_L[16]_ablation_mne_l2_l16.log
+no_regularization,0,97.94,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_l16/cnn2_L[16]_ablation_none_l16.pth,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_l16/cnn2_L[16]_ablation_none_l16.log

@@ -1,0 +1,5 @@
+method,best_test_acc_t0,acc_sigma0_t16_rate_uniform,sigma_hit_acc_le_90,acc_at_hit
+weight_decay,97.9,94.77,0.1,76.0
+mne_l2,97.76,95.74,0.9,89.86
+conv_mne_l2,96.56,93.01,,
+no_regularization,97.67,93.44,0.1,89.51

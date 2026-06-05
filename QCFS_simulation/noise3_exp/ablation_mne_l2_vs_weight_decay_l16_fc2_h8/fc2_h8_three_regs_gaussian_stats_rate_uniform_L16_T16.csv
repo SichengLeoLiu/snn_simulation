@@ -1,0 +1,4 @@
+arch,regularizer,L,T,if_mode,sigma_eff,var_eff,p_e,acc,equal_count,total_count,lambda_if1,h_tolerance,noise_variance,noise_sigma,noise_type,repeats,max_batches,checkpoint
+fc2_h8,mne_l2,16,16,rate_uniform,2.11210953674066,4.46100669519083,0.969930013020833,80.190000,23837,24576,193.329315185547,6.04154109954834,0.5,0.7071067811865476,gaussian,6,4,mnist-checkpoints/fc2_h8_L[16]_ablation_mne_l2_l16_fc2_h8_rc5em02.pth
+fc2_h8,weight_decay,16,16,rate_uniform,0.41120715026502,0.169091320429079,0.715657552083333,82.010000,17588,24576,6.42895317077637,0.200904786586761,0.5,0.7071067811865476,gaussian,6,4,mnist-checkpoints/fc2_h8_L[16]_ablation_wd_l16_fc2_h8.pth
+fc2_h8,no_regularization,16,16,rate_uniform,4.24806909855109,18.0460910660647,0.773966471354167,70.580000,19021,24576,32.8541221618652,1.02669131755829,0.5,0.7071067811865476,gaussian,6,4,mnist-checkpoints/fc2_h8_L[16]_ablation_none_l16_fc2_h8.pth

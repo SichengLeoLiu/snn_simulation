@@ -1,0 +1,5 @@
+method,target_acc,sigma_hit,acc_at_hit,best_test_acc_t0
+weight_decay,90.0,0.94,89.890000,99.140
+mne_l2,90.0,,,99.110
+no_regularization,90.0,,,99.150
+conv_mne_l2,90.0,,,98.750

@@ -1,0 +1,16 @@
+folder,label,L,sigma_eff
+mnist-checkpoints,small (mnist-checkpoints),2,0.461869051499675
+mnist-checkpoints,small (mnist-checkpoints),4,0.45920161615117766
+mnist-checkpoints,small (mnist-checkpoints),8,0.4499277756562603
+mnist-checkpoints,small (mnist-checkpoints),16,0.47226908398374345
+mnist-checkpoints,small (mnist-checkpoints),32,0.488351125391559
+mnist-checkpoints_c16_c32,large (c16_c32),2,0.33131609786733446
+mnist-checkpoints_c16_c32,large (c16_c32),4,0.33533233554026126
+mnist-checkpoints_c16_c32,large (c16_c32),8,0.3288845852688511
+mnist-checkpoints_c16_c32,large (c16_c32),16,0.31003027137880695
+mnist-checkpoints_c16_c32,large (c16_c32),32,0.3157176480655404
+mnist-checkpoints_c4_c8,medium (c4_c8),2,0.3987467397467151
+mnist-checkpoints_c4_c8,medium (c4_c8),4,0.416343042801005
+mnist-checkpoints_c4_c8,medium (c4_c8),8,0.3652217371884585
+mnist-checkpoints_c4_c8,medium (c4_c8),16,0.3638410937009932
+mnist-checkpoints_c4_c8,medium (c4_c8),32,0.3928415944729308

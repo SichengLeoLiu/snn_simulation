@@ -1,0 +1,4 @@
+method,T,mode,acc,weights
+weight_decay,16,normal,16.46,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_quick3ep/vgg16_L[16]_quick3ep_wd.pth
+mne_l2,16,normal,16.86,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_quick3ep/vgg16_L[16]_quick3ep_mne_l2.pth
+no_regularization,16,normal,15.31,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_quick3ep/vgg16_L[16]_quick3ep_none.pth

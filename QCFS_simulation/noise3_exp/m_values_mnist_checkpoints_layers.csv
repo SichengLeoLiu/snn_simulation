@@ -1,0 +1,295 @@
+checkpoint,layer,type,shape,m_layer_mean,m_layer_strict,numel
+mnist-checkpoints/cnn2_L[16].pth,classifier.weight,fc,"(10, 196)",0.284220814704895,0.4028192162513733,1960
+mnist-checkpoints/cnn2_L[16].pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4767724573612213,0.5546320676803589,18
+mnist-checkpoints/cnn2_L[16].pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3816547393798828,0.5075414776802063,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed44.pth,classifier.weight,fc,"(10, 196)",0.30445799231529236,0.4213569164276123,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed44.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5219600796699524,0.6913392543792725,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed44.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.30948734283447266,0.35378706455230713,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed45.pth,classifier.weight,fc,"(10, 196)",0.2443125993013382,0.3148769736289978,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed45.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.502246081829071,0.508316159248352,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed45.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3311026990413666,0.39413392543792725,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed46.pth,classifier.weight,fc,"(10, 196)",0.29297101497650146,0.3885178565979004,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed46.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.42063090205192566,0.4714726209640503,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed46.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.37422826886177063,0.43982288241386414,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed47.pth,classifier.weight,fc,"(10, 196)",0.32631728053092957,0.44718217849731445,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed47.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.3820769488811493,0.41774284839630127,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed47.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3148964047431946,0.3856970965862274,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed48.pth,classifier.weight,fc,"(10, 196)",0.27609682083129883,0.3376044034957886,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed48.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.47614786028862,0.5325102210044861,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed48.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.362833172082901,0.4634736478328705,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed49.pth,classifier.weight,fc,"(10, 196)",0.32708197832107544,0.39453279972076416,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed49.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4353797137737274,0.4575241506099701,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed49.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.34858453273773193,0.3793196678161621,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed50.pth,classifier.weight,fc,"(10, 196)",0.2932232916355133,0.4245143532752991,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed50.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5038387775421143,0.5541783571243286,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed50.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3104584217071533,0.3585752248764038,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed51.pth,classifier.weight,fc,"(10, 196)",0.31377115845680237,0.44170746207237244,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed51.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4053623080253601,0.4464013874530792,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed51.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3437317907810211,0.3768243193626404,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed52.pth,classifier.weight,fc,"(10, 196)",0.36337926983833313,0.4840103089809418,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed52.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.38442105054855347,0.3885485529899597,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed52.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.36177343130111694,0.4096623957157135,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed53.pth,classifier.weight,fc,"(10, 196)",0.31398576498031616,0.396136075258255,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed53.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.44690343737602234,0.5188668966293335,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed53.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3777422308921814,0.4080577492713928,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed54.pth,classifier.weight,fc,"(10, 196)",0.3221225440502167,0.48980712890625,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed54.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4584379196166992,0.543507993221283,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed54.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.35325294733047485,0.3931918144226074,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed55.pth,classifier.weight,fc,"(10, 196)",0.3119003474712372,0.4625331461429596,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed55.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.3815276026725769,0.3936861753463745,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed55.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3793568015098572,0.5520641803741455,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed56.pth,classifier.weight,fc,"(10, 196)",0.27142733335494995,0.3867703378200531,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed56.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.35783860087394714,0.4269547760486603,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed56.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3403536081314087,0.4236195981502533,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed57.pth,classifier.weight,fc,"(10, 196)",0.29041290283203125,0.4011843800544739,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed57.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4431747794151306,0.4954156279563904,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed57.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.39685317873954773,0.5737574100494385,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed58.pth,classifier.weight,fc,"(10, 196)",0.29491347074508667,0.46054545044898987,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed58.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.41628336906433105,0.48346737027168274,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed58.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.36307913064956665,0.38987934589385986,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed59.pth,classifier.weight,fc,"(10, 196)",0.27210184931755066,0.34778064489364624,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed59.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.413435161113739,0.44615602493286133,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed59.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.42292383313179016,0.4968075156211853,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed60.pth,classifier.weight,fc,"(10, 196)",0.28299733996391296,0.36407944560050964,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed60.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.33758634328842163,0.348943293094635,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed60.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3721107244491577,0.4016052484512329,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed61.pth,classifier.weight,fc,"(10, 196)",0.28866857290267944,0.36995306611061096,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed61.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.48438602685928345,0.49206244945526123,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed61.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.35846084356307983,0.40542393922805786,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed62.pth,classifier.weight,fc,"(10, 196)",0.31345370411872864,0.4557034969329834,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed62.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4025493562221527,0.4345712959766388,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed62.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.36108648777008057,0.40810659527778625,72
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed63.pth,classifier.weight,fc,"(10, 196)",0.2862303555011749,0.37541213631629944,1960
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed63.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.41484805941581726,0.4196144640445709,18
+mnist-checkpoints/cnn2_L[16]_L2_ann2snn_seed63.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.37211138010025024,0.48156240582466125,72
+mnist-checkpoints/cnn2_L[2].pth,classifier.weight,fc,"(10, 196)",0.26370638608932495,0.47998860478401184,1960
+mnist-checkpoints/cnn2_L[2].pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4602302014827728,0.5930185317993164,18
+mnist-checkpoints/cnn2_L[2].pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3128439486026764,0.4251507520675659,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed44.pth,classifier.weight,fc,"(10, 196)",0.3626019060611725,0.6389294862747192,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed44.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5210646390914917,0.6559016704559326,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed44.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3914225995540619,0.5470756888389587,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed45.pth,classifier.weight,fc,"(10, 196)",0.5550491213798523,0.8325441479682922,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed45.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.16507884860038757,0.19432398676872253,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed45.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.281798779964447,0.3735939562320709,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed46.pth,classifier.weight,fc,"(10, 196)",0.22902199625968933,0.2971188724040985,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed46.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4432843029499054,0.5187498331069946,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed46.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.33987194299697876,0.3936527967453003,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed47.pth,classifier.weight,fc,"(10, 196)",0.39464136958122253,0.5956993699073792,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed47.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.3969007134437561,0.4158399999141693,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed47.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.39601022005081177,0.46660757064819336,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed48.pth,classifier.weight,fc,"(10, 196)",0.2846083641052246,0.3936074674129486,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed48.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.31595999002456665,0.3340376615524292,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed48.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.327154278755188,0.3601545989513397,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed49.pth,classifier.weight,fc,"(10, 196)",0.30265676975250244,0.4266795814037323,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed49.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5393097400665283,0.5735803842544556,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed49.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3836781084537506,0.4813499450683594,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed50.pth,classifier.weight,fc,"(10, 196)",0.37531986832618713,0.5235699415206909,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed50.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5759198665618896,0.6997822523117065,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed50.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.33625268936157227,0.38280588388442993,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed51.pth,classifier.weight,fc,"(10, 196)",0.2746518552303314,0.37737220525741577,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed51.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5791696906089783,0.7172766923904419,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed51.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3303232789039612,0.41014277935028076,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed52.pth,classifier.weight,fc,"(10, 196)",0.2692868113517761,0.410519540309906,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed52.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.46675029397010803,0.5569984912872314,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed52.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3438537120819092,0.3931940495967865,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed53.pth,classifier.weight,fc,"(10, 196)",0.3182395100593567,0.39549094438552856,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed53.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.6047894358634949,0.804511308670044,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed53.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.41451236605644226,0.43986332416534424,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed54.pth,classifier.weight,fc,"(10, 196)",0.32980987429618835,0.4660029411315918,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed54.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5383839011192322,0.6868278980255127,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed54.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.4055902659893036,0.5423634648323059,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed55.pth,classifier.weight,fc,"(10, 196)",0.34836944937705994,0.5005786418914795,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed55.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.36201316118240356,0.4014623165130615,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed55.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.35779672861099243,0.40443655848503113,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed56.pth,classifier.weight,fc,"(10, 196)",0.2946150004863739,0.38061127066612244,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed56.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.42796480655670166,0.46452534198760986,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed56.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.35897713899612427,0.398716539144516,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed57.pth,classifier.weight,fc,"(10, 196)",0.32032784819602966,0.3667565882205963,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed57.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5195498466491699,0.5378050208091736,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed57.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.395461767911911,0.5086434483528137,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed58.pth,classifier.weight,fc,"(10, 196)",0.3258633613586426,0.4703928232192993,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed58.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.526057243347168,0.5283874273300171,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed58.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.36929798126220703,0.4831755459308624,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed59.pth,classifier.weight,fc,"(10, 196)",0.29714927077293396,0.4458647072315216,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed59.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.3183770179748535,0.3448657691478729,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed59.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.31502044200897217,0.36745500564575195,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed60.pth,classifier.weight,fc,"(10, 196)",0.3118353486061096,0.47671961784362793,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed60.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.37599581480026245,0.4074847996234894,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed60.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.41228628158569336,0.4838627576828003,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed61.pth,classifier.weight,fc,"(10, 196)",0.2929184138774872,0.3847467005252838,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed61.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4794164299964905,0.5875825881958008,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed61.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3623019754886627,0.4614366888999939,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed62.pth,classifier.weight,fc,"(10, 196)",0.307109534740448,0.4453434944152832,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed62.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5261635184288025,0.5594580173492432,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed62.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3660411238670349,0.40712493658065796,72
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed63.pth,classifier.weight,fc,"(10, 196)",0.27152591943740845,0.3552723824977875,1960
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed63.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4682072103023529,0.5082443952560425,18
+mnist-checkpoints/cnn2_L[2]_L2_ann2snn_seed63.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3656614124774933,0.4356517791748047,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed44.pth,classifier.weight,fc,"(10, 196)",0.14927445352077484,0.3167318105697632,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed44.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.6177184581756592,0.8316843509674072,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed44.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3479020297527313,0.44966351985931396,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed45.pth,classifier.weight,fc,"(10, 196)",0.001673458726145327,0.0018181765917688608,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed45.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.09800930321216583,0.11387063562870026,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed45.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.04420141875743866,0.06204560026526451,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed46.pth,classifier.weight,fc,"(10, 196)",0.08414585888385773,0.15838941931724548,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed46.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.1961054801940918,0.20268931984901428,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed46.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.15960413217544556,0.2072456181049347,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed47.pth,classifier.weight,fc,"(10, 196)",0.12582820653915405,0.20610883831977844,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed47.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.40321066975593567,0.47636663913726807,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed47.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.4525660276412964,0.766215980052948,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed48.pth,classifier.weight,fc,"(10, 196)",0.021936452016234398,0.028326820582151413,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed48.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.059233468025922775,0.06520428508520126,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed48.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.057909343391656876,0.07798127084970474,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed49.pth,classifier.weight,fc,"(10, 196)",0.06114790216088295,0.1029583290219307,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed49.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.24911610782146454,0.27678072452545166,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed49.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.10939177125692368,0.1327233910560608,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed50.pth,classifier.weight,fc,"(10, 196)",0.13465115427970886,0.20923848450183868,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed50.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.28450503945350647,0.4382038116455078,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed50.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.2906643748283386,0.5420597791671753,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed51.pth,classifier.weight,fc,"(10, 196)",0.05853373184800148,0.0911531075835228,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed51.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.20027466118335724,0.29534390568733215,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed51.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.08253797143697739,0.09995871037244797,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed52.pth,classifier.weight,fc,"(10, 196)",0.052330709993839264,0.0779578909277916,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed52.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.1634809374809265,0.20664991438388824,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed52.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.10309100151062012,0.1205577701330185,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed53.pth,classifier.weight,fc,"(10, 196)",0.18538734316825867,0.26326853036880493,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed53.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4526810050010681,0.6509689092636108,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed53.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.29240766167640686,0.4077655076980591,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed54.pth,classifier.weight,fc,"(10, 196)",0.09795704483985901,0.16980382800102234,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed54.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.47970613837242126,0.7423825860023499,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed54.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.21152646839618683,0.40915384888648987,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed55.pth,classifier.weight,fc,"(10, 196)",0.018680818378925323,0.030657904222607613,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed55.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.10653630644083023,0.13656097650527954,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed55.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.07348867505788803,0.0878833532333374,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed56.pth,classifier.weight,fc,"(10, 196)",0.023076407611370087,0.037915561348199844,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed56.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.08183032274246216,0.08814463019371033,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed56.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.07175454497337341,0.1133057028055191,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed57.pth,classifier.weight,fc,"(10, 196)",0.039378371089696884,0.05375980958342552,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed57.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.21434128284454346,0.240250825881958,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed57.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.1067425012588501,0.15599358081817627,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed58.pth,classifier.weight,fc,"(10, 196)",0.07128987461328506,0.09378494322299957,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed58.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.21788223087787628,0.25407305359840393,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed58.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.11008402705192566,0.14315935969352722,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed59.pth,classifier.weight,fc,"(10, 196)",0.012491107918322086,0.021867884323000908,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed59.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.11491187661886215,0.14484892785549164,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed59.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.053640201687812805,0.0623585507273674,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed60.pth,classifier.weight,fc,"(10, 196)",0.08142916858196259,0.1184537336230278,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed60.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.437507301568985,0.7163345813751221,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed60.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.2589263319969177,0.3990653455257416,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed61.pth,classifier.weight,fc,"(10, 196)",0.030689017847180367,0.04541444405913353,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed61.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.14349621534347534,0.1979319304227829,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed61.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.0715351477265358,0.08473734557628632,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed62.pth,classifier.weight,fc,"(10, 196)",0.047715988010168076,0.08529309183359146,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed62.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.16019652783870697,0.20239686965942383,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed62.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.09915906190872192,0.12051468342542648,72
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed63.pth,classifier.weight,fc,"(10, 196)",0.036593977361917496,0.056990813463926315,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed63.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.11418669670820236,0.15027961134910583,18
+mnist-checkpoints/cnn2_L[2]_T[2]_L2T2_seed63.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.08542047441005707,0.10514304786920547,72
+mnist-checkpoints/cnn2_L[2]_T[2]_smokecheck_seed44.pth,classifier.weight,fc,"(10, 196)",0.05134045332670212,0.07011492550373077,1960
+mnist-checkpoints/cnn2_L[2]_T[2]_smokecheck_seed44.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.23976381123065948,0.3428671956062317,18
+mnist-checkpoints/cnn2_L[2]_T[2]_smokecheck_seed44.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.10551419854164124,0.1312207579612732,72
+mnist-checkpoints/cnn2_L[2]_ann2snn_smoke_seed44.pth,classifier.weight,fc,"(10, 196)",0.059995852410793304,0.07524391263723373,1960
+mnist-checkpoints/cnn2_L[2]_ann2snn_smoke_seed44.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.23338225483894348,0.3308662474155426,18
+mnist-checkpoints/cnn2_L[2]_ann2snn_smoke_seed44.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.10226121544837952,0.12129257619380951,72
+mnist-checkpoints/cnn2_L[32].pth,classifier.weight,fc,"(10, 196)",0.29621076583862305,0.4586138129234314,1960
+mnist-checkpoints/cnn2_L[32].pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5073542594909668,0.6194705963134766,18
+mnist-checkpoints/cnn2_L[32].pth,conv2.weight,conv,"(4, 2, 3, 3)",0.4034689664840698,0.5072376728057861,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed44.pth,classifier.weight,fc,"(10, 196)",0.30876168608665466,0.4160192012786865,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed44.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5363495349884033,0.6905152797698975,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed44.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3045312166213989,0.3492472767829895,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed45.pth,classifier.weight,fc,"(10, 196)",0.2680806815624237,0.3615715205669403,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed45.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.5076624751091003,0.5304318070411682,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed45.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3403815031051636,0.38620373606681824,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed46.pth,classifier.weight,fc,"(10, 196)",0.29814815521240234,0.40007156133651733,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed46.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4206315279006958,0.4668090045452118,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed46.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.37117913365364075,0.4258989989757538,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed47.pth,classifier.weight,fc,"(10, 196)",0.3383667469024658,0.4430010914802551,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed47.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.3862084746360779,0.41451120376586914,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed47.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3234117329120636,0.41499945521354675,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed48.pth,classifier.weight,fc,"(10, 196)",0.2717129588127136,0.3546069264411926,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed48.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.39887216687202454,0.47511211037635803,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed48.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3744230270385742,0.5395246744155884,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed49.pth,classifier.weight,fc,"(10, 196)",0.3322599232196808,0.3867122232913971,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed49.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4384905695915222,0.4650115370750427,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed49.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3381969928741455,0.36685311794281006,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed50.pth,classifier.weight,fc,"(10, 196)",0.2929188013076782,0.4132551848888397,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed50.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4959351718425751,0.5450950264930725,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed50.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.30690425634384155,0.3387148380279541,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed51.pth,classifier.weight,fc,"(10, 196)",0.28470608592033386,0.37227651476860046,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed51.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.37379592657089233,0.4288298785686493,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed51.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3461087644100189,0.37924161553382874,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed52.pth,classifier.weight,fc,"(10, 196)",0.3603557348251343,0.5026733875274658,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed52.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.36181512475013733,0.3832511305809021,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed52.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3700442612171173,0.4512605667114258,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed53.pth,classifier.weight,fc,"(10, 196)",0.3196793496608734,0.4046657979488373,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed53.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4309993088245392,0.5028456449508667,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed53.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3688915967941284,0.39739328622817993,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed54.pth,classifier.weight,fc,"(10, 196)",0.34086400270462036,0.4748878479003906,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed54.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.437190979719162,0.5055482387542725,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed54.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.35933852195739746,0.3997960686683655,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed55.pth,classifier.weight,fc,"(10, 196)",0.3283799886703491,0.4273577034473419,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed55.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.3750423491001129,0.3960311710834503,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed55.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.40064769983291626,0.5757365822792053,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed56.pth,classifier.weight,fc,"(10, 196)",0.2772231101989746,0.36624881625175476,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed56.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.350687712430954,0.41982001066207886,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed56.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.34080371260643005,0.42254140973091125,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed57.pth,classifier.weight,fc,"(10, 196)",0.2741375267505646,0.3764486610889435,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed57.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.43143436312675476,0.4738512635231018,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed57.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3825276494026184,0.54686039686203,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed58.pth,classifier.weight,fc,"(10, 196)",0.2894286513328552,0.47617125511169434,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed58.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4040192663669586,0.47032198309898376,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed58.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.34556591510772705,0.3666306436061859,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed59.pth,classifier.weight,fc,"(10, 196)",0.25362786650657654,0.3219454884529114,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed59.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.49328967928886414,0.5827375650405884,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed59.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.4017379581928253,0.46551698446273804,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed60.pth,classifier.weight,fc,"(10, 196)",0.2557753920555115,0.31080904603004456,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed60.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.33437198400497437,0.3845764398574829,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed60.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.37844839692115784,0.44986692070961,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed61.pth,classifier.weight,fc,"(10, 196)",0.29313164949417114,0.3690759241580963,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed61.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4775671362876892,0.49651873111724854,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed61.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3589213788509369,0.4372405707836151,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed62.pth,classifier.weight,fc,"(10, 196)",0.32686129212379456,0.40398162603378296,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed62.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.39741626381874084,0.4362500011920929,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed62.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.35336607694625854,0.37374284863471985,72
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed63.pth,classifier.weight,fc,"(10, 196)",0.3195788860321045,0.4404676854610443,1960
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed63.pth,conv1.weight,conv,"(2, 1, 3, 3)",0.47715771198272705,0.5426936745643616,18
+mnist-checkpoints/cnn2_L[32]_L2_ann2snn_seed63.pth,conv2.weight,conv,"(4, 2, 3, 3)",0.4005924463272095,0.4673769176006317,72
+mnist-checkpoints/cnn2_L[4].pth,classifier.weight,fc,"(10, 196)",0.2926531732082367,0.3758579194545746,1960
+mnist-checkpoints/cnn2_L[4].pth,conv1.weight,conv,"(2, 1, 3, 3)",0.45092329382896423,0.4933941662311554,18
+mnist-checkpoints/cnn2_L[4].pth,conv2.weight,conv,"(4, 2, 3, 3)",0.339026540517807,0.4028415083885193,72
+mnist-checkpoints/cnn2_L[64].pth,classifier.weight,fc,"(10, 196)",0.2846274673938751,0.44690096378326416,1960
+mnist-checkpoints/cnn2_L[64].pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4926908314228058,0.6043789386749268,18
+mnist-checkpoints/cnn2_L[64].pth,conv2.weight,conv,"(4, 2, 3, 3)",0.4158051908016205,0.5739642977714539,72
+mnist-checkpoints/cnn2_L[8].pth,classifier.weight,fc,"(10, 196)",0.27606886625289917,0.37923136353492737,1960
+mnist-checkpoints/cnn2_L[8].pth,conv1.weight,conv,"(2, 1, 3, 3)",0.4349217712879181,0.4728732109069824,18
+mnist-checkpoints/cnn2_L[8].pth,conv2.weight,conv,"(4, 2, 3, 3)",0.3616735637187958,0.4297226667404175,72
+mnist-checkpoints_c16_c32/cnn2_L[16].pth,classifier.weight,fc,"(10, 1568)",0.05292767286300659,0.07063788920640945,15680
+mnist-checkpoints_c16_c32/cnn2_L[16].pth,conv1.weight,conv,"(16, 1, 3, 3)",0.20444634556770325,0.43617957830429077,144
+mnist-checkpoints_c16_c32/cnn2_L[16].pth,conv2.weight,conv,"(32, 16, 3, 3)",0.12787160277366638,0.21707384288311005,4608
+mnist-checkpoints_c16_c32/cnn2_L[2].pth,classifier.weight,fc,"(10, 1568)",0.15646527707576752,0.19051286578178406,15680
+mnist-checkpoints_c16_c32/cnn2_L[2].pth,conv1.weight,conv,"(16, 1, 3, 3)",0.23403318226337433,0.37924474477767944,144
+mnist-checkpoints_c16_c32/cnn2_L[2].pth,conv2.weight,conv,"(32, 16, 3, 3)",0.1712600737810135,0.2173600047826767,4608
+mnist-checkpoints_c16_c32/cnn2_L[32].pth,classifier.weight,fc,"(10, 1568)",0.0515698567032814,0.06731471419334412,15680
+mnist-checkpoints_c16_c32/cnn2_L[32].pth,conv1.weight,conv,"(16, 1, 3, 3)",0.21155568957328796,0.36909520626068115,144
+mnist-checkpoints_c16_c32/cnn2_L[32].pth,conv2.weight,conv,"(32, 16, 3, 3)",0.13688762485980988,0.230421245098114,4608
+mnist-checkpoints_c16_c32/cnn2_L[4].pth,classifier.weight,fc,"(10, 1568)",0.10376637428998947,0.1217445656657219,15680
+mnist-checkpoints_c16_c32/cnn2_L[4].pth,conv1.weight,conv,"(16, 1, 3, 3)",0.23928560316562653,0.4831545054912567,144
+mnist-checkpoints_c16_c32/cnn2_L[4].pth,conv2.weight,conv,"(32, 16, 3, 3)",0.16983136534690857,0.2707323729991913,4608
+mnist-checkpoints_c16_c32/cnn2_L[8].pth,classifier.weight,fc,"(10, 1568)",0.061297692358493805,0.07644418627023697,15680
+mnist-checkpoints_c16_c32/cnn2_L[8].pth,conv1.weight,conv,"(16, 1, 3, 3)",0.23083050549030304,0.5466673374176025,144
+mnist-checkpoints_c16_c32/cnn2_L[8].pth,conv2.weight,conv,"(32, 16, 3, 3)",0.13637055456638336,0.24463865160942078,4608
+mnist-checkpoints_c4_c8/cnn2_L[16].pth,classifier.weight,fc,"(10, 392)",0.10876841098070145,0.1318933069705963,3920
+mnist-checkpoints_c4_c8/cnn2_L[16].pth,conv1.weight,conv,"(4, 1, 3, 3)",0.2841830253601074,0.41010114550590515,36
+mnist-checkpoints_c4_c8/cnn2_L[16].pth,conv2.weight,conv,"(8, 4, 3, 3)",0.2248048037290573,0.2655056118965149,288
+mnist-checkpoints_c4_c8/cnn2_L[2].pth,classifier.weight,fc,"(10, 392)",0.19250810146331787,0.2744923532009125,3920
+mnist-checkpoints_c4_c8/cnn2_L[2].pth,conv1.weight,conv,"(4, 1, 3, 3)",0.3416299819946289,0.4626670479774475,36
+mnist-checkpoints_c4_c8/cnn2_L[2].pth,conv2.weight,conv,"(8, 4, 3, 3)",0.26653528213500977,0.29080328345298767,288
+mnist-checkpoints_c4_c8/cnn2_L[32].pth,classifier.weight,fc,"(10, 392)",0.17161305248737335,0.2011709362268448,3920
+mnist-checkpoints_c4_c8/cnn2_L[32].pth,conv1.weight,conv,"(4, 1, 3, 3)",0.32735028862953186,0.42291170358657837,36
+mnist-checkpoints_c4_c8/cnn2_L[32].pth,conv2.weight,conv,"(8, 4, 3, 3)",0.29595816135406494,0.34362542629241943,288
+mnist-checkpoints_c4_c8/cnn2_L[4].pth,classifier.weight,fc,"(10, 392)",0.21266205608844757,0.26625025272369385,3920
+mnist-checkpoints_c4_c8/cnn2_L[4].pth,conv1.weight,conv,"(4, 1, 3, 3)",0.3696392774581909,0.47071948647499084,36
+mnist-checkpoints_c4_c8/cnn2_L[4].pth,conv2.weight,conv,"(8, 4, 3, 3)",0.29890576004981995,0.3370759189128876,288
+mnist-checkpoints_c4_c8/cnn2_L[8].pth,classifier.weight,fc,"(10, 392)",0.1434451788663864,0.16984570026397705,3920
+mnist-checkpoints_c4_c8/cnn2_L[8].pth,conv1.weight,conv,"(4, 1, 3, 3)",0.28577545285224915,0.3331493139266968,36
+mnist-checkpoints_c4_c8/cnn2_L[8].pth,conv2.weight,conv,"(8, 4, 3, 3)",0.24593883752822876,0.2877998650074005,288

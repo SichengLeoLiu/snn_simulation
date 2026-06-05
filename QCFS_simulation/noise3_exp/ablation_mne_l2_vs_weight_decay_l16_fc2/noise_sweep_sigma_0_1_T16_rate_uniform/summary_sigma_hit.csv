@@ -1,0 +1,4 @@
+method,target_acc,sigma_hit,acc_at_hit
+weight_decay,90.0,,
+mne_l2,90.0,,
+no_regularization,90.0,,

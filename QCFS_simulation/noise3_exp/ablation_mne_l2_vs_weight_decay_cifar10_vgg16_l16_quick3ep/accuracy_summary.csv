@@ -1,0 +1,4 @@
+method,best_train_test_acc_T0,eval_acc_T0,epochs,batch_size,weight_file
+weight_decay,21.48,21.48,3,256,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_quick3ep/vgg16_L[16]_quick3ep_wd.pth
+mne_l2,21.38,21.38,3,256,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_quick3ep/vgg16_L[16]_quick3ep_mne_l2.pth
+no_regularization,19.61,19.61,3,256,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_quick3ep/vgg16_L[16]_quick3ep_none.pth

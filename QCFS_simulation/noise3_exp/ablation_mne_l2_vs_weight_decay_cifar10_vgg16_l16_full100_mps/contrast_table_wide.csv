@@ -1,0 +1,4 @@
+method,eval_acc_T0_normal,eval_acc_T16_normal,delta_T16_minus_T0,best_train_test_acc_T0,epochs,device,L,mode,weight_file
+weight_decay,88.4,88.21,-0.1900,88.4,100,mps,16,normal,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_full100_mps/vgg16_L[16]_full100_wd_l16_cifar10_vgg16.pth
+mne_l2,86.47,84.32,-2.1500,86.47,100,mps,16,normal,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_full100_mps/vgg16_L[16]_full100_mne_l2_l16_cifar10_vgg16.pth
+no_regularization,84.96,83.99,-0.9700,84.96,100,mps,16,normal,QCFS_simulation/noise3_exp/ablation_mne_l2_vs_weight_decay_cifar10_vgg16_l16_full100_mps/vgg16_L[16]_full100_none_l16_cifar10_vgg16.pth

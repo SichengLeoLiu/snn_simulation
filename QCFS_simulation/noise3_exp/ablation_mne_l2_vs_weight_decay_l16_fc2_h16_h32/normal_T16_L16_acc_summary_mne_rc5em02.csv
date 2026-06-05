@@ -1,0 +1,3 @@
+arch,hidden_size,regularizer,reg_coeff,L,T,mode,checkpoint,acc
+fc2_h16,16,mne_l2,0.05,16,16,normal,mnist-checkpoints/fc2_h16_L[16]_ablation_mne_l2_l16_fc2_h16_rc5em02.pth,92.600000
+fc2_h32,32,mne_l2,0.05,16,16,normal,mnist-checkpoints/fc2_h32_L[16]_ablation_mne_l2_l16_fc2_h32_rc5em02.pth,95.330000

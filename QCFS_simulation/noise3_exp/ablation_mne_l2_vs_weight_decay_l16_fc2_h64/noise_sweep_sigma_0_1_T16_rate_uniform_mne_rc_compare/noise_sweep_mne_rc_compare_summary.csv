@@ -1,0 +1,16 @@
+metric,value
+mean_acc_1e-4,96.917255
+mean_acc_5e-4,97.029608
+mean_acc_1e-3,97.076471
+mean_delta_5e-4_minus_1e-4,0.112353
+mean_delta_1e-3_minus_5e-4,0.046863
+mean_delta_1e-3_minus_1e-4,0.159216
+max_abs_delta_5e-4_vs_1e-4,0.370000
+max_abs_delta_1e-3_vs_5e-4,0.260000
+max_abs_delta_1e-3_vs_1e-4,0.500000
+delta_at_sigma_1.00_5e-4_minus_1e-4,0.170000
+delta_at_sigma_1.00_1e-3_minus_5e-4,-0.030000
+delta_at_sigma_1.00_1e-3_minus_1e-4,0.140000
+auc_1e-4,96.917400
+auc_5e-4,97.029600
+auc_1e-3,97.077200

@@ -1,0 +1,1 @@
+fc2_h16,weight_decay,L=4,T=16,mode=normal,acc=95.030000,checkpoint=mnist-checkpoints/fc2_h16_L[4]_ablation_wd_l4_fc2_h16.pth\nfc2_h32,weight_decay,L=4,T=16,mode=normal,acc=97.080000,checkpoint=mnist-checkpoints/fc2_h32_L[4]_ablation_wd_l4_fc2_h32.pth\n

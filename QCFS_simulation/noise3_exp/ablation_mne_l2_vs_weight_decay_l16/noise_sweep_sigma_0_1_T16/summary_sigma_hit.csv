@@ -1,0 +1,4 @@
+method,matrix_csv,sigma_hit_for_90acc,acc_at_hit
+mne_l2,noise_sweep_matrix_mnist_cnn2_T16_mode_normal_schedule_normal_seed_42.csv,0.000000,68.940
+no_regularization,noise_sweep_matrix_mnist_cnn2_T16_mode_normal_schedule_normal_seed_42.csv,0.000000,74.720
+weight_decay,noise_sweep_matrix_mnist_cnn2_T16_mode_normal_schedule_normal_seed_42.csv,0.000000,70.480

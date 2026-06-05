@@ -1,0 +1,37 @@
+L,model,regularizer,checkpoint_name,exists,paths
+2,fc2,ablation_mne_l2,fc2_L[2]_ablation_mne_l2_l2_fc2.pth,yes,mnist-checkpoints/fc2_L[2]_ablation_mne_l2_l2_fc2.pth | noise3_exp/ablation_mne_l2_vs_weight_decay_l16_fc2/fc2_L[2]_ablation_mne_l2_l2_fc2.pth
+2,fc2,ablation_none,fc2_L[2]_ablation_none_l2_fc2.pth,yes,mnist-checkpoints/fc2_L[2]_ablation_none_l2_fc2.pth | noise3_exp/ablation_mne_l2_vs_weight_decay_l16_fc2/fc2_L[2]_ablation_none_l2_fc2.pth
+2,fc2,ablation_wd,fc2_L[2]_ablation_wd_l2_fc2.pth,yes,mnist-checkpoints/fc2_L[2]_ablation_wd_l2_fc2.pth | noise3_exp/ablation_mne_l2_vs_weight_decay_l16_fc2/fc2_L[2]_ablation_wd_l2_fc2.pth
+2,fc2_h128,ablation_mne_l2,fc2_h128_L[2]_ablation_mne_l2_l2_fc2_h128.pth,no,
+2,fc2_h128,ablation_none,fc2_h128_L[2]_ablation_none_l2_fc2_h128.pth,no,
+2,fc2_h128,ablation_wd,fc2_h128_L[2]_ablation_wd_l2_fc2_h128.pth,no,
+2,fc2_h512,ablation_mne_l2,fc2_h512_L[2]_ablation_mne_l2_l2_fc2_h512.pth,no,
+2,fc2_h512,ablation_none,fc2_h512_L[2]_ablation_none_l2_fc2_h512.pth,no,
+2,fc2_h512,ablation_wd,fc2_h512_L[2]_ablation_wd_l2_fc2_h512.pth,no,
+4,fc2,ablation_mne_l2,fc2_L[4]_ablation_mne_l2_l4_fc2.pth,yes,mnist-checkpoints/fc2_L[4]_ablation_mne_l2_l4_fc2.pth
+4,fc2,ablation_none,fc2_L[4]_ablation_none_l4_fc2.pth,no,
+4,fc2,ablation_wd,fc2_L[4]_ablation_wd_l4_fc2.pth,yes,mnist-checkpoints/fc2_L[4]_ablation_wd_l4_fc2.pth | noise3_exp/ablation_mne_l2_vs_weight_decay_l16_fc2/fc2_L[4]_ablation_wd_l4_fc2.pth
+4,fc2_h128,ablation_mne_l2,fc2_h128_L[4]_ablation_mne_l2_l4_fc2_h128.pth,no,
+4,fc2_h128,ablation_none,fc2_h128_L[4]_ablation_none_l4_fc2_h128.pth,no,
+4,fc2_h128,ablation_wd,fc2_h128_L[4]_ablation_wd_l4_fc2_h128.pth,no,
+4,fc2_h512,ablation_mne_l2,fc2_h512_L[4]_ablation_mne_l2_l4_fc2_h512.pth,no,
+4,fc2_h512,ablation_none,fc2_h512_L[4]_ablation_none_l4_fc2_h512.pth,no,
+4,fc2_h512,ablation_wd,fc2_h512_L[4]_ablation_wd_l4_fc2_h512.pth,no,
+8,fc2,ablation_mne_l2,fc2_L[8]_ablation_mne_l2_l8_fc2.pth,no,
+8,fc2,ablation_none,fc2_L[8]_ablation_none_l8_fc2.pth,no,
+8,fc2,ablation_wd,fc2_L[8]_ablation_wd_l8_fc2.pth,no,
+8,fc2_h128,ablation_mne_l2,fc2_h128_L[8]_ablation_mne_l2_l8_fc2_h128.pth,no,
+8,fc2_h128,ablation_none,fc2_h128_L[8]_ablation_none_l8_fc2_h128.pth,no,
+8,fc2_h128,ablation_wd,fc2_h128_L[8]_ablation_wd_l8_fc2_h128.pth,no,
+8,fc2_h512,ablation_mne_l2,fc2_h512_L[8]_ablation_mne_l2_l8_fc2_h512.pth,no,
+8,fc2_h512,ablation_none,fc2_h512_L[8]_ablation_none_l8_fc2_h512.pth,no,
+8,fc2_h512,ablation_wd,fc2_h512_L[8]_ablation_wd_l8_fc2_h512.pth,no,
+32,fc2,ablation_mne_l2,fc2_L[32]_ablation_mne_l2_l32_fc2.pth,no,
+32,fc2,ablation_none,fc2_L[32]_ablation_none_l32_fc2.pth,no,
+32,fc2,ablation_wd,fc2_L[32]_ablation_wd_l32_fc2.pth,no,
+32,fc2_h128,ablation_mne_l2,fc2_h128_L[32]_ablation_mne_l2_l32_fc2_h128.pth,no,
+32,fc2_h128,ablation_none,fc2_h128_L[32]_ablation_none_l32_fc2_h128.pth,no,
+32,fc2_h128,ablation_wd,fc2_h128_L[32]_ablation_wd_l32_fc2_h128.pth,no,
+32,fc2_h512,ablation_mne_l2,fc2_h512_L[32]_ablation_mne_l2_l32_fc2_h512.pth,no,
+32,fc2_h512,ablation_none,fc2_h512_L[32]_ablation_none_l32_fc2_h512.pth,no,
+32,fc2_h512,ablation_wd,fc2_h512_L[32]_ablation_wd_l32_fc2_h512.pth,no,

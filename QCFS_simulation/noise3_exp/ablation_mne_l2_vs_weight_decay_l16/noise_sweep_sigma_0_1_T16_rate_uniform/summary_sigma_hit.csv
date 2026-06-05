@@ -1,0 +1,4 @@
+method,if_mode,matrix_csv,clean_acc_sigma0,sigma_hit_for_90acc,acc_at_hit
+mne_l2,rate_uniform,noise_sweep_matrix_mnist_cnn2_T16_mode_rate_uniform_schedule_normal_seed_42.csv,87.570,0.000000,87.570
+no_regularization,rate_uniform,noise_sweep_matrix_mnist_cnn2_T16_mode_rate_uniform_schedule_normal_seed_42.csv,90.900,0.040000,77.020
+weight_decay,rate_uniform,noise_sweep_matrix_mnist_cnn2_T16_mode_rate_uniform_schedule_normal_seed_42.csv,91.230,0.040000,83.870

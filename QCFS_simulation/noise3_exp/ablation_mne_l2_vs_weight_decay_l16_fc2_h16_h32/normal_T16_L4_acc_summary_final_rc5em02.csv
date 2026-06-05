@@ -1,0 +1,7 @@
+arch,hidden_size,regularizer,L,T,mode,reg_coeff,weight_decay,checkpoint,acc
+fc2_h16,16,mne_l2,4,16,normal,0.05,,mnist-checkpoints/fc2_h16_L[4]_ablation_mne_l2_l4_fc2_h16_rc5em02.pth,94.740000
+fc2_h16,16,no_regularization,4,16,normal,,,mnist-checkpoints/fc2_h16_L[4]_ablation_none_l4_fc2_h16.pth,94.650000
+fc2_h16,16,weight_decay,4,16,normal,,0.0005,mnist-checkpoints/fc2_h16_L[4]_ablation_wd_l4_fc2_h16.pth,95.030000
+fc2_h32,32,mne_l2,4,16,normal,0.05,,mnist-checkpoints/fc2_h32_L[4]_ablation_mne_l2_l4_fc2_h32_rc5em02.pth,96.990000
+fc2_h32,32,no_regularization,4,16,normal,,,mnist-checkpoints/fc2_h32_L[4]_ablation_none_l4_fc2_h32.pth,96.000000
+fc2_h32,32,weight_decay,4,16,normal,,0.0005,mnist-checkpoints/fc2_h32_L[4]_ablation_wd_l4_fc2_h32.pth,97.080000

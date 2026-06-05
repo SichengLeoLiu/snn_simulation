@@ -1,0 +1,16 @@
+arch,hidden_size,regularizer,L,T,if_mode,weight_decay,reg_coeff,checkpoint,acc
+fc2_h8,8,mne_l2,2,16,normal,,0.05,mnist-checkpoints/fc2_h8_L[2]_ablation_mne_l2_l2_fc2_h8_rc5em02.pth,77.320000
+fc2_h8,8,no_regularization,2,16,normal,,,mnist-checkpoints/fc2_h8_L[2]_ablation_none_l2_fc2_h8.pth,80.710000
+fc2_h8,8,weight_decay,2,16,normal,0.0005,,mnist-checkpoints/fc2_h8_L[2]_ablation_wd_l2_fc2_h8.pth,89.830000
+fc2_h8,8,mne_l2,4,16,normal,,0.05,mnist-checkpoints/fc2_h8_L[4]_ablation_mne_l2_l4_fc2_h8_rc5em02.pth,81.120000
+fc2_h8,8,no_regularization,4,16,normal,,,mnist-checkpoints/fc2_h8_L[4]_ablation_none_l4_fc2_h8.pth,81.720000
+fc2_h8,8,weight_decay,4,16,normal,0.0005,,mnist-checkpoints/fc2_h8_L[4]_ablation_wd_l4_fc2_h8.pth,90.080000
+fc2_h8,8,mne_l2,8,16,normal,,0.05,mnist-checkpoints/fc2_h8_L[8]_ablation_mne_l2_l8_fc2_h8_rc5em02.pth,68.290000
+fc2_h8,8,no_regularization,8,16,normal,,,mnist-checkpoints/fc2_h8_L[8]_ablation_none_l8_fc2_h8.pth,69.750000
+fc2_h8,8,weight_decay,8,16,normal,0.0005,,mnist-checkpoints/fc2_h8_L[8]_ablation_wd_l8_fc2_h8.pth,81.790000
+fc2_h8,8,mne_l2,16,16,normal,,0.05,mnist-checkpoints/fc2_h8_L[16]_ablation_mne_l2_l16_fc2_h8_rc5em02.pth,80.190000
+fc2_h8,8,no_regularization,16,16,normal,,,mnist-checkpoints/fc2_h8_L[16]_ablation_none_l16_fc2_h8.pth,70.580000
+fc2_h8,8,weight_decay,16,16,normal,0.0005,,mnist-checkpoints/fc2_h8_L[16]_ablation_wd_l16_fc2_h8.pth,82.020000
+fc2_h8,8,mne_l2,32,16,normal,,0.05,mnist-checkpoints/fc2_h8_L[32]_ablation_mne_l2_l32_fc2_h8_rc5em02.pth,89.060000
+fc2_h8,8,no_regularization,32,16,normal,,,mnist-checkpoints/fc2_h8_L[32]_ablation_none_l32_fc2_h8.pth,69.830000
+fc2_h8,8,weight_decay,32,16,normal,0.0005,,mnist-checkpoints/fc2_h8_L[32]_ablation_wd_l32_fc2_h8.pth,86.680000
