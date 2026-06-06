@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CIFAR-100 VGG16：mne_l2 vs weight_decay 严格多 seed 噪声注入（rate_uniform, L=16, T=16）
+# CIFAR-100 VGG16：mne_l2 vs weight_decay 单 seed 噪声注入（rate_uniform, L=16, T=16）
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

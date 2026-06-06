@@ -1,7 +1,7 @@
 """
-CIFAR-100 VGG16 严格多 seed 高斯噪声注入：mne_l2 vs weight_decay。
+CIFAR-100 VGG16 单 seed 高斯噪声注入：mne_l2 vs weight_decay。
 设置：L=16, T=16, IF mode=rate_uniform, sigma=0.0~1.0 step=0.1。
-每个 seed 独立训练，再用对应 checkpoint 做噪声扫描。
+先单 seed 跑通；多 seed 时将 SEEDS 改回列表即可。
 """
 import csv
 import statistics
@@ -18,7 +18,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 ARCH = "vgg16"
 DATASET = "cifar100"
-SEEDS = [40, 41, 42, 43, 44]
+SEEDS = [42]
 REGS = ["mne_l2", "weight_decay"]
 LVAL = 16
 TVAL = 16
@@ -131,7 +131,11 @@ def test_noise_sweep(reg: str, seed: int, ckpt: Path) -> Path:
 
 def plot_results(agg_rows: list[dict]) -> None:
     colors = {"mne_l2": "#1f77b4", "weight_decay": "#ff7f0e"}
-    labels = {"mne_l2": "mne_l2 (mean)", "weight_decay": "weight_decay (mean)"}
+    multi_seed = any(int(r.get("n_seeds", 1)) > 1 for r in agg_rows)
+    labels = {
+        "mne_l2": "mne_l2 (mean)" if multi_seed else "mne_l2",
+        "weight_decay": "weight_decay (mean)" if multi_seed else "weight_decay",
+    }
     plt.rcParams.update({"font.size": 11, "legend.fontsize": 10})
     for no_caption in (False, True):
         fig, ax = plt.subplots(figsize=(8.8, 5.6), dpi=180)
@@ -145,14 +149,15 @@ def plot_results(agg_rows: list[dict]) -> None:
             all_y.extend([yy - ss for yy, ss in zip(y, s)])
             all_y.extend([yy + ss for yy, ss in zip(y, s)])
             ax.plot(x, y, marker="o", linewidth=2.2, markersize=5, color=colors[reg], label=labels[reg])
-            ax.fill_between(
-                x,
-                [yy - ss for yy, ss in zip(y, s)],
-                [yy + ss for yy, ss in zip(y, s)],
-                color=colors[reg],
-                alpha=0.18,
-                linewidth=0,
-            )
+            if multi_seed:
+                ax.fill_between(
+                    x,
+                    [yy - ss for yy, ss in zip(y, s)],
+                    [yy + ss for yy, ss in zip(y, s)],
+                    color=colors[reg],
+                    alpha=0.18,
+                    linewidth=0,
+                )
         ax.set_xlabel("Gaussian noise sigma")
         ax.set_ylabel("Accuracy (%)")
         ax.set_xlim(-0.02, 1.02)
@@ -162,7 +167,7 @@ def plot_results(agg_rows: list[dict]) -> None:
         ax.legend(loc="lower left", frameon=False)
         if not no_caption:
             ax.set_title(
-                f"CIFAR-100 {ARCH} strict-seed noise sweep (L={LVAL},T={TVAL},{IF_MODE})"
+                f"CIFAR-100 {ARCH} noise sweep seed={SEEDS[0]} (L={LVAL},T={TVAL},{IF_MODE})"
             )
         fig.tight_layout()
         suffix = "_no_caption" if no_caption else ""
