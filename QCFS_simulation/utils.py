@@ -241,6 +241,9 @@ def compute_mne_l2_regularization(
         w_eff = w
 
         bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        # 方案 C：无匹配 IF 的层（如 VGG classifier.7 输出头）不参与 MNE-L2。
+        if if_mod is None:
+            continue
         if bn_mod is not None:
             bn_eps = float(getattr(bn_mod, "eps", eps))
             gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
@@ -258,12 +261,9 @@ def compute_mne_l2_regularization(
         m_eff = per_out_norm_sq.max() if use_max else per_out_norm_sq.mean()
 
         lam_min = max(eps, 1e-3)
-        if if_mod is not None and hasattr(if_mod, "thresh"):
-            lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=lam_min).view(-1)[0]
-            if detach_lambda:
-                lam = lam.detach()
-        else:
-            lam = torch.ones((), device=w.device, dtype=w.dtype)
+        lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=lam_min).view(-1)[0]
+        if detach_lambda:
+            lam = lam.detach()
 
         term = (float(quant_level) ** 2) * m_eff / (lam.pow(2) + eps)
         reg = term if reg is None else (reg + term)
