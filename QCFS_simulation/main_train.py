@@ -179,12 +179,20 @@ def main():
     reg_loss_fn = None
 
     is_diff1d = log_ds == "diff1d"
+
+    def _optimizer_weight_decay(regularizer: str, weight_decay: float) -> float:
+        if regularizer == "weight_decay":
+            return weight_decay
+        if regularizer in ("mne_l2", "conv_mne_l2") and weight_decay > 0:
+            return weight_decay
+        return 0.0
+
     if is_diff1d:
         criterion = nn.MSELoss().to(device)
         optimizer = torch.optim.Adam(
             model.parameters(),
             lr=args.lr,
-            weight_decay=(args.weight_decay if args.regularizer == "weight_decay" else 0.0),
+            weight_decay=_optimizer_weight_decay(args.regularizer, args.weight_decay),
         )
     else:
         criterion = nn.CrossEntropyLoss().to(device)
@@ -192,14 +200,14 @@ def main():
             optimizer = torch.optim.Adam(
                 model.parameters(),
                 lr=args.lr,
-                weight_decay=(args.weight_decay if args.regularizer == "weight_decay" else 0.0),
+                weight_decay=_optimizer_weight_decay(args.regularizer, args.weight_decay),
             )
         else:
             optimizer = torch.optim.SGD(
                 model.parameters(),
                 lr=args.lr,
                 momentum=0.9,
-                weight_decay=(args.weight_decay if args.regularizer == "weight_decay" else 0.0),
+                weight_decay=_optimizer_weight_decay(args.regularizer, args.weight_decay),
             )
 
     if args.regularizer == "resolution_aware":
