@@ -3,7 +3,7 @@
     Deep Residual Learning for Image Recognition
     https://arxiv.org/abs/1512.03385v1
 """
-from matplotlib.pyplot import xlim
+import torch
 import torch.nn as nn
 from Models.layer import *
 
@@ -41,16 +41,28 @@ class BasicBlock(nn.Module):
         return self.act(x)
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_block, num_classes=100):
+    def __init__(self, block, num_block, num_classes=100, imagenet_stem=False):
         super().__init__()
         self.in_channels = 64
         self.T = 0
         self.merge = MergeTemporalDim(0)
         self.expand = ExpandTemporalDim(0)
-        self.conv1 = nn.Sequential(
-                        nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
-                        nn.BatchNorm2d(64),
-                        IF())
+        self.first_layer_input_noise_sigma = 0.0
+        self.first_layer_input_noise_type = "gaussian"
+        if imagenet_stem:
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+                nn.BatchNorm2d(64),
+                IF(),
+            )
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        else:
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(64),
+                IF(),
+            )
+            self.maxpool = nn.Identity()
         self.conv2_x = self._make_layer(block, 64, num_block[0], 1)
         self.conv3_x = self._make_layer(block, 128, num_block[1], 2)
         self.conv4_x = self._make_layer(block, 256, num_block[2], 2)
@@ -73,12 +85,8 @@ class ResNet(nn.Module):
         for module in self.modules():
             if isinstance(module, (IF, ExpandTemporalDim)):
                 module.T = T
-                ### Attributes to store spike counts and total elements per timestep
                 module.spike_counts = [0] * T
                 module.total_elements = [0] * T
-
-            if isinstance(module, IF):
-                print(module.thresh)
         return
 
     def set_L(self, L):
@@ -98,6 +106,22 @@ class ResNet(nn.Module):
         for module in self.modules():
             if isinstance(module, IF):
                 module.mode = mode
+
+    def set_first_layer_input_noise_sigma(self, sigma=0.0):
+        self.first_layer_input_noise_sigma = max(0.0, float(sigma))
+
+    def set_first_layer_input_noise_type(self, noise_type="gaussian"):
+        nt = str(noise_type).strip().lower()
+        if nt not in ("gaussian", "pink"):
+            raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
+        self.first_layer_input_noise_type = nt
+
+    def _inject_first_layer_noise(self, x):
+        sigma = self.first_layer_input_noise_sigma
+        if sigma <= 0:
+            return x
+        noise = torch.randn_like(x)
+        return x + noise * sigma
 
     def get_firing_rate(self, save_to_file=None, experiment_name=None):
         """the percentage of 1s out of a spike tensor
@@ -138,6 +162,8 @@ class ResNet(nn.Module):
             x = add_dimention(x, self.T)
             x = self.merge(x)
         output = self.conv1(x)
+        output = self._inject_first_layer_noise(output)
+        output = self.maxpool(output)
         output = self.conv2_x(output)
         output = self.conv3_x(output)
         output = self.conv4_x(output)
@@ -236,8 +262,14 @@ class ResNet4Cifar(nn.Module):
 def resnet18(num_classes=10):
     return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
+def resnet18_imagenet(num_classes=1000):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, imagenet_stem=True)
+
 def resnet20(num_classes=10):
     return ResNet4Cifar(BasicBlock, [3, 3, 3], num_classes=num_classes)
 
 def resnet34(num_classes=10):
     return ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes)
+
+def resnet34_imagenet(num_classes=1000):
+    return ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes, imagenet_stem=True)

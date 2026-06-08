@@ -18,7 +18,7 @@ from utils import (
     compute_conv_mne_l2_regularization,
 )
 
-DATASET_CHOICES = ["mnist", "cifar10", "cifar100", "diff1d"]
+DATASET_CHOICES = ["mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
 
 parser = argparse.ArgumentParser(
     description="训练（MNIST: CNN2；CIFAR: VGG 等）"
@@ -280,9 +280,14 @@ def main():
             )
         )
     if ds not in ("mnist", "diff1d", "toy_diff1d", "diff_1d"):
-        logger.info(
-            "CIFAR 建议: -lr 0.1 -wd 5e-4 --epochs 300 -b 128"
-        )
+        if ds in ("imagenet", "imagenet1k"):
+            logger.info(
+                "ImageNet 建议: -arch resnet18 -lr 0.05 -wd 1e-4 --epochs 90 -b 128"
+            )
+        else:
+            logger.info(
+                "CIFAR 建议: -lr 0.1 -wd 5e-4 --epochs 300 -b 128"
+            )
     if is_diff1d:
         logger.info(
             "diff1d：回归 y=x1-x2（数据上 x1>=x2）；Linear 无 bias、写死差分；指标为 RMSE"

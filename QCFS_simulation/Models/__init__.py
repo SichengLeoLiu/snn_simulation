@@ -5,6 +5,7 @@ from .cnn_mnist import cnn2_mnist
 from .fc_mnist import fc2_mnist, fc3_mnist
 from .toy_diff1d import toy_diff1d
 from .VGG import vgg16, vgg19, vgg16_wobn
+from .ResNet import resnet18, resnet18_imagenet, resnet34, resnet34_imagenet
 
 
 def _parse_mnist_cnn2_variant(model_name: str):
@@ -72,6 +73,14 @@ def modelpool(model_name, dataset_name="mnist"):
             % (dataset_name,)
         )
     dropout = 0.5 if d in ("cifar10", "cifar100") else 0.0
+    if m in ("resnet18", "resnet18_imagenet"):
+        if d in ("imagenet", "imagenet1k"):
+            return resnet18_imagenet(num_classes=num_classes)
+        return resnet18(num_classes=num_classes)
+    if m in ("resnet34", "resnet34_imagenet"):
+        if d in ("imagenet", "imagenet1k"):
+            return resnet34_imagenet(num_classes=num_classes)
+        return resnet34(num_classes=num_classes)
     if m == "vgg16":
         return vgg16(num_classes=num_classes, dropout=dropout)
     if m == "vgg16_wobn":
@@ -79,6 +88,6 @@ def modelpool(model_name, dataset_name="mnist"):
     if m == "vgg19":
         return vgg19(num_classes=num_classes, dropout=dropout)
     raise ValueError(
-        "数据集 %s 下支持的模型: vgg16 | vgg16_wobn | vgg19，收到: %s"
+        "数据集 %s 下支持的模型: vgg16 | vgg16_wobn | vgg19 | resnet18 | resnet34，收到: %s"
         % (dataset_name, model_name)
     )
