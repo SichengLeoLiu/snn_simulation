@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 # Gadi: project gs14, user sl9144（lquota 显示 scratch 约 1TB 可用）
@@ -115,10 +116,12 @@ def download_split_parquet_files(
     repo_id: str,
     split: str,
     verbose: bool = True,
+    max_retries: int = 8,
+    retry_wait_sec: float = 30.0,
 ) -> list[str]:
     """
     仅下载指定 split 的 parquet 到 HF hub 缓存（HF_HUB_CACHE）。
-    不使用 load_dataset('imagenet-1k')，因其会误拉其它 split（HF issue #6793）。
+    已完成的文件会自动跳过；网络中断后重新运行本函数即可续传。
     """
     from huggingface_hub import hf_hub_download
 
@@ -138,17 +141,40 @@ def download_split_parquet_files(
             f"hub_cache={hub_cache}",
             flush=True,
         )
+        print(
+            "[download] 已下载的文件会自动跳过；中断后重新运行同一命令即可续传。",
+            flush=True,
+        )
 
     local_paths: list[str] = []
     for idx, remote_file in enumerate(files, 1):
         if verbose:
             print(f"  [{idx}/{len(files)}] {remote_file}", flush=True)
-        local_path = hf_hub_download(
-            repo_id=repo_id,
-            filename=remote_file,
-            repo_type="dataset",
-            cache_dir=hub_cache,
-        )
+
+        last_err: Exception | None = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                local_path = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=remote_file,
+                    repo_type="dataset",
+                    cache_dir=hub_cache,
+                )
+                break
+            except Exception as exc:
+                last_err = exc
+                if attempt >= max_retries:
+                    raise
+                if verbose:
+                    print(
+                        f"    [retry {attempt}/{max_retries - 1}] {exc}",
+                        flush=True,
+                    )
+                time.sleep(retry_wait_sec)
+        else:
+            if last_err is not None:
+                raise last_err
+
         local_path = str(Path(local_path).resolve())
         if not local_path.startswith(str(hf_home.resolve())):
             raise RuntimeError(

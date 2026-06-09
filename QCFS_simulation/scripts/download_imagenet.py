@@ -439,6 +439,11 @@ def main() -> None:
                     0,
                     "  0. 磁盘配额已满 — 先运行: python scripts/download_imagenet.py --clean",
                 )
+            if "incompleteread" in err.lower() or "connection broken" in err.lower():
+                extra.insert(
+                    0,
+                    "  0. 网络中断 — 已下载文件在 scratch 缓存中，直接重新运行同一命令续传",
+                )
             print("\n常见原因:\n" + "\n".join(extra), file=sys.stderr, flush=True)
             raise SystemExit(1) from exc
 
