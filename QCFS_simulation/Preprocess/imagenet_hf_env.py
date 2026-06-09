@@ -84,14 +84,14 @@ def configure_imagenet_hf_env(verbose: bool = True) -> Path:
         print(f"[imagenet_hf_env] HF_DATASETS_CACHE={datasets_cache}", flush=True)
         if os.environ.get("TMPDIR"):
             print(f"[imagenet_hf_env] TMPDIR={os.environ['TMPDIR']}", flush=True)
-        if prev_hf and Path(prev_hf).expanduser() != hf_home:
+        if prev_hf and Path(prev_hf).expanduser().resolve() != hf_home.resolve():
             print(
-                f"[imagenet_hf_env] 注意: HF_HOME 已由 {prev_hf} 改为 {hf_home}",
+                f"[imagenet_hf_env] HF_HOME changed: {prev_hf} -> {hf_home}",
                 flush=True,
             )
-        if prev_hub and Path(prev_hub).expanduser() != hub_cache:
+        if prev_hub and Path(prev_hub).expanduser().resolve() != hub_cache.resolve():
             print(
-                f"[imagenet_hf_env] 注意: HF_HUB_CACHE 已由 {prev_hub} 改为 {hub_cache}",
+                f"[imagenet_hf_env] HF_HUB_CACHE changed: {prev_hub} -> {hub_cache}",
                 flush=True,
             )
     return hf_home

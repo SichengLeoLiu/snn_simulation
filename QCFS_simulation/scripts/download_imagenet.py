@@ -200,8 +200,15 @@ def check_disk_usage() -> None:
     )
 
 
-def find_imagenet_cache_dirs(hf_roots: list[Path] | None = None) -> list[Path]:
-    roots = hf_roots or [_hf_home()]
+def find_imagenet_cache_dirs(
+    hf_roots: Path | list[Path] | None = None,
+) -> list[Path]:
+    if hf_roots is None:
+        roots = [_hf_home()]
+    elif isinstance(hf_roots, Path):
+        roots = [hf_roots]
+    else:
+        roots = list(hf_roots)
     found: list[Path] = []
     for root in roots:
         if not root.exists():
