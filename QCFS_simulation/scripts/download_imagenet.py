@@ -51,12 +51,16 @@ if str(ROOT) not in sys.path:
 
 from Preprocess.imagenet_hf_env import (  # noqa: E402
     GADI_SCRATCH_ROOT,
+    IMAGENET_ENV_VERSION,
     configure_imagenet_hf_env,
     download_split_parquet_files,
+    home_hf_cache_candidates,
     load_imagenet_split,
     resolve_imagenet_datasets_cache,
     resolve_imagenet_hf_home,
 )
+
+DOWNLOAD_SCRIPT_VERSION = IMAGENET_ENV_VERSION
 
 
 def _ensure_deps() -> None:
@@ -196,45 +200,52 @@ def check_disk_usage() -> None:
     )
 
 
-def find_imagenet_cache_dirs(hf_home: Path | None = None) -> list[Path]:
-    root = hf_home or _hf_home()
+def find_imagenet_cache_dirs(hf_roots: list[Path] | None = None) -> list[Path]:
+    roots = hf_roots or [_hf_home()]
     found: list[Path] = []
-    if not root.exists():
-        return found
+    for root in roots:
+        if not root.exists():
+            continue
 
-    patterns = [
-        root / "hub" / "datasets--imagenet-1k",
-        root / "hub" / "datasets--ILSVRC--imagenet-1k",
-        root / "datasets" / "imagenet-1k",
-        root / "datasets" / "ILSVRC___imagenet-1k",
-    ]
-    for p in patterns:
-        if p.exists():
-            found.append(p)
-
-    hub = root / "hub"
-    if hub.exists():
-        for p in hub.glob("datasets--*imagenet*"):
-            if p not in found:
+        patterns = [
+            root / "hub" / "datasets--imagenet-1k",
+            root / "hub" / "datasets--ILSVRC--imagenet-1k",
+            root / "datasets" / "imagenet-1k",
+            root / "datasets" / "ILSVRC___imagenet-1k",
+        ]
+        for p in patterns:
+            if p.exists():
                 found.append(p)
 
-    datasets_dir = root / "datasets"
-    if datasets_dir.exists():
-        for p in datasets_dir.glob("*imagenet*"):
-            if p not in found:
-                found.append(p)
+        hub = root / "hub"
+        if hub.exists():
+            for p in hub.glob("datasets--*imagenet*"):
+                if p not in found:
+                    found.append(p)
+
+        datasets_dir = root / "datasets"
+        if datasets_dir.exists():
+            for p in datasets_dir.glob("*imagenet*"):
+                if p not in found:
+                    found.append(p)
+
+        lock_dir = hub / ".locks" if hub.exists() else root / "hub" / ".locks"
+        if lock_dir.exists():
+            for p in lock_dir.glob("*imagenet*"):
+                if p not in found:
+                    found.append(p)
 
     return sorted(set(found))
 
 
-def clean_imagenet_cache(hf_home: Path | None = None) -> None:
-    root = hf_home or _hf_home()
-    targets = find_imagenet_cache_dirs(root)
-
-    lock_dir = root / "hub" / ".locks"
-    if lock_dir.exists():
-        for p in lock_dir.glob("*imagenet*"):
-            targets.append(p)
+def clean_imagenet_cache(
+    hf_home: Path | None = None,
+    include_home_copies: bool = True,
+) -> None:
+    roots = [hf_home or _hf_home()]
+    if include_home_copies:
+        roots.extend(home_hf_cache_candidates())
+    targets = find_imagenet_cache_dirs(roots)
 
     if not targets:
         print("[CLEAN] 未发现 ImageNet 缓存，无需删除。", flush=True)
@@ -270,8 +281,13 @@ def _download_split(repo_id: str, split: str, cache_dir: str | None) -> int:
         flush=True,
     )
 
-    download_split_parquet_files(repo_id, split, verbose=True)
-    ds = load_imagenet_split(split, repo_id=repo_id, cache_dir=cache_dir)
+    local_paths = download_split_parquet_files(repo_id, split, verbose=True)
+    ds = load_imagenet_split(
+        split,
+        repo_id=repo_id,
+        cache_dir=cache_dir,
+        parquet_paths=local_paths,
+    )
     n = len(ds)
     print(f"[DONE] split={split!r}  samples={n:,}", flush=True)
     return n
@@ -360,9 +376,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    _ensure_deps()
 
+    # 必须在 import datasets/huggingface_hub 之前设置缓存路径
     hf_home = configure_imagenet_hf_env(verbose=True)
+    print(f"[download_imagenet] version={DOWNLOAD_SCRIPT_VERSION}", flush=True)
+
+    _ensure_deps()
     cache_dir = args.cache_dir or str(resolve_imagenet_datasets_cache())
 
     if args.check_disk:

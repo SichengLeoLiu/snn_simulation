@@ -8,6 +8,7 @@ from pathlib import Path
 GADI_SCRATCH_IMAGENET = Path("/scratch/gs14/sl9144/huggingface")
 GADI_SCRATCH_ROOT = Path("/scratch/gs14/sl9144")
 IMAGENET_REPO_ID = "imagenet-1k"
+IMAGENET_ENV_VERSION = "2026-06-scratch-v2"
 
 
 def _on_gadi_gs14_scratch() -> bool:
@@ -15,7 +16,7 @@ def _on_gadi_gs14_scratch() -> bool:
 
 
 def resolve_imagenet_hf_home() -> Path:
-    """解析 ImageNet 用的 HF_HOME（优先 scratch，避免占满 home 10GB）。"""
+    """解析 ImageNet 用的 HF_HOME（Gadi 上强制 scratch，忽略 home 里的 HF_HOME）。"""
     explicit = os.environ.get("IMAGENET_HF_HOME", "").strip()
     if explicit:
         return Path(explicit).expanduser()
@@ -37,28 +38,60 @@ def resolve_imagenet_datasets_cache() -> Path:
     return resolve_imagenet_hf_home() / "datasets"
 
 
+def resolve_hub_cache_dir() -> Path:
+    hub_cache = os.environ.get("HF_HUB_CACHE", "").strip()
+    if hub_cache:
+        return Path(hub_cache).expanduser()
+    return resolve_imagenet_hf_home() / "hub"
+
+
+def home_hf_cache_candidates() -> list[Path]:
+    return [
+        Path.home() / "datasets" / "huggingface",
+        Path.home() / ".cache" / "huggingface",
+    ]
+
+
 def configure_imagenet_hf_env(verbose: bool = True) -> Path:
     """
-    为 ImageNet 下载/训练设置 HF_HOME 与 HF_DATASETS_CACHE。
-    在 Gadi 上自动使用 /scratch/gs14/sl9144/huggingface。
+    为 ImageNet 下载/训练设置全部 HuggingFace 缓存到 scratch。
+    必须在本文件任何 huggingface_hub / datasets 导入之前调用。
     """
     hf_home = resolve_imagenet_hf_home()
+    hub_cache = hf_home / "hub"
+    datasets_cache = hf_home / "datasets"
     prev_hf = os.environ.get("HF_HOME")
+    prev_hub = os.environ.get("HF_HUB_CACHE")
 
     os.environ["HF_HOME"] = str(hf_home)
-    os.environ["HF_DATASETS_CACHE"] = str(hf_home / "datasets")
+    os.environ["HF_HUB_CACHE"] = str(hub_cache)
+    os.environ["HUGGINGFACE_HUB_CACHE"] = str(hub_cache)
+    os.environ["HF_DATASETS_CACHE"] = str(datasets_cache)
+
     hf_home.mkdir(parents=True, exist_ok=True)
-    (hf_home / "datasets").mkdir(parents=True, exist_ok=True)
+    hub_cache.mkdir(parents=True, exist_ok=True)
+    datasets_cache.mkdir(parents=True, exist_ok=True)
+
+    if _on_gadi_gs14_scratch():
+        tmp_dir = GADI_SCRATCH_ROOT / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["TMPDIR"] = str(tmp_dir)
 
     if verbose:
+        print(f"[imagenet_hf_env] version={IMAGENET_ENV_VERSION}", flush=True)
         print(f"[imagenet_hf_env] HF_HOME={hf_home}", flush=True)
-        print(
-            f"[imagenet_hf_env] HF_DATASETS_CACHE={os.environ['HF_DATASETS_CACHE']}",
-            flush=True,
-        )
+        print(f"[imagenet_hf_env] HF_HUB_CACHE={hub_cache}", flush=True)
+        print(f"[imagenet_hf_env] HF_DATASETS_CACHE={datasets_cache}", flush=True)
+        if os.environ.get("TMPDIR"):
+            print(f"[imagenet_hf_env] TMPDIR={os.environ['TMPDIR']}", flush=True)
         if prev_hf and Path(prev_hf).expanduser() != hf_home:
             print(
                 f"[imagenet_hf_env] 注意: HF_HOME 已由 {prev_hf} 改为 {hf_home}",
+                flush=True,
+            )
+        if prev_hub and Path(prev_hub).expanduser() != hub_cache:
+            print(
+                f"[imagenet_hf_env] 注意: HF_HUB_CACHE 已由 {prev_hub} 改为 {hub_cache}",
                 flush=True,
             )
     return hf_home
@@ -78,21 +111,20 @@ def list_split_parquet_files(repo_id: str, split: str) -> list[str]:
     return sorted(matches)
 
 
-def hf_parquet_urls(repo_id: str, split: str) -> list[str]:
-    files = list_split_parquet_files(repo_id, split)
-    return [f"hf://datasets/{repo_id}/{name}" for name in files]
-
-
 def download_split_parquet_files(
     repo_id: str,
     split: str,
     verbose: bool = True,
 ) -> list[str]:
     """
-    仅下载指定 split 的 parquet 到 HF hub 缓存。
+    仅下载指定 split 的 parquet 到 HF hub 缓存（HF_HUB_CACHE）。
     不使用 load_dataset('imagenet-1k')，因其会误拉其它 split（HF issue #6793）。
     """
     from huggingface_hub import hf_hub_download
+
+    configure_imagenet_hf_env(verbose=False)
+    hub_cache = str(resolve_hub_cache_dir())
+    hf_home = resolve_imagenet_hf_home()
 
     files = list_split_parquet_files(repo_id, split)
     if not files:
@@ -102,7 +134,8 @@ def download_split_parquet_files(
 
     if verbose:
         print(
-            f"[download] split={split!r} parquet_files={len(files)}",
+            f"[download] split={split!r} parquet_files={len(files)} "
+            f"hub_cache={hub_cache}",
             flush=True,
         )
 
@@ -110,13 +143,22 @@ def download_split_parquet_files(
     for idx, remote_file in enumerate(files, 1):
         if verbose:
             print(f"  [{idx}/{len(files)}] {remote_file}", flush=True)
-        local_paths.append(
-            hf_hub_download(
-                repo_id=repo_id,
-                filename=remote_file,
-                repo_type="dataset",
-            )
+        local_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=remote_file,
+            repo_type="dataset",
+            cache_dir=hub_cache,
         )
+        local_path = str(Path(local_path).resolve())
+        if not local_path.startswith(str(hf_home.resolve())):
+            raise RuntimeError(
+                f"下载未写入 scratch/hf_home: {local_path}\n"
+                f"期望前缀: {hf_home}"
+            )
+        local_paths.append(local_path)
+
+    if verbose and local_paths:
+        print(f"[download] 首个文件落盘: {local_paths[0]}", flush=True)
     return local_paths
 
 
@@ -124,16 +166,20 @@ def load_imagenet_split(
     split: str,
     repo_id: str = IMAGENET_REPO_ID,
     cache_dir: str | Path | None = None,
+    parquet_paths: list[str] | None = None,
 ):
-    """从已缓存/将按需下载的 parquet 加载单个 split。"""
+    """从本地 parquet 路径加载单个 split（不再使用 hf://，避免误拉 train）。"""
     from datasets import load_dataset
 
-    urls = hf_parquet_urls(repo_id, split)
-    if not urls:
+    paths = parquet_paths
+    if not paths:
+        paths = download_split_parquet_files(repo_id, split, verbose=False)
+    if not paths:
         raise FileNotFoundError(f"split={split!r} 无 parquet 文件")
+
     return load_dataset(
         "parquet",
-        data_files={split: urls},
+        data_files={split: paths},
         split=split,
         cache_dir=str(cache_dir) if cache_dir else None,
     )
@@ -144,18 +190,15 @@ def load_imagenet_dataset(
     cache_dir: str | Path | None = None,
     splits: tuple[str, ...] = ("train", "validation"),
 ):
-    """
-    加载 ImageNet train/validation。
-    仅引用各 split 的 parquet；未缓存的文件会在访问该 split 时下载。
-    """
+    """加载 ImageNet；仅引用各 split 已有/按需下载的 parquet 本地路径。"""
     from datasets import load_dataset
 
+    configure_imagenet_hf_env(verbose=False)
     data_files = {}
     for split in splits:
-        urls = hf_parquet_urls(repo_id, split)
-        if not urls:
-            raise FileNotFoundError(f"split={split!r} 无 parquet 文件")
-        data_files[split] = urls
+        data_files[split] = download_split_parquet_files(
+            repo_id, split, verbose=False
+        )
 
     return load_dataset(
         "parquet",
