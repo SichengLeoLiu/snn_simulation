@@ -1,0 +1,27 @@
+#!/bin/bash
+#PBS -P gs14
+#PBS -q copyq
+#PBS -N imagenet_dl
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=4,mem=32GB
+#PBS -l storage=scratch/gs14
+#PBS -l wd
+#PBS -j oe
+
+set -euo pipefail
+
+cd "${PBS_O_WORKDIR:-$HOME/codes/snn_simulation/QCFS_simulation}"
+
+source scripts/setup_gadi_imagenet.sh
+
+# 按需修改：validation 仅 ~6GB；train+validation 约 ~150GB
+SPLITS="${IMAGENET_SPLITS:-validation}"
+
+echo "=== ImageNet download on $(hostname) ==="
+echo "HF_HOME=${HF_HOME}"
+lquota 2>/dev/null | grep gs14 || true
+
+python scripts/download_imagenet.py --splits ${SPLITS} --verify
+
+echo "=== Done ==="
+du -sh "${HF_HOME}"

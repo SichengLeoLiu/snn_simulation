@@ -228,7 +228,15 @@ def GetImageNet(
 ):
     from datasets import load_dataset
 
-    ds = load_dataset("imagenet-1k")
+    from Preprocess.imagenet_hf_env import (
+        configure_imagenet_hf_env,
+        resolve_imagenet_datasets_cache,
+    )
+
+    configure_imagenet_hf_env(verbose=False)
+    cache_dir = str(resolve_imagenet_datasets_cache())
+
+    ds = load_dataset("imagenet-1k", cache_dir=cache_dir)
     train_ds, val_ds = ds["train"], ds["validation"]
     train_transforms = transforms.Compose(
         [
