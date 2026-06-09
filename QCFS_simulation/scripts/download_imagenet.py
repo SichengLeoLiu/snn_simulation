@@ -44,17 +44,16 @@ from pathlib import Path
 
 REPO_ID = "imagenet-1k"
 DEFAULT_SPLITS = ("train", "validation")
-SPLIT_PATTERNS = {
-    "train": ["train-*"],
-    "validation": ["validation-*"],
-}
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from Preprocess.imagenet_hf_env import (  # noqa: E402
+    GADI_SCRATCH_ROOT,
     configure_imagenet_hf_env,
+    download_split_parquet_files,
+    load_imagenet_split,
     resolve_imagenet_datasets_cache,
     resolve_imagenet_hf_home,
 )
@@ -145,13 +144,25 @@ def check_disk_usage() -> None:
 
     quota = _run_cmd(["quota", "-s"]) or _run_cmd(["lfs", "quota", "-h", str(home)])
     if quota:
-        print("\n[quota]", flush=True)
+        print("\n[quota home]", flush=True)
         print(quota, flush=True)
+        if "5274M" in quota or "10240M" in quota:
+            print(
+                "  → home 已用约 5GB / 上限 10GB，剩余约 5GB（token/代码够用）",
+                flush=True,
+            )
     else:
         df = _run_cmd(["df", "-h", str(home)])
         if df:
             print("\n[df -h $HOME]", flush=True)
             print(df, flush=True)
+
+    lquota = _run_cmd(["lquota"])
+    if lquota:
+        print("\n[lquota 项目盘]", flush=True)
+        for line in lquota.splitlines():
+            if "gs14" in line or "scratch" in line or "----" in line or "fs" in line:
+                print(line, flush=True)
 
     print("\n[目录大小]", flush=True)
     for label, path in (
@@ -160,6 +171,12 @@ def check_disk_usage() -> None:
         ("$HF_HOME/hub", hf_home / "hub"),
     ):
         print(f"  {label:16s} {_fmt_bytes(_dir_size(path))}", flush=True)
+
+    if GADI_SCRATCH_ROOT.is_dir():
+        print(
+            f"  /scratch/gs14/sl9144  {_fmt_bytes(_dir_size(GADI_SCRATCH_ROOT))}",
+            flush=True,
+        )
 
     imagenet_dirs = find_imagenet_cache_dirs(hf_home)
     if imagenet_dirs:
@@ -242,33 +259,26 @@ def clean_imagenet_cache(hf_home: Path | None = None) -> None:
 
 
 def _download_split(repo_id: str, split: str, cache_dir: str | None) -> int:
-    from datasets import load_dataset
-    from huggingface_hub import snapshot_download
-
-    patterns = SPLIT_PATTERNS[split]
     print(
         f"\n[DOWNLOAD] repo={repo_id!r} split={split!r} "
-        f"patterns={patterns} cache_dir={cache_dir!r}",
+        f"cache_dir={cache_dir!r}",
+        flush=True,
+    )
+    print(
+        "  说明: 不使用 load_dataset('imagenet-1k')，"
+        "仅拉当前 split 的 parquet（HF issue #6793）。",
         flush=True,
     )
 
-    # 仅拉指定 split 的 parquet，避免 validation 误下全部 train（~140GB）
-    snapshot_download(
-        repo_id=repo_id,
-        repo_type="dataset",
-        allow_patterns=patterns,
-    )
-
-    ds = load_dataset(repo_id, split=split, cache_dir=cache_dir)
+    download_split_parquet_files(repo_id, split, verbose=True)
+    ds = load_imagenet_split(split, repo_id=repo_id, cache_dir=cache_dir)
     n = len(ds)
     print(f"[DONE] split={split!r}  samples={n:,}", flush=True)
     return n
 
 
 def _verify_sample(repo_id: str, cache_dir: str | None) -> None:
-    from datasets import load_dataset
-
-    ds = load_dataset(repo_id, split="validation", cache_dir=cache_dir)
+    ds = load_imagenet_split("validation", repo_id=repo_id, cache_dir=cache_dir)
     item = ds[0]
     image = item["image"]
     label = item["label"]
