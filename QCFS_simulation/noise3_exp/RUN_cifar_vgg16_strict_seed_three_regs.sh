@@ -20,7 +20,7 @@ export CIFAR_ROOT="${CIFAR_ROOT:-${HOME}/datasets}"
 echo "[INFO] QCFS_simulation root: ${ROOT}"
 echo "[INFO] CIFAR_ROOT: ${CIFAR_ROOT}"
 echo "[INFO] dataset: ${DATASET}"
-python -c "import torch; print('[INFO] torch:', torch.__version__, 'cuda:', torch.cuda.is_available())"
+python -c 'import torch; print("[INFO] torch:", torch.__version__, "cuda:", torch.cuda.is_available())'
 
 python "${SCRIPT_DIR}/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py" \
   --dataset "${DATASET}" "$@"

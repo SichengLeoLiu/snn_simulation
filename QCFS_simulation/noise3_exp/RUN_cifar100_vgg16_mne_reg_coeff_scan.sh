@@ -10,7 +10,7 @@ export CIFAR_ROOT="${CIFAR_ROOT:-${HOME}/datasets}"
 
 echo "[INFO] QCFS_simulation root: ${ROOT}"
 echo "[INFO] CIFAR_ROOT: ${CIFAR_ROOT}"
-python -c "import torch; print('[INFO] torch:', torch.__version__, 'cuda:', torch.cuda.is_available())"
+python -c 'import torch; print("[INFO] torch:", torch.__version__, "cuda:", torch.cuda.is_available())'
 
 python "${SCRIPT_DIR}/run_cifar100_vgg16_mne_reg_coeff_scan_noise_sweep_rate_uniform_L16_T16.py"
 
