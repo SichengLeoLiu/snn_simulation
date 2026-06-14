@@ -9,6 +9,14 @@ MNIST_ROOT = os.path.expanduser(os.environ.get("MNIST_ROOT", "~/datasets"))
 CIFAR_ROOT = os.path.expanduser(os.environ.get("CIFAR_ROOT", "~/datasets"))
 
 
+def _mnist_available(root: str) -> bool:
+    """MNIST 已解压到 processed/ 时可在无网 GPU 节点离线加载。"""
+    mnist_dir = os.path.join(root, "MNIST")
+    processed_train = os.path.join(mnist_dir, "processed", "training.pt")
+    processed_test = os.path.join(mnist_dir, "processed", "test.pt")
+    return os.path.isfile(processed_train) and os.path.isfile(processed_test)
+
+
 def _cifar_pil_autoaugment():
     try:
         from torchvision.transforms import AutoAugment, AutoAugmentPolicy
@@ -26,11 +34,14 @@ def GetMNIST(batch_size, num_workers=4, pin_memory=None):
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )
+    download = not _mnist_available(MNIST_ROOT)
+    if download:
+        os.makedirs(MNIST_ROOT, exist_ok=True)
     train_data = datasets.MNIST(
-        MNIST_ROOT, train=True, download=True, transform=transform
+        MNIST_ROOT, train=True, download=download, transform=transform
     )
     test_data = datasets.MNIST(
-        MNIST_ROOT, train=False, download=True, transform=transform
+        MNIST_ROOT, train=False, download=download, transform=transform
     )
     train_loader = DataLoader(
         train_data,
