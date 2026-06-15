@@ -63,7 +63,7 @@ def ckpt_path(arch: str, l_val: int, seed: int) -> Path:
 
 
 def normalize_row(row: dict) -> dict:
-    c1, c2 = map(int, row["c1"]), int(row["c2"])
+    c1, c2 = int(row["c1"]), int(row["c2"])
     return {
         "arch": row["arch"],
         "c1": c1,
