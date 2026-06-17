@@ -80,14 +80,21 @@ def main() -> None:
 
 def _verify(root: str) -> None:
     if not _mnist_available(root):
-        raise SystemExit(f"[download_mnist] verify failed: missing processed/*.pt in {root}/MNIST")
+        raise SystemExit(
+            f"[download_mnist] verify failed: missing MNIST under {root}/MNIST "
+            "(need processed/*.pt or raw/*-ubyte[.gz])"
+        )
     processed = Path(root) / "MNIST" / "processed"
     train_pt = processed / "training.pt"
     test_pt = processed / "test.pt"
-    print(f"[download_mnist] verify ok")
+    print("[download_mnist] verify ok")
     print(f"  MNIST_ROOT={root}")
-    print(f"  training.pt size={train_pt.stat().st_size / 1e6:.1f} MB")
-    print(f"  test.pt size={test_pt.stat().st_size / 1e6:.1f} MB")
+    if train_pt.is_file() and test_pt.is_file():
+        print(f"  training.pt size={train_pt.stat().st_size / 1e6:.1f} MB")
+        print(f"  test.pt size={test_pt.stat().st_size / 1e6:.1f} MB")
+    else:
+        raw = Path(root) / "MNIST" / "raw"
+        print(f"  raw MNIST present: {raw}")
     print("  GPU 节点请先: source scripts/setup_gadi_mnist.sh")
 
 

@@ -9,12 +9,31 @@ MNIST_ROOT = os.path.expanduser(os.environ.get("MNIST_ROOT", "~/datasets"))
 CIFAR_ROOT = os.path.expanduser(os.environ.get("CIFAR_ROOT", "~/datasets"))
 
 
+def _mnist_raw_available(root: str) -> bool:
+    """新版 torchvision 可能只保留 raw/，不含 processed/*.pt。"""
+    raw_dir = os.path.join(root, "MNIST", "raw")
+    names = (
+        "train-images-idx3-ubyte",
+        "train-labels-idx1-ubyte",
+        "t10k-images-idx3-ubyte",
+        "t10k-labels-idx1-ubyte",
+    )
+    for name in names:
+        plain = os.path.join(raw_dir, name)
+        gz = plain + ".gz"
+        if not (os.path.isfile(plain) or os.path.isfile(gz)):
+            return False
+    return True
+
+
 def _mnist_available(root: str) -> bool:
-    """MNIST 已解压到 processed/ 时可在无网 GPU 节点离线加载。"""
+    """MNIST 已在本地（processed/ 或 raw/）时可在无网 GPU 节点离线加载。"""
     mnist_dir = os.path.join(root, "MNIST")
     processed_train = os.path.join(mnist_dir, "processed", "training.pt")
     processed_test = os.path.join(mnist_dir, "processed", "test.pt")
-    return os.path.isfile(processed_train) and os.path.isfile(processed_test)
+    if os.path.isfile(processed_train) and os.path.isfile(processed_test):
+        return True
+    return _mnist_raw_available(root)
 
 
 def _cifar_pil_autoaugment():
