@@ -362,13 +362,19 @@ def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
     return agg_rows
 
 
-def plot_results(dataset: str, agg_rows: list[dict], out: Path) -> None:
+def plot_results(
+    dataset: str,
+    agg_rows: list[dict],
+    out: Path,
+    font_size: float = 18.0,
+    legend_font_size: float = 16.0,
+) -> None:
     if not agg_rows:
         print("[PLOT] 无汇总数据，跳过", flush=True)
         return
 
     multi_seed = any(int(r["n_seeds"]) > 1 for r in agg_rows)
-    plt.rcParams.update({"font.size": 11, "legend.fontsize": 10})
+    plt.rcParams.update({"font.size": font_size, "legend.fontsize": legend_font_size})
     for no_caption in (False, True):
         fig, ax = plt.subplots(figsize=(9.5, 6.0), dpi=180)
         all_y = []
@@ -454,7 +460,12 @@ def run_one(dataset: str, method_key: str, seed: int, out: Path) -> list[dict]:
     return rows
 
 
-def finalize_outputs(dataset: str, out: Path) -> None:
+def finalize_outputs(
+    dataset: str,
+    out: Path,
+    font_size: float = 18.0,
+    legend_font_size: float = 16.0,
+) -> None:
     raw_csv = raw_csv_path(out, dataset)
     raw_rows = load_raw_rows(raw_csv)
     agg_rows = aggregate_rows(raw_rows)
@@ -463,7 +474,7 @@ def finalize_outputs(dataset: str, out: Path) -> None:
         writer = csv.DictWriter(f, fieldnames=AGG_FIELDS)
         writer.writeheader()
         writer.writerows(agg_rows)
-    plot_results(dataset, agg_rows, out)
+    plot_results(dataset, agg_rows, out, font_size, legend_font_size)
     print(f"[TABLE] raw: {raw_csv}", flush=True)
     print(f"[TABLE] agg: {agg_csv}", flush=True)
 
@@ -501,6 +512,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="仅从已有 raw CSV 重算 mean±std 并出图",
     )
+    parser.add_argument("--font-size", type=float, default=18.0)
+    parser.add_argument("--legend-font-size", type=float, default=16.0)
     return parser.parse_args()
 
 
@@ -511,7 +524,9 @@ def main() -> None:
     raw_csv = raw_csv_path(out, dataset)
 
     if args.plot_only:
-        finalize_outputs(dataset, out)
+        finalize_outputs(
+            dataset, out, args.font_size, args.legend_font_size
+        )
         return
 
     seeds = [args.seed] if args.seed is not None else args.seeds
@@ -531,7 +546,7 @@ def main() -> None:
             rows = run_one(dataset, method_key, seed, out)
             upsert_run_rows(raw_csv, method_key, seed, rows)
 
-    finalize_outputs(dataset, out)
+    finalize_outputs(dataset, out, args.font_size, args.legend_font_size)
 
 
 if __name__ == "__main__":
