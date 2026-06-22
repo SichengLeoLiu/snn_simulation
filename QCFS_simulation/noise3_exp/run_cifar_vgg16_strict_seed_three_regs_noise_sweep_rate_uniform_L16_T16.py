@@ -82,11 +82,11 @@ METHOD_CONFIG = {
 PLOT_ORDER = ["weight_decay", "mne_l2 rc=1e-4", "mne_l2+wd rc=1e-4 wd=1e-4"]
 
 LINE_STYLES = {
-    "weight_decay": {"color": "#ff7f0e", "label": "weight_decay (mean)"},
-    "mne_l2 rc=1e-4": {"color": "#1f77b4", "label": "mne_l2 rc=1e-4 (mean)"},
+    "weight_decay": {"color": "#ff7f0e", "label": "L2"},
+    "mne_l2 rc=1e-4": {"color": "#1f77b4", "label": "MNE L2"},
     "mne_l2+wd rc=1e-4 wd=1e-4": {
         "color": "#98df8a",
-        "label": "mne_l2+wd rc=1e-4 wd=1e-4 (mean)",
+        "label": "MNE L2+L2",
     },
 }
 
@@ -366,15 +366,21 @@ def plot_results(
     dataset: str,
     agg_rows: list[dict],
     out: Path,
-    font_size: float = 18.0,
-    legend_font_size: float = 16.0,
+    font_size: float = 20.0,
+    legend_font_size: float = 18.0,
 ) -> None:
     if not agg_rows:
         print("[PLOT] 无汇总数据，跳过", flush=True)
         return
 
     multi_seed = any(int(r["n_seeds"]) > 1 for r in agg_rows)
-    plt.rcParams.update({"font.size": font_size, "legend.fontsize": legend_font_size})
+    plt.rcParams.update({
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "xtick.labelsize": font_size - 1,
+        "ytick.labelsize": font_size - 1,
+        "legend.fontsize": legend_font_size,
+    })
     for no_caption in (False, True):
         fig, ax = plt.subplots(figsize=(9.5, 6.0), dpi=180)
         all_y = []
@@ -512,8 +518,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="仅从已有 raw CSV 重算 mean±std 并出图",
     )
-    parser.add_argument("--font-size", type=float, default=18.0)
-    parser.add_argument("--legend-font-size", type=float, default=16.0)
+    parser.add_argument("--font-size", type=float, default=20.0)
+    parser.add_argument("--legend-font-size", type=float, default=18.0)
     return parser.parse_args()
 
 
