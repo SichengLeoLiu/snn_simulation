@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # MNIST CNN2：mne_l2 reg_coeff 扫描 + weight_decay 基线 + rate_uniform 噪声注入
+# 默认 seeds=40..44（5 seed mean±std），与 strict-seed 实验一致
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
