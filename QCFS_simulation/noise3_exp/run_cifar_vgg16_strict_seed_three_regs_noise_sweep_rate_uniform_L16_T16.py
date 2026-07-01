@@ -15,6 +15,14 @@ CIFAR-10 / CIFAR-100 VGG16：三路正则 strict-seed 训练 + 噪声扫描 + me
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10 --method no_regularization
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar100 --plot-only
 
+  # 强制重跑噪声扫描（不重新训练）
+  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \\
+      --dataset cifar10 --force-test
+
+  # 强制重训 + 重测
+  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \\
+      --dataset cifar10 --method no_regularization --retrain --force-test
+
 或：
   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar10
 """
@@ -166,9 +174,31 @@ def resolve_method(name: str) -> str:
     return key
 
 
-def train_one(dataset: str, method_key: str, seed: int) -> Path:
+def test_out_dir(out: Path, method_key: str, seed: int) -> Path:
+    safe_label = METHOD_CONFIG[method_key]["label"].replace(" ", "_").replace("=", "")
+    return out / safe_label / f"seed_{seed}"
+
+
+def clear_test_artifacts(out: Path, method_key: str, seed: int) -> None:
+    test_dir = test_out_dir(out, method_key, seed)
+    if not test_dir.exists():
+        return
+    for p in test_dir.glob("noise_sweep_matrix_*.csv"):
+        p.unlink()
+        print(f"[CLEAR] {p}", flush=True)
+    for p in test_dir.glob("noise_sweep_combined_L_T.csv"):
+        p.unlink()
+        print(f"[CLEAR] {p}", flush=True)
+
+
+def train_one(
+    dataset: str, method_key: str, seed: int, retrain: bool = False
+) -> Path:
     cfg = METHOD_CONFIG[method_key]
     ckpt = ckpt_path(dataset, method_key, seed)
+    if retrain and ckpt.exists():
+        ckpt.unlink()
+        print(f"[RETRAIN] removed {ckpt.name}", flush=True)
     if ckpt.exists():
         print(f"[SKIP TRAIN] {ckpt.name}", flush=True)
         return ckpt
@@ -236,10 +266,11 @@ def test_noise_sweep(
     seed: int,
     ckpt: Path,
     out: Path,
+    force_test: bool = False,
 ) -> Path:
-    cfg = METHOD_CONFIG[method_key]
-    safe_label = cfg["label"].replace(" ", "_").replace("=", "")
-    test_dir = out / safe_label / f"seed_{seed}"
+    if force_test:
+        clear_test_artifacts(out, method_key, seed)
+    test_dir = test_out_dir(out, method_key, seed)
     test_dir.mkdir(parents=True, exist_ok=True)
     matrix = (
         test_dir
@@ -453,10 +484,19 @@ def plot_results(
         print(f"[PLOT] saved {out_png}", flush=True)
 
 
-def run_one(dataset: str, method_key: str, seed: int, out: Path) -> list[dict]:
+def run_one(
+    dataset: str,
+    method_key: str,
+    seed: int,
+    out: Path,
+    retrain: bool = False,
+    force_test: bool = False,
+) -> list[dict]:
     cfg = METHOD_CONFIG[method_key]
-    ckpt = train_one(dataset, method_key, seed)
-    matrix = test_noise_sweep(dataset, method_key, seed, ckpt, out)
+    ckpt = train_one(dataset, method_key, seed, retrain=retrain)
+    matrix = test_noise_sweep(
+        dataset, method_key, seed, ckpt, out, force_test=force_test
+    )
     curve = read_matrix(matrix)
     rows = []
     for sigma, acc in curve:
@@ -531,7 +571,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--plot-only",
         action="store_true",
-        help="仅从已有 raw CSV 重算 mean±std 并出图",
+        help="仅从已有 raw CSV 重算 mean±std 并出图（不训练/测试）",
+    )
+    parser.add_argument(
+        "--retrain",
+        action="store_true",
+        help="删除已有 checkpoint 后重新训练",
+    )
+    parser.add_argument(
+        "--force-test",
+        action="store_true",
+        help="删除已有 noise_sweep matrix 后重新测试",
     )
     parser.add_argument("--font-size", type=float, default=20.0)
     parser.add_argument("--legend-font-size", type=float, default=18.0)
@@ -564,7 +614,14 @@ def main() -> None:
 
     for method_key in method_keys:
         for seed in seeds:
-            rows = run_one(dataset, method_key, seed, out)
+            rows = run_one(
+                dataset,
+                method_key,
+                seed,
+                out,
+                retrain=args.retrain,
+                force_test=args.force_test,
+            )
             upsert_run_rows(raw_csv, method_key, seed, rows)
 
     finalize_outputs(dataset, out, args.font_size, args.legend_font_size)

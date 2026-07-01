@@ -4,8 +4,8 @@
 # 用法：
 #   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar10
 #   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar100
-#   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar10 --method no_regularization
-#   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar100 --plot-only
+#   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar10 --force-test
+#   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar10 --method no_regularization --retrain --force-test
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
