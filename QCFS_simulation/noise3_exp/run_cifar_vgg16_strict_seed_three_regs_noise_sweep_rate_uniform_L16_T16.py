@@ -1,10 +1,11 @@
 """
-CIFAR-10 / CIFAR-100 VGG16：三路正则 strict-seed 训练 + 噪声扫描 + mean±std 折线图。
+CIFAR-10 / CIFAR-100 VGG16：四路正则 strict-seed 训练 + 噪声扫描 + mean±std 折线图。
 
-方法（与 combo 实验一致）：
+方法：
   - weight_decay (wd=5e-4)
   - mne_l2 (rc=1e-4)
   - mne_l2+wd (rc=1e-4, wd=1e-4)
+  - no_regularization (wd=0)
 
 默认 5 seeds: 40,41,42,43,44；L=16, T=16, rate_uniform, sigma=0~1.0 step=0.1。
 方案 C：输出层不参与 MNE-L2。
@@ -12,7 +13,7 @@ CIFAR-10 / CIFAR-100 VGG16：三路正则 strict-seed 训练 + 噪声扫描 + me
 用法：
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar100
-  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10 --method mne_l2 --seed 42
+  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10 --method no_regularization
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar100 --plot-only
 
 或：
@@ -58,6 +59,9 @@ METHOD_ALIASES = {
     "mne_l2_wd": "mne_l2_wd",
     "mne_l2+wd": "mne_l2_wd",
     "combo": "mne_l2_wd",
+    "no_regularization": "no_regularization",
+    "no_reg": "no_regularization",
+    "none": "no_regularization",
     "all": "all",
 }
 
@@ -77,9 +81,19 @@ METHOD_CONFIG = {
         "reg_coeff": MNE_RC,
         "wd": WD_COMBO,
     },
+    "no_regularization": {
+        "label": "no regularization",
+        "reg_coeff": None,
+        "wd": 0.0,
+    },
 }
 
-PLOT_ORDER = ["weight_decay", "mne_l2 rc=1e-4", "mne_l2+wd rc=1e-4 wd=1e-4"]
+PLOT_ORDER = [
+    "weight_decay",
+    "mne_l2 rc=1e-4",
+    "mne_l2+wd rc=1e-4 wd=1e-4",
+    "no regularization",
+]
 
 LINE_STYLES = {
     "weight_decay": {"color": "#ff7f0e", "label": "L2"},
@@ -88,6 +102,7 @@ LINE_STYLES = {
         "color": "#98df8a",
         "label": "MNE L2+L2",
     },
+    "no regularization": {"color": "#2ca02c", "label": "No reg"},
 }
 
 RAW_FIELDS = [
@@ -133,6 +148,8 @@ def agg_csv_path(out: Path, dataset: str) -> Path:
 
 
 def build_suffix(method_key: str, seed: int) -> str:
+    if method_key == "no_regularization":
+        return f"strict_seed{seed}_{SCHEME_TAG}_none_l{LVAL}_{ARCH}"
     cfg = METHOD_CONFIG[method_key]
     reg_coeff = cfg["reg_coeff"]
     wd = cfg["wd"]
@@ -170,7 +187,9 @@ def train_one(dataset: str, method_key: str, seed: int) -> Path:
 
     reg_coeff = cfg["reg_coeff"]
     wd = cfg["wd"]
-    if reg_coeff is None:
+    if method_key == "no_regularization":
+        regularizer, rc = "weight_decay", 1.0
+    elif reg_coeff is None:
         regularizer, rc = "weight_decay", 1.0
     else:
         regularizer, rc = "mne_l2", reg_coeff
@@ -420,7 +439,7 @@ def plot_results(
         if all_y:
             ax.set_ylim(min(all_y) - 1.0, max(all_y) + 1.0)
         ax.grid(alpha=0.3)
-        ax.legend(loc="lower left", frameon=False)
+        ax.legend(loc="lower left", frameon=False, ncol=2)
         if not no_caption:
             n_seeds = max(int(r["n_seeds"]) for r in agg_rows)
             ax.set_title(
@@ -487,7 +506,7 @@ def finalize_outputs(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CIFAR-10/100 VGG16 strict-seed 三路正则 + 噪声 mean±std"
+        description="CIFAR-10/100 VGG16 strict-seed 四路正则 + 噪声 mean±std"
     )
     parser.add_argument(
         "--dataset",
@@ -498,7 +517,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--method",
         default="all",
-        help="weight_decay | mne_l2 | mne_l2_wd | all（默认 all）",
+        help="weight_decay | mne_l2 | mne_l2_wd | no_regularization | all（默认 all）",
     )
     parser.add_argument(
         "--seeds",
@@ -542,7 +561,7 @@ def main() -> None:
         method_keys = [resolve_method(args.method)]
 
     print(
-        f"\n=== {dataset.upper()} VGG16 strict-seed three-regs ===",
+        f"\n=== {dataset.upper()} VGG16 strict-seed four-regs ===",
         flush=True,
     )
     print(f"methods={method_keys} seeds={seeds}", flush=True)
