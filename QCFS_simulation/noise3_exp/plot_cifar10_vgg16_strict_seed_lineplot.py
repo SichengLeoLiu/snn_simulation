@@ -1,5 +1,5 @@
 """
-从 agg CSV 重画 CIFAR-10/100 VGG16 strict-seed 四路噪声折线图（可调字号）。
+从 agg CSV 重画 CIFAR-10/100 VGG16 strict-seed 三路噪声折线图（L2 / MNE L2 / No reg）。
 
 用法：
   python noise3_exp/plot_cifar10_vgg16_strict_seed_lineplot.py --dataset cifar10
@@ -23,16 +23,11 @@ REPO_ROOT = ROOT.parent
 PLOT_ORDER = [
     "weight_decay",
     "mne_l2 rc=1e-4",
-    "mne_l2+wd rc=1e-4 wd=1e-4",
     "no regularization",
 ]
 LINE_STYLES = {
     "weight_decay": {"color": "#ff7f0e", "label": "L2"},
     "mne_l2 rc=1e-4": {"color": "#1f77b4", "label": "MNE L2"},
-    "mne_l2+wd rc=1e-4 wd=1e-4": {
-        "color": "#98df8a",
-        "label": "MNE L2+L2",
-    },
     "no regularization": {"color": "#2ca02c", "label": "No reg"},
 }
 
@@ -162,7 +157,7 @@ def plot_results(
         if all_y:
             ax.set_ylim(min(all_y) - 1.0, max(all_y) + 1.0)
         ax.grid(alpha=0.3)
-        ax.legend(loc="lower left", frameon=False, ncol=2)
+        ax.legend(loc="lower left", frameon=False)
         fig.tight_layout()
         suffix = "_no_caption" if no_caption else ""
         out_png = (

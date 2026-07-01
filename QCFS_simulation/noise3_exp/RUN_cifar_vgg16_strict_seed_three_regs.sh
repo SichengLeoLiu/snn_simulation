@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CIFAR-10 / CIFAR-100 VGG16：strict-seed 四路正则 + 噪声 mean±std 实验
+# CIFAR-10 / CIFAR-100 VGG16：strict-seed 三路正则 (L2 / MNE L2 / No reg) + 噪声 mean±std
 #
 # 用法：
 #   bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar10

@@ -1,11 +1,10 @@
 """
-CIFAR-10 / CIFAR-100 VGG16：四路正则 strict-seed 训练 + 噪声扫描 + mean±std 折线图。
+CIFAR-10 / CIFAR-100 VGG16：三路正则 strict-seed 训练 + 噪声扫描 + mean±std 折线图。
 
-方法：
-  - weight_decay (wd=5e-4)
-  - mne_l2 (rc=1e-4)
-  - mne_l2+wd (rc=1e-4, wd=1e-4)
-  - no_regularization (wd=0)
+方法（同一 pipeline）：
+  - weight_decay / L2 (wd=5e-4)
+  - mne_l2 / MNE L2 (rc=1e-4)
+  - no_regularization / No reg (wd=0)
 
 默认 5 seeds: 40,41,42,43,44；L=16, T=16, rate_uniform, sigma=0~1.0 step=0.1。
 方案 C：输出层不参与 MNE-L2。
@@ -49,16 +48,15 @@ DEFAULT_SEEDS = [40, 41, 42, 43, 44]
 
 MNE_RC = 1e-4
 WD_BASE = 5e-4
-WD_COMBO = 1e-4
+
+METHOD_KEYS = ["weight_decay", "mne_l2", "no_regularization"]
 
 METHOD_ALIASES = {
     "weight_decay": "weight_decay",
     "wd": "weight_decay",
+    "l2": "weight_decay",
     "mne_l2": "mne_l2",
     "mnel2": "mne_l2",
-    "mne_l2_wd": "mne_l2_wd",
-    "mne_l2+wd": "mne_l2_wd",
-    "combo": "mne_l2_wd",
     "no_regularization": "no_regularization",
     "no_reg": "no_regularization",
     "none": "no_regularization",
@@ -76,11 +74,6 @@ METHOD_CONFIG = {
         "reg_coeff": MNE_RC,
         "wd": 0.0,
     },
-    "mne_l2_wd": {
-        "label": "mne_l2+wd rc=1e-4 wd=1e-4",
-        "reg_coeff": MNE_RC,
-        "wd": WD_COMBO,
-    },
     "no_regularization": {
         "label": "no regularization",
         "reg_coeff": None,
@@ -91,17 +84,12 @@ METHOD_CONFIG = {
 PLOT_ORDER = [
     "weight_decay",
     "mne_l2 rc=1e-4",
-    "mne_l2+wd rc=1e-4 wd=1e-4",
     "no regularization",
 ]
 
 LINE_STYLES = {
     "weight_decay": {"color": "#ff7f0e", "label": "L2"},
     "mne_l2 rc=1e-4": {"color": "#1f77b4", "label": "MNE L2"},
-    "mne_l2+wd rc=1e-4 wd=1e-4": {
-        "color": "#98df8a",
-        "label": "MNE L2+L2",
-    },
     "no regularization": {"color": "#2ca02c", "label": "No reg"},
 }
 
@@ -358,13 +346,21 @@ def upsert_run_rows(
 def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
     bucket: dict[tuple[str, str, float], list[float]] = defaultdict(list)
     for row in raw_rows:
+        if row["method"] not in METHOD_KEYS:
+            continue
         bucket[(row["method"], row["label"], float(row["sigma"]))].append(
             float(row["acc"])
         )
 
+    def _plot_idx(label: str) -> int:
+        try:
+            return PLOT_ORDER.index(label)
+        except ValueError:
+            return 99
+
     agg_rows = []
     for (method_key, label, sigma), vals in sorted(
-        bucket.items(), key=lambda x: (PLOT_ORDER.index(x[0][1]), x[0][2])
+        bucket.items(), key=lambda x: (_plot_idx(x[0][1]), x[0][2])
     ):
         mean = statistics.mean(vals)
         std = statistics.stdev(vals) if len(vals) > 1 else 0.0
@@ -439,7 +435,7 @@ def plot_results(
         if all_y:
             ax.set_ylim(min(all_y) - 1.0, max(all_y) + 1.0)
         ax.grid(alpha=0.3)
-        ax.legend(loc="lower left", frameon=False, ncol=2)
+        ax.legend(loc="lower left", frameon=False)
         if not no_caption:
             n_seeds = max(int(r["n_seeds"]) for r in agg_rows)
             ax.set_title(
@@ -506,7 +502,7 @@ def finalize_outputs(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CIFAR-10/100 VGG16 strict-seed 四路正则 + 噪声 mean±std"
+        description="CIFAR-10/100 VGG16 strict-seed 三路正则 (L2/MNE L2/No reg) + 噪声 mean±std"
     )
     parser.add_argument(
         "--dataset",
@@ -517,7 +513,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--method",
         default="all",
-        help="weight_decay | mne_l2 | mne_l2_wd | no_regularization | all（默认 all）",
+        help="weight_decay | mne_l2 | no_regularization | all（默认 all=三路）",
     )
     parser.add_argument(
         "--seeds",
@@ -556,12 +552,12 @@ def main() -> None:
 
     seeds = [args.seed] if args.seed is not None else args.seeds
     if args.method.strip().lower() == "all":
-        method_keys = list(METHOD_CONFIG.keys())
+        method_keys = list(METHOD_KEYS)
     else:
         method_keys = [resolve_method(args.method)]
 
     print(
-        f"\n=== {dataset.upper()} VGG16 strict-seed four-regs ===",
+        f"\n=== {dataset.upper()} VGG16 strict-seed three-regs (L2 / MNE L2 / No reg) ===",
         flush=True,
     )
     print(f"methods={method_keys} seeds={seeds}", flush=True)
