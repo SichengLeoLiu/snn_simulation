@@ -1,6 +1,6 @@
 """
 CIFAR-100 VGG16 单 seed 高斯噪声注入：mne_l2 vs weight_decay。
-设置：L=16, T=16, IF mode=rate_uniform, sigma=0.0~1.0 step=0.1。
+设置：L=16, T=16, IF mode=rate_uniform, sigma=0.0~1.0 step=0.05。
 先单 seed 跑通；多 seed 时将 SEEDS 改回列表即可。
 """
 import csv
@@ -111,7 +111,7 @@ def test_noise_sweep(reg: str, seed: int, ckpt: Path) -> Path:
         "--noise_sweep",
         "--noise_sigma_start", "0.0",
         "--noise_sigma_end", "1.0",
-        "--noise_sigma_step", "0.1",
+        "--noise_sigma_step", "0.05",
         "--noise_output_dir", str(out_dir),
     ]
     print(f"[TEST] {reg} seed={seed} mode={IF_MODE}", flush=True)

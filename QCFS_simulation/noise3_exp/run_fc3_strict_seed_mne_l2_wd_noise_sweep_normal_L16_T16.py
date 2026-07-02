@@ -2,7 +2,7 @@
 MNIST fc3 strict-seed：mne_l2+wd 多 seed 训练 + 噪声扫描，并合并到已有三路 mean±std 折线图。
 
 方法：mne_l2+wd (rc=5e-2, wd=5e-4)，与现有 fc3 strict-seed 中 mne_l2 / wd 单用系数一致。
-设置：L=16, T=16, IF mode=normal, sigma=0~1.0 step=0.1, seeds=40..44。
+设置：L=16, T=16, IF mode=normal, sigma=0~1.0 step=0.05, seeds=40..44。
 
 用法：
   python noise3_exp/run_fc3_strict_seed_mne_l2_wd_noise_sweep_normal_L16_T16.py
@@ -190,7 +190,7 @@ def test_noise_sweep(arch: str, seed: int, ckpt: Path) -> Path:
         "--noise_sigma_end",
         "1.0",
         "--noise_sigma_step",
-        "0.1",
+        "0.05",
         "--noise_output_dir",
         str(out_dir),
     ]

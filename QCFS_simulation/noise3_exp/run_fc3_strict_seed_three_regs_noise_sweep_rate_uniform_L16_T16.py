@@ -1,28 +1,31 @@
 """
-MNIST CNN2 多架构 strict-seed 三路正则 + rate_uniform 噪声扫描 + mean±std 折线图。
+MNIST fc3 strict-seed 三路正则 + rate_uniform 噪声扫描 + mean±std 折线图。
 
-模型：cnn2_c2_c4 / cnn2_c4_c8 / cnn2_c8_c16 / cnn2_c16_c32
-方法：mne_l2 (rc=5e-2) / weight_decay (wd=5e-4) / no_regularization
-训练：L=16, T=0, spike_schedule=normal, 100 epochs, seeds=40..44
-测试：L=16, T=16, IF mode=rate_uniform, sigma=0~1 step=0.05
+方法：mne_l2 / weight_decay / no_regularization（与 normal 版共用 checkpoint）
+测试：L=16, T=16, IF mode=rate_uniform, sigma=0~1 step=0.05, seeds=40..44
 
 用法：
-  python noise3_exp/run_cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py
-  python noise3_exp/run_cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \
-    --arch-list c2c4 c8c16 --reg mne_l2 --seed 42
-  python noise3_exp/run_cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \
-    --plot-only --copy-important --font-size 18 --legend-font-size 16
+  # 全量（跳过已有 checkpoint / matrix）
+  python noise3_exp/run_fc3_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py
+
+  # 重做 h32/h64：重训 + 重测 + 重画图
+  python noise3_exp/run_fc3_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \
+    --h-list 32 64 --retrain --force-test --replot --copy-important
+
+  # 仅重跑噪声扫描（checkpoint 保留）
+  python noise3_exp/run_fc3_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \
+    --h-list 32 64 --force-test --replot --copy-important
 """
 from __future__ import annotations
 
 import argparse
 import csv
-import os
 import shutil
 import statistics
 import subprocess
 import sys
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -31,18 +34,21 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-OUT = ROOT / "noise3_exp" / "cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16"
+OUT = (
+    ROOT
+    / "noise3_exp"
+    / "ablation_mne_l2_vs_weight_decay_l16_fc3_h4_h8_h16_h32_h64_h128"
+    / "strict_seed_train_rate_uniform_L16_T16"
+)
 IMPORTANT_RESULTS = ROOT.parent / "important results"
+DERIVATIVE_RESULTS = ROOT.parent / "derivative results"
 
 DEFAULT_SEEDS = [40, 41, 42, 43, 44]
-CNN_VARIANTS = [(2, 4), (4, 8), (8, 16), (16, 32)]
+ALL_H_LIST = [4, 8, 16, 32, 64, 128]
 REGS = ["mne_l2", "weight_decay", "no_regularization"]
 LVAL = 16
 TVAL = 16
 IF_MODE = "rate_uniform"
-EPOCHS = int(os.environ.get("CNN_EPOCHS", "100"))
-BATCH = int(os.environ.get("CNN_BATCH", "128"))
-NUM_WORKERS = int(os.environ.get("CNN_NUM_WORKERS", "8"))
 
 LINE_STYLES = {
     "mne_l2": {"color": "#1f77b4", "label": "mne_l2 (mean)"},
@@ -50,55 +56,41 @@ LINE_STYLES = {
     "no_regularization": {"color": "#2ca02c", "label": "no regularization (mean)"},
 }
 
-RAW_CSV = OUT / "cnn_strict_seed_three_regs_noise_sweep_raw.csv"
-AGG_CSV = OUT / "cnn_strict_seed_three_regs_noise_sweep_mean_std.csv"
+RAW_CSV = OUT / "strict_seed_train_noise_sweep_fc3_h4_h8_h16_h32_h64_h128_raw.csv"
+AGG_CSV = OUT / "strict_seed_train_noise_sweep_fc3_h4_h8_h16_h32_h64_h128_mean_std.csv"
+BACKUP_ROOT = OUT.parent / f"{OUT.name}_backups"
+
+
+def _backup_path(category: str, name: str) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = BACKUP_ROOT / category / ts / name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    return dest
+
+
+def _backup_file(path: Path, category: str) -> None:
+    if not path.exists():
+        return
+    dest = _backup_path(category, path.name)
+    shutil.move(str(path), str(dest))
+    print(f"[BACKUP] {path} -> {dest}", flush=True)
 
 RAW_FIELDS = [
-    "arch", "c1", "c2", "size_label", "regularizer", "seed", "L", "T",
+    "arch", "hidden_size", "regularizer", "seed", "L", "T",
     "if_mode", "sigma", "acc", "checkpoint", "matrix_csv",
 ]
 AGG_FIELDS = [
-    "arch", "c1", "c2", "size_label", "regularizer", "sigma",
+    "arch", "hidden_size", "regularizer", "sigma",
     "acc_mean", "acc_std", "n_seeds",
 ]
-
-ARCH_ALIASES = {
-    "c2c4": (2, 4),
-    "c4c8": (4, 8),
-    "c8c16": (8, 16),
-    "c16c32": (16, 32),
-}
 
 
 def coeff_tag(v: float) -> str:
     return f"{v:.0e}".replace("-", "m").replace("+", "p")
 
 
-def arch_name(c1: int, c2: int) -> str:
-    return f"cnn2_c{c1}_c{c2}"
-
-
-def size_label(c1: int, c2: int) -> str:
-    return f"c{c1}c{c2}"
-
-
-def resolve_arch_list(names: list[str] | None) -> list[tuple[int, int]]:
-    if not names:
-        return list(CNN_VARIANTS)
-    out: list[tuple[int, int]] = []
-    for name in names:
-        key = name.strip().lower()
-        if key in ARCH_ALIASES:
-            pair = ARCH_ALIASES[key]
-        elif key.startswith("cnn2_c") and "_c" in key:
-            rest = key.replace("cnn2_c", "")
-            c1_s, c2_s = rest.split("_c", 1)
-            pair = (int(c1_s), int(c2_s))
-        else:
-            raise ValueError(f"未知 arch: {name!r}，可用 c2c4/c4c8/c8c16/c16c32")
-        if pair not in out:
-            out.append(pair)
-    return out
+def arch_for(h: int) -> str:
+    return f"fc3_h{h}"
 
 
 def build_suffix(arch: str, reg: str, seed: int) -> str:
@@ -125,27 +117,22 @@ def matrix_path(arch: str, reg: str, seed: int) -> Path:
     )
 
 
-def important_plot_name(arch: str) -> str:
-    return f"strict_seed_train_{arch}_rate_uniform_noise_sweep_mean_std_lineplot_no_caption.png"
-
-
 def clear_test_artifacts(arch: str, reg: str, seed: int) -> None:
     out_dir = test_out_dir(arch, reg, seed)
     if not out_dir.exists():
         return
+    tag = f"{arch}_{reg}_seed{seed}"
     for p in out_dir.glob("noise_sweep_matrix_*.csv"):
-        p.unlink()
-        print(f"[CLEAR] {p}", flush=True)
+        _backup_file(p, f"noise_sweep/{tag}")
     for p in out_dir.glob("noise_sweep_combined_L_T.csv"):
-        p.unlink()
-        print(f"[CLEAR] {p}", flush=True)
+        _backup_file(p, f"noise_sweep/{tag}")
 
 
 def train_one(arch: str, reg: str, seed: int, retrain: bool) -> Path:
     ckpt = ckpt_path(arch, reg, seed)
     if retrain and ckpt.exists():
-        ckpt.unlink()
-        print(f"[RETRAIN] removed {ckpt.name}", flush=True)
+        _backup_file(ckpt, f"checkpoints/{arch}_{reg}_seed{seed}")
+        print(f"[RETRAIN] will retrain {ckpt.name}", flush=True)
     if ckpt.exists():
         print(f"[SKIP TRAIN] {ckpt.name}", flush=True)
         return ckpt
@@ -163,9 +150,9 @@ def train_one(arch: str, reg: str, seed: int, retrain: bool) -> Path:
         "-data", "mnist",
         "-arch", arch,
         "-L", str(LVAL),
-        "--epochs", str(EPOCHS),
-        "-j", str(NUM_WORKERS),
-        "-b", str(BATCH),
+        "--epochs", "100",
+        "-j", "0",
+        "-b", "128",
         "--seed", str(seed),
         "--device", "auto",
         "--time", "0",
@@ -202,8 +189,8 @@ def test_noise_sweep(
         "-arch", arch,
         "-L", str(LVAL),
         "-T", str(TVAL),
-        "-j", str(NUM_WORKERS),
-        "-b", str(BATCH),
+        "-j", "0",
+        "-b", "128",
         "--seed", str(seed),
         "--device", "auto",
         "--mode", IF_MODE,
@@ -250,10 +237,11 @@ def load_raw_rows() -> list[dict]:
 
 def upsert_run_rows(
     new_rows: list[dict],
-    archs: set[str],
+    h_list: list[int],
     regs: list[str],
     seeds: list[int],
 ) -> None:
+    archs = {arch_for(h) for h in h_list}
     kept = [
         r
         for r in load_raw_rows()
@@ -266,8 +254,7 @@ def upsert_run_rows(
     kept.extend(new_rows)
     kept.sort(
         key=lambda r: (
-            int(r["c1"]),
-            int(r["c2"]),
+            int(r["hidden_size"]),
             REGS.index(r["regularizer"]) if r["regularizer"] in REGS else 99,
             int(r["seed"]),
             float(r["sigma"]),
@@ -281,26 +268,18 @@ def upsert_run_rows(
 
 
 def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
-    bucket: dict[tuple[str, int, int, str, float], list[float]] = defaultdict(list)
+    bucket: dict[tuple[str, int, str, float], list[float]] = defaultdict(list)
     for row in raw_rows:
-        bucket[
-            (
-                row["arch"],
-                int(row["c1"]),
-                int(row["c2"]),
-                row["regularizer"],
-                float(row["sigma"]),
-            )
-        ].append(float(row["acc"]))
-
+        bucket[(row["arch"], int(row["hidden_size"]), row["regularizer"], float(row["sigma"]))].append(
+            float(row["acc"])
+        )
     agg_rows = []
-    for (arch, c1, c2, reg, sigma), vals in sorted(
+    for (arch, h, reg, sigma), vals in sorted(
         bucket.items(),
         key=lambda x: (
             x[0][1],
-            x[0][2],
-            REGS.index(x[0][3]) if x[0][3] in REGS else 99,
-            x[0][4],
+            REGS.index(x[0][2]) if x[0][2] in REGS else 99,
+            x[0][3],
         ),
     ):
         mean = statistics.mean(vals)
@@ -308,9 +287,7 @@ def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
         agg_rows.append(
             {
                 "arch": arch,
-                "c1": c1,
-                "c2": c2,
-                "size_label": size_label(c1, c2),
+                "hidden_size": h,
                 "regularizer": reg,
                 "sigma": f"{sigma:.1f}",
                 "acc_mean": f"{mean:.6f}",
@@ -321,16 +298,20 @@ def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
     return agg_rows
 
 
+def important_plot_name(arch: str) -> str:
+    return f"strict_seed_train_{arch}_rate_uniform_noise_sweep_mean_std_lineplot_no_caption.png"
+
+
 def plot_results(
     agg_rows: list[dict],
-    variants: list[tuple[int, int]],
+    h_list: list[int],
     copy_important: bool,
     font_size: float,
     legend_font_size: float,
 ) -> None:
     plt.rcParams.update({"font.size": font_size, "legend.fontsize": legend_font_size})
-    for c1, c2 in variants:
-        arch = arch_name(c1, c2)
+    for h in h_list:
+        arch = arch_for(h)
         rows_arch = [r for r in agg_rows if r["arch"] == arch]
         if not rows_arch:
             print(f"[PLOT] skip {arch}: no data", flush=True)
@@ -380,9 +361,24 @@ def plot_results(
             print(f"[PLOT] copied {dest}", flush=True)
 
 
+def replot_derivatives(h_list: list[int], font_size: float, legend_font_size: float) -> None:
+    script = ROOT / "noise3_exp" / "plot_fc3_strict_seed_rate_uniform_acc_derivative.py"
+    cmd = [
+        sys.executable,
+        str(script),
+        "--h-list",
+        *[str(h) for h in h_list],
+        "--font-size",
+        str(font_size),
+        "--legend-font-size",
+        str(legend_font_size),
+    ]
+    subprocess.run(cmd, cwd=str(ROOT), check=True)
+
+
 def finalize_tables_and_plots(
-    variants: list[tuple[int, int]],
-    plot_variants: list[tuple[int, int]],
+    h_list: list[int],
+    plot_h_list: list[int],
     copy_important: bool,
     font_size: float,
     legend_font_size: float,
@@ -397,27 +393,13 @@ def finalize_tables_and_plots(
     print(f"[TABLE] raw: {RAW_CSV}", flush=True)
     print(f"[TABLE] agg: {AGG_CSV}", flush=True)
     if replot:
-        plot_results(
-            agg_rows, plot_variants, copy_important, font_size, legend_font_size
-        )
+        plot_results(agg_rows, plot_h_list, copy_important, font_size, legend_font_size)
+        replot_derivatives(plot_h_list, font_size, legend_font_size)
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description="MNIST CNN2 strict-seed 三路正则 + rate_uniform 噪声实验"
-    )
-    p.add_argument(
-        "--arch-list",
-        nargs="+",
-        default=None,
-        help="c2c4 c4c8 c8c16 c16c32 或 cnn2_c2_c4 等（默认全部）",
-    )
-    p.add_argument(
-        "--plot-arch-list",
-        nargs="+",
-        default=None,
-        help="重画图时的架构列表（默认与 --arch-list 相同）",
-    )
+    p = argparse.ArgumentParser(description="fc3 strict-seed 三路 rate_uniform 噪声实验")
+    p.add_argument("--h-list", type=int, nargs="+", default=ALL_H_LIST)
     p.add_argument("--seeds", type=int, nargs="+", default=DEFAULT_SEEDS)
     p.add_argument("--seed", type=int, default=None)
     p.add_argument(
@@ -426,12 +408,27 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help="只跑一种正则（默认 all）",
     )
-    p.add_argument("--retrain", action="store_true", help="删除并重新训练 checkpoint")
-    p.add_argument("--force-test", action="store_true", help="删除并重新跑噪声扫描")
+    p.add_argument(
+        "--retrain",
+        action="store_true",
+        help="备份旧 checkpoint 到 ..._backups/ 后重新训练",
+    )
+    p.add_argument(
+        "--force-test",
+        action="store_true",
+        help="备份旧噪声 CSV 到 ..._backups/ 后重新跑噪声扫描",
+    )
     p.add_argument("--replot", action="store_true", help="结束后重算表并出图")
+    p.add_argument(
+        "--plot-h-list",
+        type=int,
+        nargs="+",
+        default=None,
+        help="重画图时的 h 列表（默认与 --h-list 相同；可设 4 8 16 32 64 128 更新全部图）",
+    )
     p.add_argument("--copy-important", action="store_true")
-    p.add_argument("--font-size", type=float, default=18.0)
-    p.add_argument("--legend-font-size", type=float, default=16.0)
+    p.add_argument("--font-size", type=float, default=14.0)
+    p.add_argument("--legend-font-size", type=float, default=12.0)
     p.add_argument(
         "--plot-only",
         action="store_true",
@@ -442,27 +439,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    variants = resolve_arch_list(args.arch_list)
-    plot_variants = resolve_arch_list(
-        args.plot_arch_list if args.plot_arch_list is not None else args.arch_list
-    )
-    if args.plot_arch_list is None and args.arch_list is None:
-        plot_variants = list(CNN_VARIANTS)
     seeds = [args.seed] if args.seed is not None else args.seeds
     regs = REGS if args.reg == "all" else [args.reg]
-    archs = {arch_name(c1, c2) for c1, c2 in variants}
+    plot_h_list = args.plot_h_list if args.plot_h_list is not None else args.h_list
 
     if args.plot_only:
         finalize_tables_and_plots(
-            variants, plot_variants, args.copy_important,
+            args.h_list, plot_h_list, args.copy_important,
             args.font_size, args.legend_font_size, replot=True,
         )
         return
 
     new_rows: list[dict] = []
-    for c1, c2 in variants:
-        arch = arch_name(c1, c2)
-        label = size_label(c1, c2)
+    for h in args.h_list:
+        arch = arch_for(h)
         for reg in regs:
             for seed in seeds:
                 ckpt = train_one(arch, reg, seed, args.retrain)
@@ -471,9 +461,7 @@ def main() -> None:
                     new_rows.append(
                         {
                             "arch": arch,
-                            "c1": c1,
-                            "c2": c2,
-                            "size_label": label,
+                            "hidden_size": h,
                             "regularizer": reg,
                             "seed": seed,
                             "L": LVAL,
@@ -486,11 +474,12 @@ def main() -> None:
                         }
                     )
 
-    upsert_run_rows(new_rows, archs, regs, seeds)
-    finalize_tables_and_plots(
-        variants, plot_variants, args.copy_important,
-        args.font_size, args.legend_font_size, replot=True,
-    )
+    upsert_run_rows(new_rows, args.h_list, regs, seeds)
+    if args.replot:
+        finalize_tables_and_plots(
+            args.h_list, plot_h_list, args.copy_important,
+            args.font_size, args.legend_font_size, replot=True,
+        )
 
 
 if __name__ == "__main__":

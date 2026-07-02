@@ -224,7 +224,7 @@ def test_noise_sweep(
         "--noise_sweep",
         "--noise_sigma_start", "0.0",
         "--noise_sigma_end", "1.0",
-        "--noise_sigma_step", "0.1",
+        "--noise_sigma_step", "0.05",
         "--noise_output_dir", str(out_dir),
     ]
     print(f"[TEST] {arch} {tag} seed={seed} mode={IF_MODE}", flush=True)

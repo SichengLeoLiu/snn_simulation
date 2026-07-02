@@ -165,7 +165,7 @@ parser.add_argument(
 parser.add_argument(
     "--noise_sigma_step",
     type=float,
-    default=0.02,
+    default=0.05,
     help="--noise_sweep sigma 步长",
 )
 parser.add_argument(

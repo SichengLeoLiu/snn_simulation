@@ -6,7 +6,7 @@ CIFAR-10 / CIFAR-100 VGG16：三路正则 strict-seed 训练 + 噪声扫描 + me
   - mne_l2 / MNE L2 (rc=1e-4)
   - no_regularization / No reg (wd=0)
 
-默认 5 seeds: 40,41,42,43,44；L=16, T=16, rate_uniform, sigma=0~1.0 step=0.1。
+默认 5 seeds: 40,41,42,43,44；L=16, T=16, rate_uniform, sigma=0~1.0 step=0.05。
 方案 C：输出层不参与 MNE-L2。
 
 用法：
@@ -311,7 +311,7 @@ def test_noise_sweep(
         "--noise_sigma_end",
         "1.0",
         "--noise_sigma_step",
-        "0.1",
+        "0.05",
         "--noise_output_dir",
         str(test_dir),
     ]

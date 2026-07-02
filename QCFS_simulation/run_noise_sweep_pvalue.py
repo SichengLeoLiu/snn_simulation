@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
 
     p.add_argument("--noise_sigma_start", default=0.0, type=float)
     p.add_argument("--noise_sigma_end", default=1.0, type=float)
-    p.add_argument("--noise_sigma_step", default=0.02, type=float)
+    p.add_argument("--noise_sigma_step", default=0.05, type=float)
     p.add_argument("--noise_target_acc", default=90.0, type=float)
 
     p.add_argument(

@@ -166,7 +166,7 @@ def test_noise_sweep(reg: str, ckpt: Path, reg_coeff: Optional[float] = None) ->
         "--noise_sigma_end",
         "1.0",
         "--noise_sigma_step",
-        "0.1",
+        "0.05",
         "--noise_output_dir",
         str(out_dir),
     ]

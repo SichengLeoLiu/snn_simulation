@@ -2,7 +2,7 @@
 MNIST fc3 strict-seed：mne_l2+wd 噪声扫描（rate_uniform），合并到已有三路 mean±std 折线图。
 
 训练 checkpoint 与 normal 版共用（T=0 训练）；本脚本仅用 rate_uniform 做测试。
-设置：L=16, T=16, IF mode=rate_uniform, sigma=0~1.0 step=0.1, seeds=40..44。
+设置：L=16, T=16, IF mode=rate_uniform, sigma=0~1.0 step=0.05, seeds=40..44。
 
 用法：
   python noise3_exp/run_fc3_strict_seed_mne_l2_wd_noise_sweep_rate_uniform_L16_T16.py
@@ -187,7 +187,7 @@ def test_noise_sweep(arch: str, seed: int, ckpt: Path) -> Path:
         "--noise_sigma_end",
         "1.0",
         "--noise_sigma_step",
-        "0.1",
+        "0.05",
         "--noise_output_dir",
         str(out_dir),
     ]

@@ -3,7 +3,7 @@
 #
 # 模型：c2c4 / c4c8 / c8c16 / c16c32
 # 方法：mne_l2 / weight_decay / no_regularization
-# 默认 5 seeds (40–44)，L=16, T=16, sigma=0~1 step=0.1
+# 默认 5 seeds (40–44)，L=16, T=16, sigma=0~1 step=0.05
 #
 # 用法：
 #   bash noise3_exp/RUN_cnn_strict_seed_three_regs_rate_uniform.sh
