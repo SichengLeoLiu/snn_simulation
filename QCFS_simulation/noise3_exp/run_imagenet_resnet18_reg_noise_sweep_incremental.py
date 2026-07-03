@@ -60,6 +60,9 @@ WD_COMBO = 1e-4
 METHOD_ALIASES = {
     "weight_decay": "weight_decay",
     "wd": "weight_decay",
+    "no_regularization": "no_regularization",
+    "no_reg": "no_regularization",
+    "none": "no_regularization",
     "mne_l2": "mne_l2",
     "mnel2": "mne_l2",
     "mne_l2_wd": "mne_l2_wd",
@@ -69,14 +72,21 @@ METHOD_ALIASES = {
 
 METHOD_CONFIG = {
     "weight_decay": ("weight_decay", None, WD_BASE),
+    "no_regularization": ("no_regularization", None, 0.0),
     "mne_l2": ("mne_l2 rc=1e-4", MNE_RC, 0.0),
     "mne_l2_wd": ("mne_l2+wd rc=1e-4 wd=1e-4", MNE_RC, WD_COMBO),
 }
 
-PLOT_ORDER = ["weight_decay", "mne_l2 rc=1e-4", "mne_l2+wd rc=1e-4 wd=1e-4"]
+PLOT_ORDER = [
+    "weight_decay",
+    "no_regularization",
+    "mne_l2 rc=1e-4",
+    "mne_l2+wd rc=1e-4 wd=1e-4",
+]
 
 LINE_STYLES = {
     "weight_decay": {"color": "#ff7f0e", "label": "weight_decay (wd=1e-4)"},
+    "no_regularization": {"color": "#9467bd", "label": "no_regularization"},
     "mne_l2 rc=1e-4": {"color": "#1f77b4", "label": "mne_l2 (rc=1e-4)"},
     "mne_l2+wd rc=1e-4 wd=1e-4": {
         "color": "#2ca02c",
@@ -110,6 +120,8 @@ def coeff_tag(v: float) -> str:
 
 def build_suffix(reg_coeff: Optional[float], wd: float) -> str:
     if reg_coeff is None:
+        if wd <= 0:
+            return f"seed{SEED}_{SCHEME_TAG}_none_l{LVAL}_{ARCH}"
         return f"seed{SEED}_{SCHEME_TAG}_wd_l{LVAL}_{ARCH}"
     if wd > 0:
         return (
@@ -138,7 +150,9 @@ def train_one(label: str, reg_coeff: Optional[float], wd: float) -> Path:
         print(f"[SKIP TRAIN] {ckpt.name}", flush=True)
         return ckpt
 
-    if reg_coeff is None:
+    if label == "no_regularization":
+        regularizer, rc = "weight_decay", 1.0
+    elif reg_coeff is None:
         regularizer, rc = "weight_decay", 1.0
     else:
         regularizer, rc = "mne_l2", reg_coeff
@@ -436,7 +450,7 @@ def parse_args() -> argparse.Namespace:
         "--method",
         type=str,
         default=None,
-        help="正则方法: weight_decay | mne_l2 | mne_l2_wd（别名: wd, mnel2, combo）",
+        help="正则方法: weight_decay | no_regularization | mne_l2 | mne_l2_wd（别名: wd/no_reg/mnel2/combo）",
     )
     parser.add_argument(
         "--plot-only",
