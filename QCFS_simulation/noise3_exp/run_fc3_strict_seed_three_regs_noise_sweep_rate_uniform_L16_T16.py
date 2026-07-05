@@ -51,9 +51,9 @@ TVAL = 16
 IF_MODE = "rate_uniform"
 
 LINE_STYLES = {
-    "mne_l2": {"color": "#1f77b4", "label": "mne_l2 (mean)"},
-    "weight_decay": {"color": "#ff7f0e", "label": "weight_decay (mean)"},
-    "no_regularization": {"color": "#2ca02c", "label": "no regularization (mean)"},
+    "mne_l2": {"color": "#1f77b4", "label": "MNE-L2"},
+    "weight_decay": {"color": "#ff7f0e", "label": "L2"},
+    "no_regularization": {"color": "#2ca02c", "label": "No Reg"},
 }
 
 RAW_CSV = OUT / "strict_seed_train_noise_sweep_fc3_h4_h8_h16_h32_h64_h128_raw.csv"
@@ -128,7 +128,7 @@ def clear_test_artifacts(arch: str, reg: str, seed: int) -> None:
         _backup_file(p, f"noise_sweep/{tag}")
 
 
-def train_one(arch: str, reg: str, seed: int, retrain: bool) -> Path:
+def train_one(arch: str, reg: str, seed: int, retrain: bool, epochs: int) -> Path:
     ckpt = ckpt_path(arch, reg, seed)
     if retrain and ckpt.exists():
         _backup_file(ckpt, f"checkpoints/{arch}_{reg}_seed{seed}")
@@ -150,7 +150,7 @@ def train_one(arch: str, reg: str, seed: int, retrain: bool) -> Path:
         "-data", "mnist",
         "-arch", arch,
         "-L", str(LVAL),
-        "--epochs", "100",
+        "--epochs", str(epochs),
         "-j", "0",
         "-b", "128",
         "--seed", str(seed),
@@ -270,7 +270,8 @@ def upsert_run_rows(
 def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
     bucket: dict[tuple[str, int, str, float], list[float]] = defaultdict(list)
     for row in raw_rows:
-        bucket[(row["arch"], int(row["hidden_size"]), row["regularizer"], float(row["sigma"]))].append(
+        sigma = round(float(row["sigma"]), 6)
+        bucket[(row["arch"], int(row["hidden_size"]), row["regularizer"], sigma)].append(
             float(row["acc"])
         )
     agg_rows = []
@@ -289,7 +290,7 @@ def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
                 "arch": arch,
                 "hidden_size": h,
                 "regularizer": reg,
-                "sigma": f"{sigma:.1f}",
+                "sigma": f"{sigma:.2f}",
                 "acc_mean": f"{mean:.6f}",
                 "acc_std": f"{std:.6f}",
                 "n_seeds": len(vals),
@@ -306,10 +307,17 @@ def plot_results(
     agg_rows: list[dict],
     h_list: list[int],
     copy_important: bool,
+    important_subdir: str | None,
     font_size: float,
     legend_font_size: float,
 ) -> None:
     plt.rcParams.update({"font.size": font_size, "legend.fontsize": legend_font_size})
+    important_dir: Path | None = None
+    if copy_important:
+        subdir = important_subdir or f"fc3_rate_uniform_noise_sweep_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        important_dir = IMPORTANT_RESULTS / subdir
+        important_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[PLOT] copy dir: {important_dir}", flush=True)
     for h in h_list:
         arch = arch_for(h)
         rows_arch = [r for r in agg_rows if r["arch"] == arch]
@@ -354,9 +362,8 @@ def plot_results(
         fig.savefig(out_png)
         plt.close(fig)
         print(f"[PLOT] saved {out_png}", flush=True)
-        if copy_important:
-            IMPORTANT_RESULTS.mkdir(parents=True, exist_ok=True)
-            dest = IMPORTANT_RESULTS / important_plot_name(arch)
+        if copy_important and important_dir is not None:
+            dest = important_dir / important_plot_name(arch)
             shutil.copy2(out_png, dest)
             print(f"[PLOT] copied {dest}", flush=True)
 
@@ -380,6 +387,7 @@ def finalize_tables_and_plots(
     h_list: list[int],
     plot_h_list: list[int],
     copy_important: bool,
+    important_subdir: str | None,
     font_size: float,
     legend_font_size: float,
     replot: bool,
@@ -393,7 +401,9 @@ def finalize_tables_and_plots(
     print(f"[TABLE] raw: {RAW_CSV}", flush=True)
     print(f"[TABLE] agg: {AGG_CSV}", flush=True)
     if replot:
-        plot_results(agg_rows, plot_h_list, copy_important, font_size, legend_font_size)
+        plot_results(
+            agg_rows, plot_h_list, copy_important, important_subdir, font_size, legend_font_size
+        )
         replot_derivatives(plot_h_list, font_size, legend_font_size)
 
 
@@ -414,6 +424,12 @@ def parse_args() -> argparse.Namespace:
         help="备份旧 checkpoint 到 ..._backups/ 后重新训练",
     )
     p.add_argument(
+        "--epochs",
+        type=int,
+        default=100,
+        help="训练轮数（MNIST 默认 100，可按需求下调）",
+    )
+    p.add_argument(
         "--force-test",
         action="store_true",
         help="备份旧噪声 CSV 到 ..._backups/ 后重新跑噪声扫描",
@@ -427,6 +443,12 @@ def parse_args() -> argparse.Namespace:
         help="重画图时的 h 列表（默认与 --h-list 相同；可设 4 8 16 32 64 128 更新全部图）",
     )
     p.add_argument("--copy-important", action="store_true")
+    p.add_argument(
+        "--important-subdir",
+        type=str,
+        default=None,
+        help="当 --copy-important 开启时，复制到 important results 下该子目录（默认自动时间戳目录）",
+    )
     p.add_argument("--font-size", type=float, default=14.0)
     p.add_argument("--legend-font-size", type=float, default=12.0)
     p.add_argument(
@@ -445,7 +467,7 @@ def main() -> None:
 
     if args.plot_only:
         finalize_tables_and_plots(
-            args.h_list, plot_h_list, args.copy_important,
+            args.h_list, plot_h_list, args.copy_important, args.important_subdir,
             args.font_size, args.legend_font_size, replot=True,
         )
         return
@@ -455,7 +477,7 @@ def main() -> None:
         arch = arch_for(h)
         for reg in regs:
             for seed in seeds:
-                ckpt = train_one(arch, reg, seed, args.retrain)
+                ckpt = train_one(arch, reg, seed, args.retrain, args.epochs)
                 mat = test_noise_sweep(arch, reg, seed, ckpt, args.force_test)
                 for sigma, acc in read_matrix(mat):
                     new_rows.append(
@@ -477,7 +499,7 @@ def main() -> None:
     upsert_run_rows(new_rows, args.h_list, regs, seeds)
     if args.replot:
         finalize_tables_and_plots(
-            args.h_list, plot_h_list, args.copy_important,
+            args.h_list, plot_h_list, args.copy_important, args.important_subdir,
             args.font_size, args.legend_font_size, replot=True,
         )
 
