@@ -17,6 +17,15 @@ from Preprocess import datapool
 from utils import get_torch_device, seed_all, val
 
 
+def _path_for_csv(path: Path) -> str:
+    """Prefer project-relative path; fallback to absolute path."""
+    p = path.resolve()
+    try:
+        return str(p.relative_to(PROJECT_ROOT.resolve()))
+    except ValueError:
+        return str(p)
+
+
 def ckpt_path(arch: str, l_val: int, seed: int) -> Path:
     suffix = f"strict_seed{seed}_ablation_wd_l{l_val}_{arch}"
     return PROJECT_ROOT / "mnist-checkpoints" / f"{arch}_L[{l_val}]_{suffix}.pth"
@@ -221,7 +230,7 @@ def main() -> None:
                             "T": t_val,
                             "seed": seed,
                             "acc": f"{acc:.6f}",
-                            "checkpoint": str(ckpt.relative_to(PROJECT_ROOT)),
+                            "checkpoint": _path_for_csv(ckpt),
                         }
                     )
                     print(f"[EVAL] {arch} L={l_val} T={t_val} seed={seed} acc={acc:.3f}", flush=True)
@@ -244,8 +253,8 @@ def main() -> None:
                             "seed": seed,
                             "sigma": f"{sigma:.2f}",
                             "acc": f"{acc:.6f}",
-                            "checkpoint": str(ckpt_l16.relative_to(PROJECT_ROOT)),
-                            "matrix_csv": str(mat.relative_to(PROJECT_ROOT)),
+                            "checkpoint": _path_for_csv(ckpt_l16),
+                            "matrix_csv": _path_for_csv(mat),
                         }
                     )
 
