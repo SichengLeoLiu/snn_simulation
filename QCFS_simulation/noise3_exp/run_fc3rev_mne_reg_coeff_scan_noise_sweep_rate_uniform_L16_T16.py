@@ -2,6 +2,7 @@
 FC3rev (2h->h)：mne_l2 reg_coeff 扫描 + weight_decay 基线 + rate_uniform 噪声注入。
 
 默认 h ∈ {8, 128, 256}，rc ∈ {1e-3, 5e-3, 1e-2, 5e-2, 1e-1}，seeds=40..44。
+仅扫描 MNE-L2 各 reg_coeff，按 RS 选最优 β（默认不含 L2 基线）。
 训练 L=16 T=0 epochs=50；测试 L=16 T=16 rate_uniform sigma step=0.05。
 checkpoint 后缀含 rcscan，不覆盖 strict-seed 权重。
 
@@ -364,7 +365,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seeds", type=int, nargs="+", default=DEFAULT_SEEDS)
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--rc-list", type=float, nargs="+", default=None)
-    p.add_argument("--skip-wd", action="store_true")
+    p.add_argument(
+        "--include-wd",
+        action="store_true",
+        help="额外训练 weight_decay 基线用于对比（默认只扫 mne_l2）",
+    )
     p.add_argument("--retrain", action="store_true")
     p.add_argument("--force-test", action="store_true")
     p.add_argument("--plot-only", action="store_true")
@@ -382,7 +387,7 @@ def main() -> None:
     h_list = args.h_list
     rc_list = args.rc_list if args.rc_list is not None else list(DEFAULT_RC_LIST)
     seeds = [args.seed] if args.seed is not None else args.seeds
-    include_wd = not args.skip_wd
+    include_wd = args.include_wd
     methods = (["weight_decay"] if include_wd else []) + [method_key("mne_l2", c) for c in rc_list]
     archs = {arch_for(h) for h in h_list}
     raw_csv = out_root / "fc3rev_mne_reg_coeff_scan_noise_sweep_raw.csv"
