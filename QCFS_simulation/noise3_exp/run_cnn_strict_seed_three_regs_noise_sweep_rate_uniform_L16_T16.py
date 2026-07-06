@@ -1,17 +1,21 @@
 """
-MNIST CNN2 多架构 strict-seed 三路正则 + rate_uniform 噪声扫描 + mean±std 折线图。
+MNIST CNN2 多架构 strict-seed 三路正则 + 噪声扫描 + mean±std 折线图。
 
 模型：cnn2_c2_c4 / cnn2_c4_c8 / cnn2_c8_c16 / cnn2_c16_c32
 方法：mne_l2 (rc=5e-2) / weight_decay (wd=5e-4) / no_regularization
 训练：L=16, T=0, spike_schedule=normal, 100 epochs, seeds=40..44
-测试：L=16, T=16, IF mode=rate_uniform, sigma=0~1 step=0.05
+测试：L=16, T=16, IF mode=rate_uniform 或 normal, sigma=0~1 step=0.05
 
 用法：
+  # rate_uniform（默认，输出到 noise3_exp/）
   python noise3_exp/run_cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py
+
+  # normal 模式，结果存到 all_results_from_gadi/.../normal/
   python noise3_exp/run_cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \
-    --arch-list c2c4 c8c16 --reg mne_l2 --seed 42
-  python noise3_exp/run_cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \
-    --plot-only --copy-important --font-size 18 --legend-font-size 16
+    --if-mode normal \
+    --force-test \
+    --replot \
+    --gadi-results-layout
 """
 from __future__ import annotations
 
@@ -31,8 +35,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-OUT = ROOT / "noise3_exp" / "cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16"
 IMPORTANT_RESULTS = ROOT.parent / "important results"
+GADI_RESULTS = ROOT.parent / "all_results_from_gadi"
 
 DEFAULT_SEEDS = [40, 41, 42, 43, 44]
 CNN_VARIANTS = [(2, 4), (4, 8), (8, 16), (16, 32)]
@@ -40,14 +44,16 @@ REGS = ["mne_l2", "weight_decay", "no_regularization"]
 LVAL = 16
 TVAL = 16
 IF_MODE = "rate_uniform"
+OUT = ROOT / "noise3_exp" / "cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16"
+PLOTS_OUT = OUT
 EPOCHS = int(os.environ.get("CNN_EPOCHS", "100"))
 BATCH = int(os.environ.get("CNN_BATCH", "128"))
 NUM_WORKERS = int(os.environ.get("CNN_NUM_WORKERS", "8"))
 
 LINE_STYLES = {
-    "mne_l2": {"color": "#1f77b4", "label": "mne_l2 (mean)"},
-    "weight_decay": {"color": "#ff7f0e", "label": "weight_decay (mean)"},
-    "no_regularization": {"color": "#2ca02c", "label": "no regularization (mean)"},
+    "mne_l2": {"color": "#1f77b4", "label": "MNE-L2"},
+    "weight_decay": {"color": "#ff7f0e", "label": "L2"},
+    "no_regularization": {"color": "#2ca02c", "label": "No Reg"},
 }
 
 RAW_CSV = OUT / "cnn_strict_seed_three_regs_noise_sweep_raw.csv"
@@ -125,8 +131,25 @@ def matrix_path(arch: str, reg: str, seed: int) -> Path:
     )
 
 
+def configure_paths(if_mode: str, gadi_results_layout: bool) -> None:
+    global IF_MODE, OUT, PLOTS_OUT, RAW_CSV, AGG_CSV
+    IF_MODE = if_mode
+    if gadi_results_layout:
+        if if_mode == "normal":
+            OUT = GADI_RESULTS / "cnn2_noise_sweep_step0p05_full_extracted" / "normal"
+            PLOTS_OUT = GADI_RESULTS / "cnn2_noise_sweep_step0p05_plots" / "normal"
+        else:
+            OUT = GADI_RESULTS / "cnn2_noise_sweep_step0p05_full_extracted"
+            PLOTS_OUT = GADI_RESULTS / "cnn2_noise_sweep_step0p05_plots"
+    else:
+        OUT = ROOT / "noise3_exp" / f"cnn_strict_seed_three_regs_noise_sweep_{if_mode}_L16_T16"
+        PLOTS_OUT = OUT
+    RAW_CSV = PLOTS_OUT / "cnn_strict_seed_three_regs_noise_sweep_raw.csv"
+    AGG_CSV = PLOTS_OUT / "cnn_strict_seed_three_regs_noise_sweep_mean_std.csv"
+
+
 def important_plot_name(arch: str) -> str:
-    return f"strict_seed_train_{arch}_rate_uniform_noise_sweep_mean_std_lineplot_no_caption.png"
+    return f"strict_seed_train_{arch}_{IF_MODE}_noise_sweep_mean_std_lineplot_no_caption.png"
 
 
 def clear_test_artifacts(arch: str, reg: str, seed: int) -> None:
@@ -312,7 +335,7 @@ def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
                 "c2": c2,
                 "size_label": size_label(c1, c2),
                 "regularizer": reg,
-                "sigma": f"{sigma:.1f}",
+                "sigma": f"{sigma:.2f}",
                 "acc_mean": f"{mean:.6f}",
                 "acc_std": f"{std:.6f}",
                 "n_seeds": len(vals),
@@ -369,10 +392,14 @@ def plot_results(
         ax.grid(alpha=0.3)
         ax.legend(loc="lower left", frameon=False)
         fig.tight_layout()
-        out_png = OUT / f"strict_seed_train_{arch}_noise_sweep_mean_std_lineplot_no_caption.png"
+        PLOTS_OUT.mkdir(parents=True, exist_ok=True)
+        out_png = PLOTS_OUT / f"{arch}_three_regs_noise_sweep_step0p05.png"
         fig.savefig(out_png)
+        legacy_png = PLOTS_OUT / f"strict_seed_train_{arch}_noise_sweep_mean_std_lineplot_no_caption.png"
+        fig.savefig(legacy_png)
         plt.close(fig)
         print(f"[PLOT] saved {out_png}", flush=True)
+        print(f"[PLOT] saved {legacy_png}", flush=True)
         if copy_important:
             IMPORTANT_RESULTS.mkdir(parents=True, exist_ok=True)
             dest = IMPORTANT_RESULTS / important_plot_name(arch)
@@ -404,7 +431,19 @@ def finalize_tables_and_plots(
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="MNIST CNN2 strict-seed 三路正则 + rate_uniform 噪声实验"
+        description="MNIST CNN2 strict-seed 三路正则 + 噪声实验（rate_uniform / normal）"
+    )
+    p.add_argument(
+        "--if-mode",
+        choices=["rate_uniform", "normal"],
+        default="rate_uniform",
+        help="噪声测试 IF mode（默认 rate_uniform）",
+    )
+    p.add_argument(
+        "--gadi-results-layout",
+        action="store_true",
+        help="矩阵 CSV 存到 all_results_from_gadi/cnn2_noise_sweep_step0p05_full_extracted/{if_mode}/，"
+        "表和图存到 all_results_from_gadi/cnn2_noise_sweep_step0p05_plots/{if_mode}/",
     )
     p.add_argument(
         "--arch-list",
@@ -442,6 +481,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    configure_paths(args.if_mode, args.gadi_results_layout)
+    print(f"[CONFIG] if_mode={IF_MODE}", flush=True)
+    print(f"[CONFIG] data_out={OUT}", flush=True)
+    print(f"[CONFIG] plots_out={PLOTS_OUT}", flush=True)
     variants = resolve_arch_list(args.arch_list)
     plot_variants = resolve_arch_list(
         args.plot_arch_list if args.plot_arch_list is not None else args.arch_list
