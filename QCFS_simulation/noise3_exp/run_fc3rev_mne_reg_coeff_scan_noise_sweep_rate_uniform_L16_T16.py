@@ -29,6 +29,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+
+def _path_for_csv(path: Path) -> str:
+    p = path.resolve()
+    try:
+        return str(p.relative_to(ROOT.resolve()))
+    except ValueError:
+        return str(p)
+
+
 DEFAULT_H_LIST = [8, 128, 256]
 DEFAULT_SEEDS = [40, 41, 42, 43, 44]
 DEFAULT_RC_LIST = [1e-3, 5e-3, 1e-2, 5e-2, 1e-1]
@@ -313,8 +322,8 @@ def run_config(
             "arch": arch, "hidden_size": h, "method": tag, "regularizer": reg,
             "reg_coeff": rc_str, "seed": seed, "L": LVAL, "T": TVAL,
             "if_mode": IF_MODE, "sigma": sigma, "acc": acc,
-            "checkpoint": str(ckpt.relative_to(ROOT)),
-            "matrix_csv": str(mat.relative_to(ROOT)),
+            "checkpoint": _path_for_csv(ckpt),
+            "matrix_csv": _path_for_csv(mat),
         }
         for sigma, acc in read_matrix(mat)
     ]
