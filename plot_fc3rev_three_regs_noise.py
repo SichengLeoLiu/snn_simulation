@@ -1,3 +1,4 @@
+import argparse
 import csv
 import statistics
 from collections import defaultdict
@@ -7,9 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "important results" / "new_fc3"
-NOISE_RAW = DATA_DIR / "fc3rev_h8_h256_three_regs_noise_sweep_raw.csv"
-OUT_DIR = DATA_DIR / "plots"
+DEFAULT_DATA_DIR = ROOT / "important results" / "new_fc3"
+OUT_DIR = DEFAULT_DATA_DIR / "plots"
 
 METHODS = ["weight_decay", "mne_l2", "no_regularization"]
 METHOD_LABELS = {
@@ -24,13 +24,14 @@ METHOD_COLORS = {
 }
 
 
-def read_noise_raw():
-    if not NOISE_RAW.exists():
-        legacy = DATA_DIR / "fc3rev_h8_h256_wd_noise_sweep_raw.csv"
+def read_noise_raw(data_dir: Path):
+    noise_raw = data_dir / "fc3rev_h8_h256_three_regs_noise_sweep_raw.csv"
+    if not noise_raw.exists():
+        legacy = data_dir / "fc3rev_h8_h256_wd_noise_sweep_raw.csv"
         raise FileNotFoundError(
-            f"Missing {NOISE_RAW}. Run three-regs experiment first. (legacy wd-only: {legacy})"
+            f"Missing {noise_raw}. Run three-regs experiment first. (legacy wd-only: {legacy})"
         )
-    with NOISE_RAW.open(newline="") as f:
+    with noise_raw.open(newline="") as f:
         return list(csv.DictReader(f))
 
 
@@ -108,9 +109,9 @@ def setup_style(font_size=16):
     )
 
 
-def plot_noise_lines(noise_rows):
+def plot_noise_lines(noise_rows, out_dir: Path = OUT_DIR):
     setup_style(18)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     archs = sorted({r["arch"] for r in noise_rows}, key=lambda a: int(a.split("_h")[1]))
 
     shared_ylim = None
@@ -157,8 +158,8 @@ def plot_noise_lines(noise_rows):
         ax.legend(loc="lower left", frameon=False)
         fig.tight_layout()
         label = arch_label(arch)
-        out_png = OUT_DIR / f"fc3rev_{label}_three_regs_noise_sweep_step0p05.png"
-        out_pdf = OUT_DIR / f"fc3rev_{label}_three_regs_noise_sweep_step0p05.pdf"
+        out_png = out_dir / f"fc3rev_{label}_three_regs_noise_sweep_step0p05.png"
+        out_pdf = out_dir / f"fc3rev_{label}_three_regs_noise_sweep_step0p05.pdf"
         fig.savefig(out_png)
         fig.savefig(out_pdf)
         plt.close(fig)
@@ -187,15 +188,25 @@ def plot_noise_lines(noise_rows):
             ax.grid(alpha=0.24, linewidth=0.9)
             ax.legend(loc="lower left", frameon=False)
             fig.tight_layout()
-            out_png = OUT_DIR / f"fc3rev_{label}_three_regs_noise_sweep_step0p05_shared_ylim.png"
+            out_png = out_dir / f"fc3rev_{label}_three_regs_noise_sweep_step0p05_shared_ylim.png"
             fig.savefig(out_png)
             plt.close(fig)
             print(f"[SAVED] {out_png}")
 
 
-def plot_rs_bar(rs_rows, with_sem: bool):
+def plot_rs_bar(
+    rs_rows,
+    with_sem: bool,
+    h_list: list[int] | None = None,
+    xlabel: str = "FC3rev model scale (2h→h)",
+    out_stem: str = "fc3rev_three_regs_robustness_score_bar",
+    out_dir: Path = OUT_DIR,
+):
     setup_style(16)
     archs = sorted({r["arch"] for r in rs_rows}, key=lambda a: int(a.split("_h")[1]))
+    if h_list is not None:
+        h_set = set(h_list)
+        archs = [a for a in archs if int(a.split("_h")[1]) in h_set]
     x = np.arange(len(archs))
     width = 0.24
 
@@ -226,7 +237,7 @@ def plot_rs_bar(rs_rows, with_sem: bool):
 
     ax.set_xticks(x)
     ax.set_xticklabels([arch_label(a) for a in archs])
-    ax.set_xlabel("FC3rev model scale (2h→h)")
+    ax.set_xlabel(xlabel)
     ax.set_ylabel("Robustness Score")
     ax.set_ylim(0.55, 1.02)
     ax.grid(axis="y", alpha=0.25, linewidth=0.9)
@@ -234,16 +245,16 @@ def plot_rs_bar(rs_rows, with_sem: bool):
     fig.tight_layout()
 
     suffix = "_with_sem" if with_sem else ""
-    out_png = OUT_DIR / f"fc3rev_three_regs_robustness_score_bar{suffix}.png"
-    out_pdf = OUT_DIR / f"fc3rev_three_regs_robustness_score_bar{suffix}.pdf"
+    out_png = out_dir / f"{out_stem}{suffix}.png"
+    out_pdf = out_dir / f"{out_stem}{suffix}.pdf"
     fig.savefig(out_png)
     fig.savefig(out_pdf)
     plt.close(fig)
     print(f"[SAVED] {out_png}")
 
 
-def save_rs_csv(rs_rows):
-    out = OUT_DIR / "fc3rev_three_regs_robustness_score.csv"
+def save_rs_csv(rs_rows, out_dir: Path = OUT_DIR):
+    out = out_dir / "fc3rev_three_regs_robustness_score.csv"
     with out.open("w", newline="") as f:
         w = csv.DictWriter(
             f,
@@ -262,14 +273,70 @@ def save_rs_csv(rs_rows):
     print(f"[SAVED] {out}")
 
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Plot FC3rev three-regs noise sweep and RS bars")
+    p.add_argument("--rs-bar-h-list", type=int, nargs="+", default=None, help="RS bar: hidden sizes to include")
+    p.add_argument("--rs-bar-xlabel", type=str, default="Hidden Size")
+    p.add_argument(
+        "--rs-bar-stem",
+        type=str,
+        default=None,
+        help="RS bar output filename stem (default auto from h-list)",
+    )
+    p.add_argument("--only-rs-bar", action="store_true", help="Only redraw RS bar chart(s)")
+    p.add_argument("--no-sem-bar", action="store_true", help="Skip RS bar without SEM")
+    p.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help="Directory with fc3rev three-regs CSV outputs",
+    )
+    p.add_argument(
+        "--out-dir",
+        type=Path,
+        default=None,
+        help="Plot output directory (default: <data-dir>/plots)",
+    )
+    return p.parse_args()
+
+
 def main():
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    noise_rows = read_noise_raw()
+    args = parse_args()
+    data_dir = args.data_dir
+    out_dir = args.out_dir or (data_dir / "plots")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    noise_rows = read_noise_raw(data_dir)
     rs_rows = compute_rs_rows(noise_rows)
-    plot_noise_lines(noise_rows)
-    save_rs_csv(rs_rows)
-    plot_rs_bar(rs_rows, with_sem=False)
-    plot_rs_bar(rs_rows, with_sem=True)
+
+    h_list = args.rs_bar_h_list
+    if h_list is None and args.only_rs_bar:
+        h_list = [8, 16, 32]
+    stem = args.rs_bar_stem
+    if stem is None and h_list is not None:
+        stem = "fc3rev_three_regs_robustness_score_bar_" + "_".join(f"h{h}" for h in h_list)
+    if stem is None:
+        stem = "fc3rev_three_regs_robustness_score_bar"
+    xlabel = args.rs_bar_xlabel if h_list is not None else "FC3rev model scale (2h→h)"
+
+    if args.only_rs_bar:
+        if not args.no_sem_bar:
+            plot_rs_bar(rs_rows, with_sem=False, h_list=h_list, xlabel=xlabel, out_stem=stem, out_dir=out_dir)
+        plot_rs_bar(rs_rows, with_sem=True, h_list=h_list, xlabel=xlabel, out_stem=stem, out_dir=out_dir)
+        return
+
+    plot_noise_lines(noise_rows, out_dir)
+    save_rs_csv(rs_rows, out_dir)
+    plot_rs_bar(rs_rows, with_sem=False, out_dir=out_dir)
+    plot_rs_bar(rs_rows, with_sem=True, out_dir=out_dir)
+    if h_list is not None:
+        plot_rs_bar(
+            rs_rows,
+            with_sem=True,
+            h_list=h_list,
+            xlabel=args.rs_bar_xlabel,
+            out_stem=stem,
+            out_dir=out_dir,
+        )
 
 
 if __name__ == "__main__":

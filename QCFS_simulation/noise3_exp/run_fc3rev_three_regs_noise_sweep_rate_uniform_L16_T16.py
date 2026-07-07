@@ -61,16 +61,16 @@ def arch_for(h: int) -> str:
     return f"fc3rev_h{h}"
 
 
-def build_suffix(arch: str, reg: str, seed: int) -> str:
+def build_suffix(arch: str, reg: str, seed: int, mne_rc: float = 5e-2) -> str:
     if reg == "weight_decay":
         return f"strict_seed{seed}_ablation_wd_l{LVAL}_{arch}"
     if reg == "no_regularization":
         return f"strict_seed{seed}_ablation_none_l{LVAL}_{arch}"
-    return f"strict_seed{seed}_ablation_mne_l2_l{LVAL}_{arch}_rc{coeff_tag(5e-2)}"
+    return f"strict_seed{seed}_ablation_mne_l2_l{LVAL}_{arch}_rc{coeff_tag(mne_rc)}"
 
 
-def ckpt_path(arch: str, reg: str, seed: int) -> Path:
-    suffix = build_suffix(arch, reg, seed)
+def ckpt_path(arch: str, reg: str, seed: int, mne_rc: float = 5e-2) -> Path:
+    suffix = build_suffix(arch, reg, seed, mne_rc)
     return PROJECT_ROOT / "mnist-checkpoints" / f"{arch}_L[{LVAL}]_{suffix}.pth"
 
 
@@ -89,8 +89,10 @@ def matrix_path(out_dir: Path, arch: str, seed: int) -> Path:
     )
 
 
-def train_one(arch: str, reg: str, seed: int, epochs: int, retrain: bool) -> Path:
-    ckpt = ckpt_path(arch, reg, seed)
+def train_one(
+    arch: str, reg: str, seed: int, epochs: int, retrain: bool, mne_rc: float = 5e-2
+) -> Path:
+    ckpt = ckpt_path(arch, reg, seed, mne_rc)
     if retrain and ckpt.exists():
         ckpt.unlink()
         print(f"[RETRAIN] removed {ckpt.name}", flush=True)
@@ -99,7 +101,7 @@ def train_one(arch: str, reg: str, seed: int, epochs: int, retrain: bool) -> Pat
         return ckpt
 
     if reg == "mne_l2":
-        regularizer, wd, rc = "mne_l2", 0.0, 5e-2
+        regularizer, wd, rc = "mne_l2", 0.0, mne_rc
     elif reg == "weight_decay":
         regularizer, wd, rc = "weight_decay", 5e-4, 1.0
     else:
@@ -135,7 +137,7 @@ def train_one(arch: str, reg: str, seed: int, epochs: int, retrain: bool) -> Pat
         "--reg_coeff",
         str(rc),
         "--suffix",
-        build_suffix(arch, reg, seed),
+        build_suffix(arch, reg, seed, mne_rc),
     ]
     print(f"[TRAIN] {arch} {reg} seed={seed} epochs={epochs}", flush=True)
     subprocess.run(cmd, cwd=str(PROJECT_ROOT), check=True)
@@ -237,14 +239,15 @@ def collect_all_rows(
     h_list: list[int],
     regs: list[str],
     seeds: list[int],
+    mne_rc: float = 5e-2,
 ) -> list[dict]:
     rows: list[dict] = []
     for h in h_list:
         arch = arch_for(h)
         for reg in regs:
-            ckpt_guess = ckpt_path(arch, reg, seeds[0]) if seeds else None
+            ckpt_guess = ckpt_path(arch, reg, seeds[0], mne_rc) if seeds else None
             for seed in seeds:
-                ckpt = ckpt_path(arch, reg, seed)
+                ckpt = ckpt_path(arch, reg, seed, mne_rc)
                 for mat in discover_matrix_files(noise_root, arch, reg, [seed]):
                     for sigma, acc in read_matrix(mat):
                         rows.append(
@@ -265,25 +268,46 @@ def collect_all_rows(
     return rows
 
 
+def _load_csv_rows(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    with path.open(newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def _merge_rows_by_arch(existing: list[dict], new_rows: list[dict], archs: set[str]) -> list[dict]:
+    kept = [r for r in existing if r["arch"] not in archs]
+    kept.extend(new_rows)
+    kept.sort(
+        key=lambda r: (
+            int(r["hidden_size"]),
+            r["regularizer"],
+            int(r["seed"]),
+            float(r["sigma"]),
+        )
+    )
+    return kept
+
+
+RAW_FIELDS = [
+    "arch",
+    "hidden_size",
+    "regularizer",
+    "if_mode",
+    "L",
+    "T",
+    "seed",
+    "sigma",
+    "acc",
+    "checkpoint",
+    "matrix_csv",
+]
+
+
 def write_noise_tables(rows: list[dict], raw_csv: Path, mean_csv: Path) -> None:
     raw_csv.parent.mkdir(parents=True, exist_ok=True)
     with raw_csv.open("w", newline="") as f:
-        w = csv.DictWriter(
-            f,
-            fieldnames=[
-                "arch",
-                "hidden_size",
-                "regularizer",
-                "if_mode",
-                "L",
-                "T",
-                "seed",
-                "sigma",
-                "acc",
-                "checkpoint",
-                "matrix_csv",
-            ],
-        )
+        w = csv.DictWriter(f, fieldnames=RAW_FIELDS)
         w.writeheader()
         w.writerows(rows)
 
@@ -333,6 +357,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--h-list", type=int, nargs="+", default=[8, 16, 32, 64, 128, 256])
     p.add_argument("--seeds", type=int, nargs="+", default=[40, 41, 42, 43, 44])
     p.add_argument("--regs", nargs="+", default=DEFAULT_REGS, choices=DEFAULT_REGS)
+    p.add_argument(
+        "--mne-reg-coeff",
+        type=float,
+        default=5e-2,
+        help="MNE-L2 reg_coeff (default 5e-2; use 1e-3 for tuned rerun)",
+    )
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--retrain", action="store_true")
     p.add_argument("--force-noise-test", action="store_true")
@@ -353,18 +383,24 @@ def main() -> None:
     raw_csv = out_dir / "fc3rev_h8_h256_three_regs_noise_sweep_raw.csv"
     mean_csv = out_dir / "fc3rev_h8_h256_three_regs_noise_sweep_mean_std.csv"
 
+    print(f"[MNE-REG-COEFF] {args.mne_reg_coeff}", flush=True)
+
     for h in args.h_list:
         arch = arch_for(h)
         for reg in args.regs:
             for seed in args.seeds:
-                ckpt = train_one(arch, reg, seed, args.epochs, args.retrain)
+                ckpt = train_one(arch, reg, seed, args.epochs, args.retrain, args.mne_reg_coeff)
                 out_seed_dir = test_out_dir(noise_root, arch, reg, seed)
                 run_noise_sweep(arch, reg, seed, ckpt, out_seed_dir, args.force_noise_test)
 
     all_regs = sorted(set(DEFAULT_REGS))
-    rows = collect_all_rows(noise_root, args.h_list, all_regs, args.seeds)
-    if not rows:
+    archs_run = {arch_for(h) for h in args.h_list}
+    new_rows = collect_all_rows(
+        noise_root, args.h_list, all_regs, args.seeds, args.mne_reg_coeff
+    )
+    if not new_rows:
         raise RuntimeError("No noise sweep rows collected; check output directories.")
+    rows = _merge_rows_by_arch(_load_csv_rows(raw_csv), new_rows, archs_run)
     write_noise_tables(rows, raw_csv, mean_csv)
 
     print(f"[DONE] noise raw: {raw_csv}", flush=True)

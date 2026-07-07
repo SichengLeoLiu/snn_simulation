@@ -1,3 +1,4 @@
+import argparse
 import csv
 import statistics
 from collections import defaultdict
@@ -7,26 +8,41 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "important results" / "new_fc3"
-NOISE_RAW = DATA_DIR / "fc3rev_h8_h256_wd_noise_sweep_raw.csv"
-CLEAN_MERGED = DATA_DIR / "fc3rev_h8_h256_wd_t0_t16_l4_l16_merged.csv"
-OUT_DIR = DATA_DIR / "plots"
+DEFAULT_DATA_DIR = ROOT / "important results" / "new_fc3"
+OUT_DIR = DEFAULT_DATA_DIR / "plots"
 
 LINE_COLOR = "#1f77b4"
 BAR_COLOR = "#4C78A8"
 SNN_COLOR = "#F58518"
 
 
-def read_noise_raw():
+def clean_merged_path(data_dir: Path, if_mode: str) -> Path:
+    if if_mode == "normal":
+        return data_dir / "fc3rev_h8_h256_wd_t0_t16_l4_l16_merged.csv"
+    return data_dir / "fc3rev_h4_h256_wd_clean_acc_rate_uniform_merged.csv"
+
+
+def clean_overview_stem(if_mode: str) -> str:
+    if if_mode == "normal":
+        return "fc3rev_h8_h256_wd_clean_acc_overview"
+    return "fc3rev_h4_h256_wd_clean_acc_rate_uniform_overview"
+
+
+def noise_raw_path(data_dir: Path) -> Path:
+    return data_dir / "fc3rev_h8_h256_wd_noise_sweep_raw.csv"
+
+
+def read_noise_raw(data_dir: Path):
     rows = []
-    with NOISE_RAW.open(newline="") as f:
+    with noise_raw_path(data_dir).open(newline="") as f:
         rows.extend(csv.DictReader(f))
     return rows
 
 
-def read_clean_merged():
+def read_clean_merged(data_dir: Path, if_mode: str):
+    merged_path = clean_merged_path(data_dir, if_mode)
     rows = []
-    with CLEAN_MERGED.open(newline="") as f:
+    with merged_path.open(newline="") as f:
         for r in csv.DictReader(f):
             rows.append(
                 {
@@ -121,9 +137,9 @@ def setup_style(font_size=16):
     )
 
 
-def plot_noise_lines(noise_rows):
+def plot_noise_lines(noise_rows, out_dir: Path = OUT_DIR):
     setup_style(18)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     archs = sorted({r["arch"] for r in noise_rows}, key=lambda a: int(a.split("_h")[1]))
 
     all_y = []
@@ -154,8 +170,8 @@ def plot_noise_lines(noise_rows):
         fig.tight_layout()
 
         label = arch_label(arch)
-        out_png = OUT_DIR / f"fc3rev_{label}_wd_noise_sweep_step0p05.png"
-        out_pdf = OUT_DIR / f"fc3rev_{label}_wd_noise_sweep_step0p05.pdf"
+        out_png = out_dir / f"fc3rev_{label}_wd_noise_sweep_step0p05.png"
+        out_pdf = out_dir / f"fc3rev_{label}_wd_noise_sweep_step0p05.pdf"
         fig.savefig(out_png)
         fig.savefig(out_pdf)
         plt.close(fig)
@@ -192,13 +208,13 @@ def plot_noise_lines(noise_rows):
         ax.legend(loc="lower left", frameon=False)
         fig.tight_layout()
         label = arch_label(arch)
-        out_png = OUT_DIR / f"fc3rev_{label}_wd_noise_sweep_step0p05_shared_ylim.png"
+        out_png = out_dir / f"fc3rev_{label}_wd_noise_sweep_step0p05_shared_ylim.png"
         fig.savefig(out_png)
         plt.close(fig)
         print(f"[SAVED] {out_png}")
 
 
-def plot_rs_bar(rs_rows, with_sem: bool):
+def plot_rs_bar(rs_rows, with_sem: bool, out_dir: Path = OUT_DIR):
     setup_style(16)
     x = np.arange(len(rs_rows))
     means = [r["RS_mean"] for r in rs_rows]
@@ -229,18 +245,36 @@ def plot_rs_bar(rs_rows, with_sem: bool):
     fig.tight_layout()
 
     suffix = "_with_sem" if with_sem else ""
-    out_png = OUT_DIR / f"fc3rev_wd_robustness_score_bar{suffix}.png"
-    out_pdf = OUT_DIR / f"fc3rev_wd_robustness_score_bar{suffix}.pdf"
+    out_png = out_dir / f"fc3rev_wd_robustness_score_bar{suffix}.png"
+    out_pdf = out_dir / f"fc3rev_wd_robustness_score_bar{suffix}.pdf"
     fig.savefig(out_png)
     fig.savefig(out_pdf)
     plt.close(fig)
     print(f"[SAVED] {out_png}")
 
 
-def plot_clean_overview(clean_rows):
+def _shared_clean_ylim(clean_rows):
+    all_lows, all_highs = [], []
+    for row in clean_rows:
+        for mean_key, std_key in (
+            ("T0_L4_mean", "T0_L4_std"),
+            ("T0_L16_mean", "T0_L16_std"),
+            ("T16_L4_mean", "T16_L4_std"),
+            ("T16_L16_mean", "T16_L16_std"),
+        ):
+            m, s = row[mean_key], row[std_key]
+            all_lows.append(m - s)
+            all_highs.append(m + s)
+    ymin, ymax = min(all_lows), max(all_highs)
+    pad = max(2.0, 0.06 * (ymax - ymin))
+    return max(0.0, ymin - pad), min(100.5, ymax + pad + 2.0)
+
+
+def plot_clean_overview(clean_rows, out_dir: Path, if_mode: str):
     setup_style(11)
     n = len(clean_rows)
-    fig, axes = plt.subplots(1, n, figsize=(2.8 * n, 4.8), dpi=220, constrained_layout=True)
+    shared_ylim = _shared_clean_ylim(clean_rows)
+    fig, axes = plt.subplots(1, n, figsize=(2.6 * n, 5.2), dpi=220, constrained_layout=True)
     if n == 1:
         axes = [axes]
 
@@ -249,51 +283,68 @@ def plot_clean_overview(clean_rows):
         width = 0.36
         ann = np.array([row["T0_L4_mean"], row["T0_L16_mean"]])
         snn = np.array([row["T16_L4_mean"], row["T16_L16_mean"]])
+        ann_err = np.array([row["T0_L4_std"], row["T0_L16_std"]])
+        snn_err = np.array([row["T16_L4_std"], row["T16_L16_std"]])
+
         bars_ann = ax.bar(
             x - width / 2,
             ann,
             width,
+            yerr=ann_err,
+            capsize=3,
             label="ANN (T=0)",
             color=BAR_COLOR,
             edgecolor="black",
             linewidth=0.6,
             alpha=0.92,
+            error_kw={"elinewidth": 0.9, "capthick": 0.9},
         )
         bars_snn = ax.bar(
             x + width / 2,
             snn,
             width,
+            yerr=snn_err,
+            capsize=3,
             label="SNN (T=16)",
             color=SNN_COLOR,
             edgecolor="black",
             linewidth=0.6,
             alpha=0.92,
+            error_kw={"elinewidth": 0.9, "capthick": 0.9},
         )
         for bars in (bars_ann, bars_snn):
             for b in bars:
                 h = b.get_height()
-                ax.text(b.get_x() + b.get_width() / 2.0, h + 0.08, f"{h:.2f}", ha="center", va="bottom", fontsize=7)
+                ax.text(
+                    b.get_x() + b.get_width() / 2.0,
+                    h + 0.4,
+                    f"{h:.1f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=7,
+                )
 
         ax.set_xticks(x)
         ax.set_xticklabels(["L=4", "L=16"])
-        ax.set_title(f"fc3rev_h{row['hidden_size']}", fontsize=11, fontweight="bold")
-        ax.set_ylim(85, 101)
+        ax.set_title(f"h{row['hidden_size']}", fontsize=11, fontweight="bold")
+        ax.set_ylim(*shared_ylim)
         ax.grid(axis="y", linestyle="--", linewidth=0.7, alpha=0.35)
 
     axes[0].set_ylabel("Accuracy (%)")
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 1.04))
+    fig.legend(handles, labels, loc="upper center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 1.05))
 
-    out_png = OUT_DIR / "fc3rev_h8_h256_wd_clean_acc_overview.png"
-    out_pdf = OUT_DIR / "fc3rev_h8_h256_wd_clean_acc_overview.pdf"
+    stem = clean_overview_stem(if_mode)
+    out_png = out_dir / f"{stem}.png"
+    out_pdf = out_dir / f"{stem}.pdf"
     fig.savefig(out_png, bbox_inches="tight")
     fig.savefig(out_pdf, bbox_inches="tight")
     plt.close(fig)
     print(f"[SAVED] {out_png}")
 
 
-def save_rs_csv(rs_rows):
-    out = OUT_DIR / "fc3rev_wd_robustness_score.csv"
+def save_rs_csv(rs_rows, out_dir: Path = OUT_DIR):
+    out = out_dir / "fc3rev_wd_robustness_score.csv"
     with out.open("w", newline="") as f:
         w = csv.DictWriter(
             f,
@@ -312,8 +363,8 @@ def save_rs_csv(rs_rows):
     print(f"[SAVED] {out}")
 
 
-def print_clean_table(clean_rows):
-    print("\n=== FC3rev Clean Accuracy (weight_decay, mean ± std, 5 seeds) ===")
+def print_clean_table(clean_rows, if_mode: str):
+    print(f"\n=== FC3rev Clean Accuracy (weight_decay, {if_mode}, mean ± std, 5 seeds) ===")
     header = f"{'Model':<12} {'T=0 L=4':<18} {'T=16 L=4':<18} {'T=0 L=16':<18} {'T=16 L=16':<18}"
     print(header)
     print("-" * len(header))
@@ -329,17 +380,48 @@ def print_clean_table(clean_rows):
 
 
 def main():
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    noise_rows = read_noise_raw()
-    clean_rows = read_clean_merged()
+    p = argparse.ArgumentParser(description="Plot FC3rev L2 wd noise sweep and clean acc overview")
+    p.add_argument("--only-clean", action="store_true", help="Only redraw clean acc overview")
+    p.add_argument(
+        "--if-mode",
+        type=str,
+        default="normal",
+        choices=["normal", "rate_uniform"],
+        help="Which clean acc CSV to read/plot",
+    )
+    p.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help="Directory containing fc3rev wd CSV outputs",
+    )
+    p.add_argument(
+        "--out-dir",
+        type=Path,
+        default=None,
+        help="Plot output directory (default: <data-dir>/plots)",
+    )
+    args = p.parse_args()
+
+    data_dir = args.data_dir
+    out_dir = args.out_dir or (data_dir / "plots")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    clean_rows = read_clean_merged(data_dir, args.if_mode)
+    if args.only_clean:
+        plot_clean_overview(clean_rows, out_dir, args.if_mode)
+        print_clean_table(clean_rows, args.if_mode)
+        return
+
+    noise_rows = read_noise_raw(data_dir)
     rs_rows = compute_rs_rows(noise_rows)
 
-    plot_noise_lines(noise_rows)
-    save_rs_csv(rs_rows)
-    plot_rs_bar(rs_rows, with_sem=False)
-    plot_rs_bar(rs_rows, with_sem=True)
-    plot_clean_overview(clean_rows)
-    print_clean_table(clean_rows)
+    plot_noise_lines(noise_rows, out_dir)
+    save_rs_csv(rs_rows, out_dir)
+    plot_rs_bar(rs_rows, with_sem=False, out_dir=out_dir)
+    plot_rs_bar(rs_rows, with_sem=True, out_dir=out_dir)
+    plot_clean_overview(clean_rows, out_dir, args.if_mode)
+    print_clean_table(clean_rows, args.if_mode)
 
 
 if __name__ == "__main__":
