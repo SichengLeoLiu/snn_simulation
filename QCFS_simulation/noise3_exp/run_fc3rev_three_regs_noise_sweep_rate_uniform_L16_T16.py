@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import statistics
 import subprocess
 import sys
@@ -43,6 +44,8 @@ LVAL = 16
 TVAL = 16
 IF_MODE = "rate_uniform"
 DEFAULT_REGS = ["mne_l2", "weight_decay", "no_regularization"]
+BATCH = int(os.environ.get("FC3REV_BATCH", "128"))
+NUM_WORKERS = int(os.environ.get("FC3REV_NUM_WORKERS", "0"))
 
 
 def _path_for_csv(path: Path) -> str:
@@ -119,9 +122,9 @@ def train_one(
         "--epochs",
         str(epochs),
         "-j",
-        "0",
+        str(NUM_WORKERS),
         "-b",
-        "128",
+        str(BATCH),
         "--seed",
         str(seed),
         "--device",
@@ -174,9 +177,9 @@ def run_noise_sweep(
         "-T",
         str(TVAL),
         "-j",
-        "0",
+        str(NUM_WORKERS),
         "-b",
-        "128",
+        str(BATCH),
         "--seed",
         str(seed),
         "--device",
@@ -384,6 +387,8 @@ def main() -> None:
     mean_csv = out_dir / "fc3rev_h8_h256_three_regs_noise_sweep_mean_std.csv"
 
     print(f"[MNE-REG-COEFF] {args.mne_reg_coeff}", flush=True)
+    print(f"[FC3REV_BATCH] {BATCH}", flush=True)
+    print(f"[FC3REV_NUM_WORKERS] {NUM_WORKERS}", flush=True)
 
     for h in args.h_list:
         arch = arch_for(h)

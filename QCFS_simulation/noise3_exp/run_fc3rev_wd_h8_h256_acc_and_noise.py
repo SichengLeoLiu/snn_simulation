@@ -1,5 +1,6 @@
 import argparse
 import csv
+import os
 import statistics
 import subprocess
 import sys
@@ -15,6 +16,9 @@ if str(PROJECT_ROOT) not in sys.path:
 from Models import modelpool
 from Preprocess import datapool
 from utils import get_torch_device, seed_all, val
+
+BATCH = int(os.environ.get("FC3REV_BATCH", "128"))
+NUM_WORKERS = int(os.environ.get("FC3REV_NUM_WORKERS", "0"))
 
 
 def _path_for_csv(path: Path) -> str:
@@ -52,9 +56,9 @@ def train_one(arch: str, l_val: int, seed: int, epochs: int, retrain: bool) -> P
         "--epochs",
         str(epochs),
         "-j",
-        "0",
+        str(NUM_WORKERS),
         "-b",
-        "128",
+        str(BATCH),
         "--seed",
         str(seed),
         "--device",
@@ -89,7 +93,10 @@ def eval_acc(
     if_mode: str = "normal",
 ) -> float:
     seed_all(seed)
-    _, test_loader = datapool("mnist", 128, num_workers=0, pin_memory=False)
+    use_cuda = device.type == "cuda"
+    _, test_loader = datapool(
+        "mnist", BATCH, num_workers=NUM_WORKERS, pin_memory=use_cuda
+    )
     model = modelpool(arch, "mnist")
     state = torch.load(ckpt, map_location="cpu")
     model.load_state_dict(state, strict=True)
@@ -136,9 +143,9 @@ def run_noise_sweep(arch: str, seed: int, ckpt_l16: Path, noise_out_dir: Path, f
         "-T",
         "16",
         "-j",
-        "0",
+        str(NUM_WORKERS),
         "-b",
-        "128",
+        str(BATCH),
         "--seed",
         str(seed),
         "--device",
@@ -287,6 +294,8 @@ def main() -> None:
 
     device = get_torch_device(args.device)
     print(f"[DEVICE] {device}", flush=True)
+    print(f"[FC3REV_BATCH] {BATCH}", flush=True)
+    print(f"[FC3REV_NUM_WORKERS] {NUM_WORKERS}", flush=True)
     print(f"[IF-MODE] clean eval: {args.if_mode}", flush=True)
 
     clean_rows = []
