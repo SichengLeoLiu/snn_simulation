@@ -26,8 +26,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
-import matplotlib.pyplot as plt
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -77,6 +75,11 @@ BEST_FIELDS = [
     "acc_sum_mean", "acc_drop_mean", "RS_mean", "RS_sem", "n_seeds",
 ]
 SELECT_METRICS = ("acc0", "acc1", "acc0_plus_acc1", "min_acc01", "acc0_then_acc1")
+
+
+def _require_plt():
+    import matplotlib.pyplot as plt
+    return plt
 
 
 def coeff_tag(v: float) -> str:
@@ -308,6 +311,7 @@ def pick_best_rc(summary_rows: list[dict], metric: str) -> list[dict]:
 
 
 def plot_arch(out_dir: Path, arch: str, raw_rows: list[dict], rc_list: list[float], include_wd: bool) -> None:
+    plt = _require_plt()
     rows = [r for r in raw_rows if r["arch"] == arch]
     if not rows:
         return
@@ -354,6 +358,7 @@ def plot_arch(out_dir: Path, arch: str, raw_rows: list[dict], rc_list: list[floa
 def plot_acc01_bars(
     out_dir: Path, arch: str, summary_rows: list[dict], rc_list: list[float], include_wd: bool,
 ) -> None:
+    plt = _require_plt()
     rows = [r for r in summary_rows if r["arch"] == arch and r["regularizer"] == "mne_l2"]
     if not rows:
         return
@@ -427,6 +432,7 @@ def run_config(
 
 def finalize(
     out_root: Path, h_list: list[int], rc_list: list[float], include_wd: bool, select_metric: str,
+    no_plot: bool = False,
 ) -> None:
     raw_csv = out_root / "fc3rev_mne_reg_coeff_scan_noise_sweep_raw.csv"
     summary_csv = out_root / "fc3rev_mne_reg_coeff_scan_summary.csv"
@@ -451,8 +457,9 @@ def finalize(
 
     for h in h_list:
         arch = arch_for(h)
-        plot_arch(plot_dir, arch, raw_rows, rc_list, include_wd)
-        plot_acc01_bars(plot_dir, arch, summary, rc_list, include_wd)
+        if not no_plot:
+            plot_arch(plot_dir, arch, raw_rows, rc_list, include_wd)
+            plot_acc01_bars(plot_dir, arch, summary, rc_list, include_wd)
 
     print(f"\n[DONE] raw: {raw_csv}", flush=True)
     print(f"[DONE] summary: {summary_csv}", flush=True)
@@ -484,6 +491,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--force-test", action="store_true")
     p.add_argument("--plot-only", action="store_true")
     p.add_argument(
+        "--no-plot",
+        action="store_true",
+        help="训练/汇总完成后跳过 matplotlib 出图（GPU 节点无 matplotlib 时用）",
+    )
+    p.add_argument(
         "--select-metric",
         choices=SELECT_METRICS,
         default="acc0_then_acc1",
@@ -508,8 +520,18 @@ def main() -> None:
     archs = {arch_for(h) for h in h_list}
     raw_csv = out_root / "fc3rev_mne_reg_coeff_scan_noise_sweep_raw.csv"
 
+    print(
+        f"[START] python={sys.executable} cwd={Path.cwd()} out={out_root}",
+        flush=True,
+    )
+    print(
+        f"[START] h={h_list} seeds={seeds} rc={rc_list} "
+        f"select_metric={args.select_metric} no_plot={args.no_plot}",
+        flush=True,
+    )
+
     if args.plot_only:
-        finalize(out_root, h_list, rc_list, include_wd, args.select_metric)
+        finalize(out_root, h_list, rc_list, include_wd, args.select_metric, args.no_plot)
         return
 
     new_rows: list[dict] = []
@@ -523,7 +545,7 @@ def main() -> None:
                 new_rows.extend(run_config(out_root, h, "mne_l2", seed, rc, args.retrain, args.force_test))
 
     upsert_rows(raw_csv, new_rows, archs, methods, seeds)
-    finalize(out_root, h_list, rc_list, include_wd, args.select_metric)
+    finalize(out_root, h_list, rc_list, include_wd, args.select_metric, args.no_plot)
 
 
 if __name__ == "__main__":
