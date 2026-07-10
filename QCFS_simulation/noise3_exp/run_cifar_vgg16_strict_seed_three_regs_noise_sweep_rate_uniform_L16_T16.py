@@ -19,12 +19,14 @@ CIFAR-10 / CIFAR-100 VGG16：三路正则 strict-seed 训练 + 噪声扫描 + me
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \\
       --dataset cifar10 --force-test
 
-  # 强制重训 + 重测
+  # 强制重训 + 重测（新 run-tag，不覆盖旧 checkpoint/结果）
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \\
-      --dataset cifar10 --method no_regularization --retrain --force-test
+      --dataset cifar10 --retrain --force-test \\
+      --run-tag drs_rerun \\
+      --out-dir ../important_results/cifar10_vgg16_three_regs_drs_rerun
 
 或：
-  bash noise3_exp/RUN_cifar_vgg16_strict_seed_three_regs.sh cifar10
+  bash noise3_exp/RUN_cifar10_vgg16_three_regs_rerun.sh
 """
 from __future__ import annotations
 
@@ -51,6 +53,7 @@ IF_MODE = "rate_uniform"
 EPOCHS = int(os.environ.get("CIFAR_EPOCHS", "300"))
 LR = 0.1
 BATCH = int(os.environ.get("CIFAR_BATCH", "128"))
+NUM_WORKERS = int(os.environ.get("CIFAR_NUM_WORKERS", "8"))
 SCHEME_TAG = "schemeC_noout"
 DEFAULT_SEEDS = [40, 41, 42, 43, 44]
 
@@ -125,14 +128,29 @@ def coeff_tag(v: float) -> str:
     return f"{v:.0e}".replace("-", "m").replace("+", "p")
 
 
-def out_dir_for(dataset: str) -> Path:
-    out = (
-        ROOT
-        / "noise3_exp"
-        / f"{dataset}_{ARCH}_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16"
-    )
+def out_dir_for(dataset: str, run_tag: Optional[str] = None, out_dir: Optional[Path] = None) -> Path:
+    if out_dir is not None:
+        out = Path(out_dir)
+    elif run_tag:
+        out = (
+            ROOT
+            / "noise3_exp"
+            / f"{dataset}_{ARCH}_{run_tag}_three_regs_noise_sweep_rate_uniform_L16_T16"
+        )
+    else:
+        out = (
+            ROOT
+            / "noise3_exp"
+            / f"{dataset}_{ARCH}_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16"
+        )
     out.mkdir(parents=True, exist_ok=True)
     return out
+
+
+def scheme_mid(run_tag: Optional[str]) -> str:
+    if run_tag:
+        return f"{run_tag}_{SCHEME_TAG}"
+    return SCHEME_TAG
 
 
 def raw_csv_path(out: Path, dataset: str) -> Path:
@@ -143,27 +161,28 @@ def agg_csv_path(out: Path, dataset: str) -> Path:
     return out / f"{dataset}_{ARCH}_strict_seed_three_regs_noise_sweep_mean_std.csv"
 
 
-def build_suffix(method_key: str, seed: int) -> str:
+def build_suffix(method_key: str, seed: int, run_tag: Optional[str] = None) -> str:
+    mid = scheme_mid(run_tag)
     if method_key == "no_regularization":
-        return f"strict_seed{seed}_{SCHEME_TAG}_none_l{LVAL}_{ARCH}"
+        return f"strict_seed{seed}_{mid}_none_l{LVAL}_{ARCH}"
     cfg = METHOD_CONFIG[method_key]
     reg_coeff = cfg["reg_coeff"]
     wd = cfg["wd"]
     if reg_coeff is None:
-        return f"strict_seed{seed}_{SCHEME_TAG}_wd_l{LVAL}_{ARCH}"
+        return f"strict_seed{seed}_{mid}_wd_l{LVAL}_{ARCH}"
     if wd > 0:
         return (
-            f"strict_seed{seed}_{SCHEME_TAG}_mne_l2_wd_l{LVAL}_{ARCH}"
+            f"strict_seed{seed}_{mid}_mne_l2_wd_l{LVAL}_{ARCH}"
             f"_rc{coeff_tag(reg_coeff)}_wd{coeff_tag(wd)}"
         )
     return (
-        f"strict_seed{seed}_{SCHEME_TAG}_mne_l2_l{LVAL}_{ARCH}"
+        f"strict_seed{seed}_{mid}_mne_l2_l{LVAL}_{ARCH}"
         f"_rc{coeff_tag(reg_coeff)}"
     )
 
 
-def ckpt_path(dataset: str, method_key: str, seed: int) -> Path:
-    suffix = build_suffix(method_key, seed)
+def ckpt_path(dataset: str, method_key: str, seed: int, run_tag: Optional[str] = None) -> Path:
+    suffix = build_suffix(method_key, seed, run_tag)
     return ROOT / f"{dataset}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix}.pth"
 
 
@@ -192,10 +211,10 @@ def clear_test_artifacts(out: Path, method_key: str, seed: int) -> None:
 
 
 def train_one(
-    dataset: str, method_key: str, seed: int, retrain: bool = False
+    dataset: str, method_key: str, seed: int, run_tag: Optional[str] = None, retrain: bool = False
 ) -> Path:
     cfg = METHOD_CONFIG[method_key]
-    ckpt = ckpt_path(dataset, method_key, seed)
+    ckpt = ckpt_path(dataset, method_key, seed, run_tag)
     if retrain and ckpt.exists():
         ckpt.unlink()
         print(f"[RETRAIN] removed {ckpt.name}", flush=True)
@@ -226,7 +245,7 @@ def train_one(
         "-lr",
         str(LR),
         "-j",
-        "8",
+        str(NUM_WORKERS),
         "-b",
         str(BATCH),
         "--seed",
@@ -244,7 +263,7 @@ def train_one(
         "--reg_coeff",
         str(rc),
         "--suffix",
-        build_suffix(method_key, seed),
+        build_suffix(method_key, seed, run_tag),
     ]
     if regularizer == "mne_l2":
         cmd.append("--mne_detach_lambda")
@@ -292,7 +311,7 @@ def test_noise_sweep(
         "-T",
         str(TVAL),
         "-j",
-        "8",
+        str(NUM_WORKERS),
         "-b",
         str(BATCH),
         "--seed",
@@ -412,6 +431,7 @@ def plot_results(
     dataset: str,
     agg_rows: list[dict],
     out: Path,
+    run_tag: Optional[str] = None,
     font_size: float = 20.0,
     legend_font_size: float = 18.0,
 ) -> None:
@@ -471,7 +491,7 @@ def plot_results(
             n_seeds = max(int(r["n_seeds"]) for r in agg_rows)
             ax.set_title(
                 f"{dataset.upper()} {ARCH} strict-seed three-regs noise sweep "
-                f"(seeds={n_seeds}, L={LVAL}, T={TVAL}, {IF_MODE}, {SCHEME_TAG})"
+                f"(seeds={n_seeds}, L={LVAL}, T={TVAL}, {IF_MODE}, {scheme_mid(run_tag)})"
             )
         fig.tight_layout()
         suffix = "_no_caption" if no_caption else ""
@@ -489,11 +509,12 @@ def run_one(
     method_key: str,
     seed: int,
     out: Path,
+    run_tag: Optional[str] = None,
     retrain: bool = False,
     force_test: bool = False,
 ) -> list[dict]:
     cfg = METHOD_CONFIG[method_key]
-    ckpt = train_one(dataset, method_key, seed, retrain=retrain)
+    ckpt = train_one(dataset, method_key, seed, run_tag=run_tag, retrain=retrain)
     matrix = test_noise_sweep(
         dataset, method_key, seed, ckpt, out, force_test=force_test
     )
@@ -524,6 +545,7 @@ def run_one(
 def finalize_outputs(
     dataset: str,
     out: Path,
+    run_tag: Optional[str] = None,
     font_size: float = 18.0,
     legend_font_size: float = 16.0,
 ) -> None:
@@ -535,7 +557,7 @@ def finalize_outputs(
         writer = csv.DictWriter(f, fieldnames=AGG_FIELDS)
         writer.writeheader()
         writer.writerows(agg_rows)
-    plot_results(dataset, agg_rows, out, font_size, legend_font_size)
+    plot_results(dataset, agg_rows, out, run_tag, font_size, legend_font_size)
     print(f"[TABLE] raw: {raw_csv}", flush=True)
     print(f"[TABLE] agg: {agg_csv}", flush=True)
 
@@ -583,6 +605,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="删除已有 noise_sweep matrix 后重新测试",
     )
+    parser.add_argument(
+        "--run-tag",
+        default=None,
+        help="写入 checkpoint suffix 与默认输出目录名，避免覆盖旧实验（如 drs_rerun）",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="结果输出目录（raw/agg CSV、噪声 matrix、折线图）；默认随 --run-tag 或旧路径",
+    )
     parser.add_argument("--font-size", type=float, default=20.0)
     parser.add_argument("--legend-font-size", type=float, default=18.0)
     return parser.parse_args()
@@ -591,12 +623,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     dataset = args.dataset
-    out = out_dir_for(dataset)
+    run_tag = args.run_tag
+    out = out_dir_for(
+        dataset,
+        run_tag=run_tag,
+        out_dir=Path(args.out_dir) if args.out_dir else None,
+    )
     raw_csv = raw_csv_path(out, dataset)
 
     if args.plot_only:
         finalize_outputs(
-            dataset, out, args.font_size, args.legend_font_size
+            dataset, out, run_tag, args.font_size, args.legend_font_size
         )
         return
 
@@ -610,7 +647,7 @@ def main() -> None:
         f"\n=== {dataset.upper()} VGG16 strict-seed three-regs (L2 / MNE L2 / No reg) ===",
         flush=True,
     )
-    print(f"methods={method_keys} seeds={seeds}", flush=True)
+    print(f"methods={method_keys} seeds={seeds} run_tag={run_tag!r} out={out}", flush=True)
 
     for method_key in method_keys:
         for seed in seeds:
@@ -619,12 +656,13 @@ def main() -> None:
                 method_key,
                 seed,
                 out,
+                run_tag=run_tag,
                 retrain=args.retrain,
                 force_test=args.force_test,
             )
             upsert_run_rows(raw_csv, method_key, seed, rows)
 
-    finalize_outputs(dataset, out, args.font_size, args.legend_font_size)
+    finalize_outputs(dataset, out, run_tag, args.font_size, args.legend_font_size)
 
 
 if __name__ == "__main__":

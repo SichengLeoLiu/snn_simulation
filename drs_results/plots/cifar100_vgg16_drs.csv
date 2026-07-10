@@ -1,0 +1,5 @@
+method,DRS_mean,DRS_std,DRS_sem,n_seeds
+mne_l2,0.999625,0.000186,0.000083,5
+mne_l2_wd,0.993104,0.001844,0.000825,5
+no_regularization,0.999828,0.000127,0.000074,3
+weight_decay,0.490795,0.022355,0.009998,5

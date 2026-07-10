@@ -6,6 +6,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from robustness_metrics import derivative_robustness_score
+
 ROOT = Path(__file__).resolve().parent
 DATASETS = {
     "cifar10": ROOT
@@ -30,27 +32,7 @@ METHOD_COLORS = {
 }
 
 
-def robust_score(sigmas, accs):
-    a0 = accs[0]
-    if a0 <= 0:
-        return 0.0
-    rs = 0.0
-    for i in range(len(sigmas) - 1):
-        ds = sigmas[i + 1] - sigmas[i]
-        if ds <= 0:
-            continue
-        rs += 0.5 * (accs[i] / a0 + accs[i + 1] / a0) * ds
-    return rs
-
-
-def load_raw(path: Path):
-    rows = []
-    with path.open(newline="", encoding="utf-8") as f:
-        rows.extend(csv.DictReader(f))
-    return rows
-
-
-def compute_rs_rows(raw_rows, dataset: str):
+def compute_drs_rows(raw_rows, dataset: str):
     by_method_seed = defaultdict(lambda: defaultdict(list))
     for r in raw_rows:
         if r["method"] not in METHODS:
@@ -64,22 +46,29 @@ def compute_rs_rows(raw_rows, dataset: str):
             pairs = sorted(by_method_seed[method][seed], key=lambda x: x[0])
             sigmas = [p[0] for p in pairs]
             accs = [p[1] for p in pairs]
-            vals.append(robust_score(sigmas, accs))
+            vals.append(derivative_robustness_score(sigmas, accs))
         if not vals:
             continue
         n = len(vals)
-        rs_std = statistics.stdev(vals) if n > 1 else 0.0
+        drs_std = statistics.stdev(vals) if n > 1 else 0.0
         rows.append(
             {
                 "dataset": dataset,
                 "method": method,
                 "method_label": METHOD_LABELS[method],
-                "RS_mean": statistics.mean(vals),
-                "RS_std": rs_std,
-                "RS_sem": rs_std / (n ** 0.5) if n > 0 else 0.0,
+                "DRS_mean": statistics.mean(vals),
+                "DRS_std": drs_std,
+                "DRS_sem": drs_std / (n ** 0.5) if n > 0 else 0.0,
                 "n_seeds": n,
             }
         )
+    return rows
+
+
+def load_raw(path: Path):
+    rows = []
+    with path.open(newline="", encoding="utf-8") as f:
+        rows.extend(csv.DictReader(f))
     return rows
 
 
@@ -92,9 +81,9 @@ def save_csv(all_rows, path: Path):
                 "dataset",
                 "method",
                 "method_label",
-                "RS_mean",
-                "RS_std",
-                "RS_sem",
+                "DRS_mean",
+                "DRS_std",
+                "DRS_sem",
                 "n_seeds",
             ],
         )
@@ -103,9 +92,9 @@ def save_csv(all_rows, path: Path):
             w.writerow(
                 {
                     **{k: r[k] for k in ("dataset", "method", "method_label", "n_seeds")},
-                    "RS_mean": f"{r['RS_mean']:.6f}",
-                    "RS_std": f"{r['RS_std']:.6f}",
-                    "RS_sem": f"{r['RS_sem']:.6f}",
+                    "DRS_mean": f"{r['DRS_mean']:.6f}",
+                    "DRS_std": f"{r['DRS_std']:.6f}",
+                    "DRS_sem": f"{r['DRS_sem']:.6f}",
                 }
             )
     print(f"[SAVED] {path}")
@@ -132,8 +121,8 @@ def plot_bar(rows, dataset: str, with_sem: bool):
 
     for i, method in enumerate(METHODS):
         row = next((r for r in rows if r["method"] == method), None)
-        mean = row["RS_mean"] if row else np.nan
-        err = row["RS_sem"] if row and with_sem else 0.0
+        mean = row["DRS_mean"] if row else np.nan
+        err = row["DRS_sem"] if row and with_sem else 0.0
         bar = ax.bar(
             i,
             mean,
@@ -157,25 +146,27 @@ def plot_bar(rows, dataset: str, with_sem: bool):
 
     ax.set_xticks(x)
     ax.set_xticklabels([METHOD_LABELS[m] for m in METHODS])
-    ax.set_ylabel("Robustness Score")
-    ax.set_ylim(0.0, 1.08)
+    ax.set_ylabel("Derivative Robustness Score (DRS)")
+    vals = [r["DRS_mean"] for r in rows]
+    if vals:
+        ax.set_ylim(max(0.0, min(vals) - 0.08), min(1.08, max(vals) + 0.08))
     ax.grid(axis="y", alpha=0.24, linewidth=0.9)
     fig.tight_layout()
 
     suffix = "_with_sem" if with_sem else ""
     for ext in (".png", ".pdf"):
-        out = OUT_DIR / f"{dataset}_vgg16_three_regs_robustness_score_bar{suffix}{ext}"
+        out = OUT_DIR / f"{dataset}_vgg16_three_regs_drs_bar{suffix}{ext}"
         fig.savefig(out, facecolor="white", bbox_inches="tight")
         print(f"[SAVED] {out}")
     plt.close(fig)
 
 
 def print_table(rows, dataset: str):
-    print(f"\n=== {dataset.upper()} VGG16 Robustness Score (mean ± std, n seeds) ===")
+    print(f"\n=== {dataset.upper()} VGG16 DRS (mean ± std, n seeds) ===")
     for r in rows:
         print(
-            f"{r['method_label']:<8}  RS={r['RS_mean']:.6f} ± {r['RS_std']:.6f}  "
-            f"(SEM={r['RS_sem']:.6f}, n={r['n_seeds']})"
+            f"{r['method_label']:<8}  DRS={r['DRS_mean']:.6f} ± {r['DRS_std']:.6f}  "
+            f"(SEM={r['DRS_sem']:.6f}, n={r['n_seeds']})"
         )
 
 
@@ -185,13 +176,13 @@ def main():
     for dataset, path in DATASETS.items():
         if not path.exists():
             raise FileNotFoundError(path)
-        rows = compute_rs_rows(load_raw(path), dataset)
+        rows = compute_drs_rows(load_raw(path), dataset)
         all_rows.extend(rows)
         print_table(rows, dataset)
         plot_bar(rows, dataset, with_sem=False)
         plot_bar(rows, dataset, with_sem=True)
 
-    save_csv(all_rows, OUT_DIR / "cifar10_cifar100_vgg16_three_regs_robustness_score.csv")
+    save_csv(all_rows, OUT_DIR / "cifar10_cifar100_vgg16_three_regs_drs.csv")
 
 
 if __name__ == "__main__":

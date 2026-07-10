@@ -4,30 +4,19 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from robustness_metrics import derivative_robustness_score
+
 ROOT = Path(__file__).resolve().parent
 L2_MNE_CSV = ROOT / "imagenet_resnet18_l2_vs_mnel2_combined.csv"
 NO_REG_CSV = ROOT / "imagenet_resnet18_no_reg_noise_sweep.csv"
-OUT_CSV = ROOT / "imagenet_resnet18_three_regs_robustness_score.csv"
-OUT_BASE = ROOT / "imagenet_resnet18_three_regs_robustness_score_bar"
+OUT_CSV = ROOT / "imagenet_resnet18_three_regs_drs.csv"
+OUT_BASE = ROOT / "imagenet_resnet18_three_regs_drs_bar"
 
 METHODS = [
     ("L2", "acc_l2_weight_decay", "#ff7f0e"),
     ("MNE-L2", "acc_mne_l2_rc1e-4", "#1f77b4"),
     ("No Reg", None, "#2ca02c"),
 ]
-
-
-def robust_score(sigmas, accs):
-    a0 = accs[0]
-    if a0 <= 0:
-        return 0.0
-    rs = 0.0
-    for i in range(len(sigmas) - 1):
-        ds = sigmas[i + 1] - sigmas[i]
-        if ds <= 0:
-            continue
-        rs += 0.5 * (accs[i] / a0 + accs[i + 1] / a0) * ds
-    return rs
 
 
 def load_curves():
@@ -51,17 +40,17 @@ def load_curves():
     }
 
 
-def compute_rs_rows(curves):
+def compute_drs_rows(curves):
     rows = []
     for label, _, _ in METHODS:
         sigmas, accs = curves[label]
-        rs = robust_score(sigmas, accs)
+        drs = derivative_robustness_score(sigmas, accs)
         rows.append(
             {
                 "model": "resnet18",
                 "method": label,
                 "A0": accs[0],
-                "RS": rs,
+                "DRS": drs,
             }
         )
     return rows
@@ -69,10 +58,10 @@ def compute_rs_rows(curves):
 
 def save_csv(rows):
     with OUT_CSV.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["model", "method", "A0", "RS"])
+        w = csv.DictWriter(f, fieldnames=["model", "method", "A0", "DRS"])
         w.writeheader()
         for r in rows:
-            w.writerow({**r, "A0": f"{r['A0']:.6f}", "RS": f"{r['RS']:.6f}"})
+            w.writerow({**r, "A0": f"{r['A0']:.6f}", "DRS": f"{r['DRS']:.6f}"})
     print(f"[SAVED] {OUT_CSV}")
 
 
@@ -90,7 +79,7 @@ def plot_bar(rows):
     )
 
     labels = [r["method"] for r in rows]
-    values = [r["RS"] for r in rows]
+    values = [r["DRS"] for r in rows]
     colors = [c for _, _, c in METHODS]
 
     fig, ax = plt.subplots(figsize=(8.8, 6.8), dpi=220)
@@ -119,8 +108,8 @@ def plot_bar(rows):
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_ylabel("Robustness Score")
-    ax.set_ylim(0.0, 1.08)
+    ax.set_ylabel("Derivative Robustness Score (DRS)")
+    ax.set_ylim(max(0.0, min(values) - 0.08), min(1.08, max(values) + 0.08))
     ax.grid(axis="y", alpha=0.24, linewidth=0.9)
     fig.tight_layout()
 
@@ -133,13 +122,13 @@ def plot_bar(rows):
 
 def main():
     curves = load_curves()
-    rows = compute_rs_rows(curves)
+    rows = compute_drs_rows(curves)
     save_csv(rows)
     plot_bar(rows)
 
-    print("\n=== ImageNet ResNet18 Robustness Score (sigma=0~1, step=0.1) ===")
+    print("\n=== ImageNet ResNet18 DRS (sigma=0~1, step=0.1) ===")
     for r in rows:
-        print(f"{r['method']:<8}  A(0)={r['A0']:.3f}%  RS={r['RS']:.6f}")
+        print(f"{r['method']:<8}  A(0)={r['A0']:.3f}%  DRS={r['DRS']:.6f}")
 
 
 if __name__ == "__main__":

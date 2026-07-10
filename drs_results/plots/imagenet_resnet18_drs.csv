@@ -1,0 +1,4 @@
+method,DRS_mean
+weight_decay,0.217329
+mne_l2,0.819477
+no_regularization,0.763005

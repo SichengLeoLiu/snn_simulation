@@ -26,9 +26,16 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
+import matplotlib.pyplot as plt
+
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from robustness_metrics import derivative_robustness_score, auc_robustness_score
 
 
 def _path_for_csv(path: Path) -> str:
@@ -67,19 +74,14 @@ SUMMARY_FIELDS = [
     "arch", "hidden_size", "method", "regularizer", "reg_coeff",
     "acc_sigma0_mean", "acc_sigma0_std", "acc_sigma0_sem",
     "acc_sigma1_mean", "acc_sigma1_std", "acc_sigma1_sem",
-    "acc_drop_mean", "acc_drop_std", "acc_sum_mean", "RS_mean", "RS_sem", "n_seeds",
+    "acc_drop_mean", "acc_drop_std", "acc_sum_mean", "DRS_mean", "DRS_sem", "AUC_RS_mean", "n_seeds",
 ]
 BEST_FIELDS = [
     "arch", "hidden_size", "select_metric", "best_reg_coeff",
     "acc_sigma0_mean", "acc_sigma0_std", "acc_sigma1_mean", "acc_sigma1_std",
-    "acc_sum_mean", "acc_drop_mean", "RS_mean", "RS_sem", "n_seeds",
+    "acc_sum_mean", "acc_drop_mean", "DRS_mean", "DRS_sem", "AUC_RS_mean", "n_seeds",
 ]
 SELECT_METRICS = ("acc0", "acc1", "acc0_plus_acc1", "min_acc01", "acc0_then_acc1")
-
-
-def _require_plt():
-    import matplotlib.pyplot as plt
-    return plt
 
 
 def coeff_tag(v: float) -> str:
@@ -186,18 +188,6 @@ def read_matrix(mat: Path) -> list[tuple[float, float]]:
     return list(zip([float(x) for x in header[start:]], [float(x) for x in row[start:]]))
 
 
-def robust_score(sigmas: list[float], accs: list[float]) -> float:
-    a0 = accs[0]
-    if a0 <= 0:
-        return 0.0
-    rs = 0.0
-    for i in range(len(sigmas) - 1):
-        ds = sigmas[i + 1] - sigmas[i]
-        if ds > 0:
-            rs += 0.5 * (accs[i] / a0 + accs[i + 1] / a0) * ds
-    return rs
-
-
 def load_raw(raw_csv: Path) -> list[dict]:
     if not raw_csv.exists():
         return []
@@ -234,7 +224,7 @@ def aggregate_summary(raw_rows: list[dict]) -> list[dict]:
 
     rows = []
     for (arch, h, method, reg, rc_str), seed_map in sorted(by_key.items(), key=lambda x: (x[0][1], x[0][2])):
-        a0s, a1s, drops, rss, sums = [], [], [], [], []
+        a0s, a1s, drops, rss, drss, sums = [], [], [], [], [], []
         for pairs in seed_map.values():
             pairs = sorted(pairs, key=lambda x: x[0])
             sigmas = [p[0] for p in pairs]
@@ -245,11 +235,13 @@ def aggregate_summary(raw_rows: list[dict]) -> list[dict]:
             a1s.append(a1)
             drops.append(a0 - a1)
             sums.append(a0 + a1)
-            rss.append(robust_score(sigmas, accs))
+            rss.append(auc_robustness_score(sigmas, accs))
+            drss.append(derivative_robustness_score(sigmas, accs))
         n = len(a0s)
         a0_std = statistics.stdev(a0s) if n > 1 else 0.0
         a1_std = statistics.stdev(a1s) if n > 1 else 0.0
         rs_std = statistics.stdev(rss) if n > 1 else 0.0
+        drs_std = statistics.stdev(drss) if n > 1 else 0.0
         rows.append({
             "arch": arch, "hidden_size": h, "method": method,
             "regularizer": reg, "reg_coeff": rc_str,
@@ -262,8 +254,9 @@ def aggregate_summary(raw_rows: list[dict]) -> list[dict]:
             "acc_drop_mean": f"{statistics.mean(drops):.6f}",
             "acc_drop_std": f"{(statistics.stdev(drops) if n > 1 else 0.0):.6f}",
             "acc_sum_mean": f"{statistics.mean(sums):.6f}",
-            "RS_mean": f"{statistics.mean(rss):.6f}",
-            "RS_sem": f"{(rs_std / (n ** 0.5) if n > 0 else 0.0):.6f}",
+            "DRS_mean": f"{statistics.mean(drss):.6f}",
+            "DRS_sem": f"{(drs_std / (n ** 0.5) if n > 0 else 0.0):.6f}",
+            "AUC_RS_mean": f"{statistics.mean(rss):.6f}",
             "n_seeds": n,
         })
     return rows
@@ -303,15 +296,15 @@ def pick_best_rc(summary_rows: list[dict], metric: str) -> list[dict]:
             "acc_sigma1_std": winner["acc_sigma1_std"],
             "acc_sum_mean": winner["acc_sum_mean"],
             "acc_drop_mean": winner["acc_drop_mean"],
-            "RS_mean": winner["RS_mean"],
-            "RS_sem": winner["RS_sem"],
+            "DRS_mean": winner["DRS_mean"],
+            "DRS_sem": winner["DRS_sem"],
+            "AUC_RS_mean": winner["AUC_RS_mean"],
             "n_seeds": winner["n_seeds"],
         })
     return best
 
 
 def plot_arch(out_dir: Path, arch: str, raw_rows: list[dict], rc_list: list[float], include_wd: bool) -> None:
-    plt = _require_plt()
     rows = [r for r in raw_rows if r["arch"] == arch]
     if not rows:
         return
@@ -358,7 +351,6 @@ def plot_arch(out_dir: Path, arch: str, raw_rows: list[dict], rc_list: list[floa
 def plot_acc01_bars(
     out_dir: Path, arch: str, summary_rows: list[dict], rc_list: list[float], include_wd: bool,
 ) -> None:
-    plt = _require_plt()
     rows = [r for r in summary_rows if r["arch"] == arch and r["regularizer"] == "mne_l2"]
     if not rows:
         return
@@ -432,7 +424,6 @@ def run_config(
 
 def finalize(
     out_root: Path, h_list: list[int], rc_list: list[float], include_wd: bool, select_metric: str,
-    no_plot: bool = False,
 ) -> None:
     raw_csv = out_root / "fc3rev_mne_reg_coeff_scan_noise_sweep_raw.csv"
     summary_csv = out_root / "fc3rev_mne_reg_coeff_scan_summary.csv"
@@ -457,9 +448,8 @@ def finalize(
 
     for h in h_list:
         arch = arch_for(h)
-        if not no_plot:
-            plot_arch(plot_dir, arch, raw_rows, rc_list, include_wd)
-            plot_acc01_bars(plot_dir, arch, summary, rc_list, include_wd)
+        plot_arch(plot_dir, arch, raw_rows, rc_list, include_wd)
+        plot_acc01_bars(plot_dir, arch, summary, rc_list, include_wd)
 
     print(f"\n[DONE] raw: {raw_csv}", flush=True)
     print(f"[DONE] summary: {summary_csv}", flush=True)
@@ -471,7 +461,8 @@ def finalize(
             f"acc@0={float(row['acc_sigma0_mean']):.3f}±{float(row['acc_sigma0_std']):.3f}  "
             f"acc@1={float(row['acc_sigma1_mean']):.3f}±{float(row['acc_sigma1_std']):.3f}  "
             f"sum={float(row['acc_sum_mean']):.3f}  "
-            f"RS={float(row['RS_mean']):.4f}±{float(row['RS_sem']):.4f}",
+            f"DRS={float(row['DRS_mean']):.4f}±{float(row['DRS_sem']):.4f}  "
+            f"(AUC-RS={float(row['AUC_RS_mean']):.4f})",
             flush=True,
         )
 
@@ -490,11 +481,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--retrain", action="store_true")
     p.add_argument("--force-test", action="store_true")
     p.add_argument("--plot-only", action="store_true")
-    p.add_argument(
-        "--no-plot",
-        action="store_true",
-        help="训练/汇总完成后跳过 matplotlib 出图（GPU 节点无 matplotlib 时用）",
-    )
     p.add_argument(
         "--select-metric",
         choices=SELECT_METRICS,
@@ -520,18 +506,8 @@ def main() -> None:
     archs = {arch_for(h) for h in h_list}
     raw_csv = out_root / "fc3rev_mne_reg_coeff_scan_noise_sweep_raw.csv"
 
-    print(
-        f"[START] python={sys.executable} cwd={Path.cwd()} out={out_root}",
-        flush=True,
-    )
-    print(
-        f"[START] h={h_list} seeds={seeds} rc={rc_list} "
-        f"select_metric={args.select_metric} no_plot={args.no_plot}",
-        flush=True,
-    )
-
     if args.plot_only:
-        finalize(out_root, h_list, rc_list, include_wd, args.select_metric, args.no_plot)
+        finalize(out_root, h_list, rc_list, include_wd, args.select_metric)
         return
 
     new_rows: list[dict] = []
@@ -545,7 +521,7 @@ def main() -> None:
                 new_rows.extend(run_config(out_root, h, "mne_l2", seed, rc, args.retrain, args.force_test))
 
     upsert_rows(raw_csv, new_rows, archs, methods, seeds)
-    finalize(out_root, h_list, rc_list, include_wd, args.select_metric, args.no_plot)
+    finalize(out_root, h_list, rc_list, include_wd, args.select_metric)
 
 
 if __name__ == "__main__":

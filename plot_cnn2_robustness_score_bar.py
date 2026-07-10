@@ -6,6 +6,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from robustness_metrics import derivative_robustness_score
+
 ROOT = Path(__file__).resolve().parent
 GADI = ROOT / "all_results_from_gadi"
 
@@ -40,20 +42,32 @@ def read_matrix_csv(path: Path):
     return sigmas, accs
 
 
-def robust_score(sigmas, accs):
-    a0 = accs[0]
-    if a0 <= 0:
-        return 0.0
-    rs = 0.0
-    for i in range(len(sigmas) - 1):
-        ds = sigmas[i + 1] - sigmas[i]
-        if ds <= 0:
-            continue
-        r_i = accs[i] / a0
-        r_j = accs[i + 1] / a0
-        rs += 0.5 * (r_i + r_j) * ds
-    # denominator (sigma_K - sigma_0) is 1.0 here
-    return rs
+def compute_scores(data_root: Path):
+    rows = []
+    for arch in ARCHES:
+        for method in METHODS:
+            seed_files = sorted((data_root / arch / method).glob("seed_*/noise_sweep_matrix_*.csv"))
+            vals = []
+            for fp in seed_files:
+                sigmas, accs = read_matrix_csv(fp)
+                vals.append(derivative_robustness_score(sigmas, accs))
+            if not vals:
+                continue
+            n = len(vals)
+            drs_std = statistics.stdev(vals) if n > 1 else 0.0
+            rows.append(
+                {
+                    "arch": arch,
+                    "arch_label": ARCH_LABELS[arch],
+                    "method": method,
+                    "method_label": METHOD_LABELS[method],
+                    "DRS_mean": statistics.mean(vals),
+                    "DRS_std": drs_std,
+                    "DRS_sem": drs_std / (n ** 0.5) if n > 0 else 0.0,
+                    "n_seeds": n,
+                }
+            )
+    return rows
 
 
 def data_root_for_mode(if_mode: str) -> Path:
@@ -68,34 +82,6 @@ def out_dir_for_mode(if_mode: str) -> Path:
     return GADI / "cnn2_noise_sweep_step0p05_plots"
 
 
-def compute_scores(data_root: Path):
-    rows = []
-    for arch in ARCHES:
-        for method in METHODS:
-            seed_files = sorted((data_root / arch / method).glob("seed_*/noise_sweep_matrix_*.csv"))
-            vals = []
-            for fp in seed_files:
-                sigmas, accs = read_matrix_csv(fp)
-                vals.append(robust_score(sigmas, accs))
-            if not vals:
-                continue
-            n = len(vals)
-            rs_std = statistics.stdev(vals) if n > 1 else 0.0
-            rows.append(
-                {
-                    "arch": arch,
-                    "arch_label": ARCH_LABELS[arch],
-                    "method": method,
-                    "method_label": METHOD_LABELS[method],
-                    "RS_mean": statistics.mean(vals),
-                    "RS_std": rs_std,
-                    "RS_sem": rs_std / (n ** 0.5) if n > 0 else 0.0,
-                    "n_seeds": n,
-                }
-            )
-    return rows
-
-
 def save_csv(rows, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
@@ -106,9 +92,9 @@ def save_csv(rows, path: Path):
                 "arch_label",
                 "method",
                 "method_label",
-                "RS_mean",
-                "RS_std",
-                "RS_sem",
+                "DRS_mean",
+                "DRS_std",
+                "DRS_sem",
                 "n_seeds",
             ],
         )
@@ -117,9 +103,9 @@ def save_csv(rows, path: Path):
             w.writerow(
                 {
                     **r,
-                    "RS_mean": f"{r['RS_mean']:.6f}",
-                    "RS_std": f"{r['RS_std']:.6f}",
-                    "RS_sem": f"{r['RS_sem']:.6f}",
+                    "DRS_mean": f"{r['DRS_mean']:.6f}",
+                    "DRS_std": f"{r['DRS_std']:.6f}",
+                    "DRS_sem": f"{r['DRS_sem']:.6f}",
                 }
             )
 
@@ -147,7 +133,7 @@ def plot_bar(rows, out_dir: Path, error_key: str | None, suffix: str):
         errs = []
         for arch in ARCHES:
             r = next((v for v in rows if v["arch"] == arch and v["method"] == method), None)
-            means.append(r["RS_mean"] if r else np.nan)
+            means.append(r["DRS_mean"] if r else np.nan)
             errs.append(r[error_key] if r and error_key else 0.0)
         xpos = x + (idx - 1) * width
         bars = ax.bar(
@@ -175,15 +161,17 @@ def plot_bar(rows, out_dir: Path, error_key: str | None, suffix: str):
     ax.set_xticks(x)
     ax.set_xticklabels([ARCH_LABELS[a] for a in ARCHES])
     ax.set_xlabel("CNN2 model scale")
-    ax.set_ylabel("Robustness Score")
-    ax.set_ylim(0.55, 1.02)
+    ax.set_ylabel("Derivative Robustness Score (DRS)")
+    all_vals = [r["DRS_mean"] for r in rows]
+    if all_vals:
+        ax.set_ylim(max(0.0, min(all_vals) - 0.08), min(1.02, max(all_vals) + 0.08))
     ax.grid(axis="y", alpha=0.25, linewidth=0.9)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.18), ncol=3, frameon=False)
     fig.tight_layout()
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_png = out_dir / f"cnn2_three_regs_robustness_score_bar{suffix}.png"
-    out_pdf = out_dir / f"cnn2_three_regs_robustness_score_bar{suffix}.pdf"
+    out_png = out_dir / f"cnn2_three_regs_drs_bar{suffix}.png"
+    out_pdf = out_dir / f"cnn2_three_regs_drs_bar{suffix}.pdf"
     fig.savefig(out_png)
     fig.savefig(out_pdf)
     plt.close(fig)
@@ -205,11 +193,11 @@ def main():
         raise FileNotFoundError(f"Missing data root: {data_root}")
 
     rows = compute_scores(data_root)
-    out_csv = out_dir / "cnn2_three_regs_robustness_score.csv"
+    out_csv = out_dir / "cnn2_three_regs_drs.csv"
     save_csv(rows, out_csv)
     print(f"[SAVED] {out_csv}")
     plot_bar(rows, out_dir, error_key=None, suffix="")
-    plot_bar(rows, out_dir, error_key="RS_sem", suffix="_with_sem")
+    plot_bar(rows, out_dir, error_key="DRS_sem", suffix="_with_sem")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from robustness_metrics import derivative_robustness_score
+
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = ROOT / "important results" / "new_fc3"
 OUT_DIR = DEFAULT_DATA_DIR / "plots"
@@ -82,20 +84,7 @@ def collect_arch_curve(noise_rows, arch: str):
     return xs, ys, ysem
 
 
-def robust_score(sigmas, accs):
-    a0 = accs[0]
-    if a0 <= 0:
-        return 0.0
-    rs = 0.0
-    for i in range(len(sigmas) - 1):
-        ds = sigmas[i + 1] - sigmas[i]
-        if ds <= 0:
-            continue
-        rs += 0.5 * (accs[i] / a0 + accs[i + 1] / a0) * ds
-    return rs
-
-
-def compute_rs_rows(noise_rows):
+def compute_drs_rows(noise_rows):
     by_arch_seed = defaultdict(lambda: defaultdict(list))
     for r in noise_rows:
         by_arch_seed[r["arch"]][int(r["seed"])].append((float(r["sigma"]), float(r["acc"])))
@@ -107,16 +96,16 @@ def compute_rs_rows(noise_rows):
             pairs = sorted(by_arch_seed[arch][seed], key=lambda x: x[0])
             sigmas = [p[0] for p in pairs]
             accs = [p[1] for p in pairs]
-            vals.append(robust_score(sigmas, accs))
+            vals.append(derivative_robustness_score(sigmas, accs))
         n = len(vals)
-        rs_std = statistics.stdev(vals) if n > 1 else 0.0
+        drs_std = statistics.stdev(vals) if n > 1 else 0.0
         rows.append(
             {
                 "arch": arch,
                 "hidden_size": int(arch.split("_h")[1]),
-                "RS_mean": statistics.mean(vals),
-                "RS_std": rs_std,
-                "RS_sem": rs_std / (n ** 0.5) if n > 0 else 0.0,
+                "DRS_mean": statistics.mean(vals),
+                "DRS_std": drs_std,
+                "DRS_sem": drs_std / (n ** 0.5) if n > 0 else 0.0,
                 "n_seeds": n,
             }
         )
@@ -214,12 +203,12 @@ def plot_noise_lines(noise_rows, out_dir: Path = OUT_DIR):
         print(f"[SAVED] {out_png}")
 
 
-def plot_rs_bar(rs_rows, with_sem: bool, out_dir: Path = OUT_DIR):
+def plot_drs_bar(drs_rows, with_sem: bool, out_dir: Path = OUT_DIR):
     setup_style(16)
-    x = np.arange(len(rs_rows))
-    means = [r["RS_mean"] for r in rs_rows]
-    sems = [r["RS_sem"] for r in rs_rows]
-    labels = [f"h{r['hidden_size']}" for r in rs_rows]
+    x = np.arange(len(drs_rows))
+    means = [r["DRS_mean"] for r in drs_rows]
+    sems = [r["DRS_sem"] for r in drs_rows]
+    labels = [f"h{r['hidden_size']}" for r in drs_rows]
 
     fig, ax = plt.subplots(figsize=(10.8, 6.8), dpi=220)
     bars = ax.bar(
@@ -239,14 +228,15 @@ def plot_rs_bar(rs_rows, with_sem: bool, out_dir: Path = OUT_DIR):
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_xlabel("FC3rev model scale (2h→h)")
-    ax.set_ylabel("Robustness Score")
-    ax.set_ylim(0.55, 1.02)
+    ax.set_ylabel("Derivative Robustness Score (DRS)")
+    if means:
+        ax.set_ylim(max(0.0, min(means) - 0.08), min(1.02, max(means) + 0.08))
     ax.grid(axis="y", alpha=0.25, linewidth=0.9)
     fig.tight_layout()
 
     suffix = "_with_sem" if with_sem else ""
-    out_png = out_dir / f"fc3rev_wd_robustness_score_bar{suffix}.png"
-    out_pdf = out_dir / f"fc3rev_wd_robustness_score_bar{suffix}.pdf"
+    out_png = out_dir / f"fc3rev_wd_drs_bar{suffix}.png"
+    out_pdf = out_dir / f"fc3rev_wd_drs_bar{suffix}.pdf"
     fig.savefig(out_png)
     fig.savefig(out_pdf)
     plt.close(fig)
@@ -343,21 +333,21 @@ def plot_clean_overview(clean_rows, out_dir: Path, if_mode: str):
     print(f"[SAVED] {out_png}")
 
 
-def save_rs_csv(rs_rows, out_dir: Path = OUT_DIR):
-    out = out_dir / "fc3rev_wd_robustness_score.csv"
+def save_drs_csv(drs_rows, out_dir: Path = OUT_DIR):
+    out = out_dir / "fc3rev_wd_drs.csv"
     with out.open("w", newline="") as f:
         w = csv.DictWriter(
             f,
-            fieldnames=["arch", "hidden_size", "RS_mean", "RS_std", "RS_sem", "n_seeds"],
+            fieldnames=["arch", "hidden_size", "DRS_mean", "DRS_std", "DRS_sem", "n_seeds"],
         )
         w.writeheader()
-        for r in rs_rows:
+        for r in drs_rows:
             w.writerow(
                 {
                     **{k: r[k] for k in ("arch", "hidden_size", "n_seeds")},
-                    "RS_mean": f"{r['RS_mean']:.6f}",
-                    "RS_std": f"{r['RS_std']:.6f}",
-                    "RS_sem": f"{r['RS_sem']:.6f}",
+                    "DRS_mean": f"{r['DRS_mean']:.6f}",
+                    "DRS_std": f"{r['DRS_std']:.6f}",
+                    "DRS_sem": f"{r['DRS_sem']:.6f}",
                 }
             )
     print(f"[SAVED] {out}")
@@ -414,12 +404,12 @@ def main():
         return
 
     noise_rows = read_noise_raw(data_dir)
-    rs_rows = compute_rs_rows(noise_rows)
+    drs_rows = compute_drs_rows(noise_rows)
 
     plot_noise_lines(noise_rows, out_dir)
-    save_rs_csv(rs_rows, out_dir)
-    plot_rs_bar(rs_rows, with_sem=False, out_dir=out_dir)
-    plot_rs_bar(rs_rows, with_sem=True, out_dir=out_dir)
+    save_drs_csv(drs_rows, out_dir)
+    plot_drs_bar(drs_rows, with_sem=False, out_dir=out_dir)
+    plot_drs_bar(drs_rows, with_sem=True, out_dir=out_dir)
     plot_clean_overview(clean_rows, out_dir, args.if_mode)
     print_clean_table(clean_rows, args.if_mode)
 

@@ -7,6 +7,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from robustness_metrics import derivative_robustness_score
+
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = ROOT / "important results" / "new_fc3"
 OUT_DIR = DEFAULT_DATA_DIR / "plots"
@@ -54,20 +56,7 @@ def collect_curve(noise_rows, arch: str, reg: str):
     return xs, ys, ysem
 
 
-def robust_score(sigmas, accs):
-    a0 = accs[0]
-    if a0 <= 0:
-        return 0.0
-    rs = 0.0
-    for i in range(len(sigmas) - 1):
-        ds = sigmas[i + 1] - sigmas[i]
-        if ds <= 0:
-            continue
-        rs += 0.5 * (accs[i] / a0 + accs[i + 1] / a0) * ds
-    return rs
-
-
-def compute_rs_rows(noise_rows):
+def compute_drs_rows(noise_rows):
     by_key = defaultdict(lambda: defaultdict(list))
     for r in noise_rows:
         key = (r["arch"], r["regularizer"])
@@ -78,17 +67,17 @@ def compute_rs_rows(noise_rows):
         vals = []
         for seed in sorted(by_key[(arch, reg)].keys()):
             pairs = sorted(by_key[(arch, reg)][seed], key=lambda x: x[0])
-            vals.append(robust_score([p[0] for p in pairs], [p[1] for p in pairs]))
+            vals.append(derivative_robustness_score([p[0] for p in pairs], [p[1] for p in pairs]))
         n = len(vals)
-        rs_std = statistics.stdev(vals) if n > 1 else 0.0
+        drs_std = statistics.stdev(vals) if n > 1 else 0.0
         rows.append(
             {
                 "arch": arch,
                 "hidden_size": int(arch.split("_h")[1]),
                 "regularizer": reg,
-                "RS_mean": statistics.mean(vals),
-                "RS_std": rs_std,
-                "RS_sem": rs_std / (n ** 0.5) if n > 0 else 0.0,
+                "DRS_mean": statistics.mean(vals),
+                "DRS_std": drs_std,
+                "DRS_sem": drs_std / (n ** 0.5) if n > 0 else 0.0,
                 "n_seeds": n,
             }
         )
@@ -194,16 +183,16 @@ def plot_noise_lines(noise_rows, out_dir: Path = OUT_DIR):
             print(f"[SAVED] {out_png}")
 
 
-def plot_rs_bar(
-    rs_rows,
+def plot_drs_bar(
+    drs_rows,
     with_sem: bool,
     h_list: list[int] | None = None,
     xlabel: str = "FC3rev model scale (2h→h)",
-    out_stem: str = "fc3rev_three_regs_robustness_score_bar",
+    out_stem: str = "fc3rev_three_regs_drs_bar",
     out_dir: Path = OUT_DIR,
 ):
     setup_style(16)
-    archs = sorted({r["arch"] for r in rs_rows}, key=lambda a: int(a.split("_h")[1]))
+    archs = sorted({r["arch"] for r in drs_rows}, key=lambda a: int(a.split("_h")[1]))
     if h_list is not None:
         h_set = set(h_list)
         archs = [a for a in archs if int(a.split("_h")[1]) in h_set]
@@ -211,12 +200,14 @@ def plot_rs_bar(
     width = 0.24
 
     fig, ax = plt.subplots(figsize=(11.2, 6.8), dpi=220)
+    all_means = []
     for idx, reg in enumerate(METHODS):
         means, errs = [], []
         for arch in archs:
-            row = next((v for v in rs_rows if v["arch"] == arch and v["regularizer"] == reg), None)
-            means.append(row["RS_mean"] if row else np.nan)
-            errs.append(row["RS_sem"] if row and with_sem else 0.0)
+            row = next((v for v in drs_rows if v["arch"] == arch and v["regularizer"] == reg), None)
+            means.append(row["DRS_mean"] if row else np.nan)
+            errs.append(row["DRS_sem"] if row and with_sem else 0.0)
+        all_means.extend([m for m in means if not np.isnan(m)])
         xpos = x + (idx - 1) * width
         bars = ax.bar(
             xpos,
@@ -238,8 +229,11 @@ def plot_rs_bar(
     ax.set_xticks(x)
     ax.set_xticklabels([arch_label(a) for a in archs])
     ax.set_xlabel(xlabel)
-    ax.set_ylabel("Robustness Score")
-    ax.set_ylim(0.55, 1.02)
+    ax.set_ylabel("Derivative Robustness Score (DRS)")
+    if all_means:
+        ymin = max(0.0, min(all_means) - 0.08)
+        ymax = min(1.02, max(all_means) + 0.08)
+        ax.set_ylim(ymin, ymax)
     ax.grid(axis="y", alpha=0.25, linewidth=0.9)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.18), ncol=3, frameon=False)
     fig.tight_layout()
@@ -253,38 +247,42 @@ def plot_rs_bar(
     print(f"[SAVED] {out_png}")
 
 
-def save_rs_csv(rs_rows, out_dir: Path = OUT_DIR):
-    out = out_dir / "fc3rev_three_regs_robustness_score.csv"
+def save_drs_csv(drs_rows, out_dir: Path = OUT_DIR):
+    out = out_dir / "fc3rev_three_regs_drs.csv"
     with out.open("w", newline="") as f:
         w = csv.DictWriter(
             f,
-            fieldnames=["arch", "hidden_size", "regularizer", "RS_mean", "RS_std", "RS_sem", "n_seeds"],
+            fieldnames=["arch", "hidden_size", "regularizer", "DRS_mean", "DRS_std", "DRS_sem", "n_seeds"],
         )
         w.writeheader()
-        for r in rs_rows:
+        for r in drs_rows:
             w.writerow(
                 {
                     **{k: r[k] for k in ("arch", "hidden_size", "regularizer", "n_seeds")},
-                    "RS_mean": f"{r['RS_mean']:.6f}",
-                    "RS_std": f"{r['RS_std']:.6f}",
-                    "RS_sem": f"{r['RS_sem']:.6f}",
+                    "DRS_mean": f"{r['DRS_mean']:.6f}",
+                    "DRS_std": f"{r['DRS_std']:.6f}",
+                    "DRS_sem": f"{r['DRS_sem']:.6f}",
                 }
             )
     print(f"[SAVED] {out}")
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Plot FC3rev three-regs noise sweep and RS bars")
-    p.add_argument("--rs-bar-h-list", type=int, nargs="+", default=None, help="RS bar: hidden sizes to include")
-    p.add_argument("--rs-bar-xlabel", type=str, default="Hidden Size")
+    p = argparse.ArgumentParser(description="Plot FC3rev three-regs noise sweep and DRS bars")
+    p.add_argument("--drs-bar-h-list", type=int, nargs="+", default=None, help="DRS bar: hidden sizes to include")
+    p.add_argument("--rs-bar-h-list", type=int, nargs="+", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--drs-bar-xlabel", type=str, default="Hidden Size")
+    p.add_argument("--rs-bar-xlabel", type=str, default=None, help=argparse.SUPPRESS)
     p.add_argument(
-        "--rs-bar-stem",
+        "--drs-bar-stem",
         type=str,
         default=None,
-        help="RS bar output filename stem (default auto from h-list)",
+        help="DRS bar output filename stem (default auto from h-list)",
     )
-    p.add_argument("--only-rs-bar", action="store_true", help="Only redraw RS bar chart(s)")
-    p.add_argument("--no-sem-bar", action="store_true", help="Skip RS bar without SEM")
+    p.add_argument("--rs-bar-stem", type=str, default=None, help=argparse.SUPPRESS)
+    p.add_argument("--only-drs-bar", action="store_true", help="Only redraw DRS bar chart(s)")
+    p.add_argument("--only-rs-bar", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--no-sem-bar", action="store_true", help="Skip DRS bar without SEM")
     p.add_argument(
         "--data-dir",
         type=Path,
@@ -306,34 +304,37 @@ def main():
     out_dir = args.out_dir or (data_dir / "plots")
     out_dir.mkdir(parents=True, exist_ok=True)
     noise_rows = read_noise_raw(data_dir)
-    rs_rows = compute_rs_rows(noise_rows)
+    drs_rows = compute_drs_rows(noise_rows)
 
-    h_list = args.rs_bar_h_list
-    if h_list is None and args.only_rs_bar:
+    h_list = args.drs_bar_h_list or args.rs_bar_h_list
+    only_bar = args.only_drs_bar or args.only_rs_bar
+    if h_list is None and only_bar:
         h_list = [8, 16, 32]
-    stem = args.rs_bar_stem
+    stem = args.drs_bar_stem or args.rs_bar_stem
     if stem is None and h_list is not None:
-        stem = "fc3rev_three_regs_robustness_score_bar_" + "_".join(f"h{h}" for h in h_list)
+        stem = "fc3rev_three_regs_drs_bar_" + "_".join(f"h{h}" for h in h_list)
     if stem is None:
-        stem = "fc3rev_three_regs_robustness_score_bar"
-    xlabel = args.rs_bar_xlabel if h_list is not None else "FC3rev model scale (2h→h)"
+        stem = "fc3rev_three_regs_drs_bar"
+    xlabel = (args.drs_bar_xlabel if args.rs_bar_xlabel is None else args.rs_bar_xlabel)
+    if h_list is None:
+        xlabel = "FC3rev model scale (2h→h)"
 
-    if args.only_rs_bar:
+    if only_bar:
         if not args.no_sem_bar:
-            plot_rs_bar(rs_rows, with_sem=False, h_list=h_list, xlabel=xlabel, out_stem=stem, out_dir=out_dir)
-        plot_rs_bar(rs_rows, with_sem=True, h_list=h_list, xlabel=xlabel, out_stem=stem, out_dir=out_dir)
+            plot_drs_bar(drs_rows, with_sem=False, h_list=h_list, xlabel=xlabel, out_stem=stem, out_dir=out_dir)
+        plot_drs_bar(drs_rows, with_sem=True, h_list=h_list, xlabel=xlabel, out_stem=stem, out_dir=out_dir)
         return
 
     plot_noise_lines(noise_rows, out_dir)
-    save_rs_csv(rs_rows, out_dir)
-    plot_rs_bar(rs_rows, with_sem=False, out_dir=out_dir)
-    plot_rs_bar(rs_rows, with_sem=True, out_dir=out_dir)
+    save_drs_csv(drs_rows, out_dir)
+    plot_drs_bar(drs_rows, with_sem=False, out_dir=out_dir)
+    plot_drs_bar(drs_rows, with_sem=True, out_dir=out_dir)
     if h_list is not None:
-        plot_rs_bar(
-            rs_rows,
+        plot_drs_bar(
+            drs_rows,
             with_sem=True,
             h_list=h_list,
-            xlabel=args.rs_bar_xlabel,
+            xlabel=args.drs_bar_xlabel,
             out_stem=stem,
             out_dir=out_dir,
         )

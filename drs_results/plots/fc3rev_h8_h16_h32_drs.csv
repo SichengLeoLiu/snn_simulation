@@ -1,0 +1,10 @@
+arch,method,DRS_mean,DRS_std,DRS_sem,n_seeds
+fc3rev_h16,mne_l2,0.999307,0.000310,0.000139,5
+fc3rev_h16,no_regularization,0.994931,0.000741,0.000332,5
+fc3rev_h16,weight_decay,0.998953,0.000339,0.000152,5
+fc3rev_h32,mne_l2,0.999591,0.000074,0.000033,5
+fc3rev_h32,no_regularization,0.998953,0.000715,0.000320,5
+fc3rev_h32,weight_decay,0.999714,0.000077,0.000034,5
+fc3rev_h8,mne_l2,0.999007,0.000524,0.000234,5
+fc3rev_h8,no_regularization,0.971066,0.012686,0.005673,5
+fc3rev_h8,weight_decay,0.988228,0.009069,0.004056,5
