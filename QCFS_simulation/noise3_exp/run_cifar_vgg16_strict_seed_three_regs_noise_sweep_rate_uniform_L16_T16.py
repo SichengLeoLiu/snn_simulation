@@ -46,6 +46,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+
+def _path_for_csv(path: Path) -> str:
+    p = path.resolve()
+    try:
+        return str(p.relative_to(ROOT.resolve()))
+    except ValueError:
+        return str(p)
+
+
 ARCH = "vgg16"
 LVAL = 16
 TVAL = 16
@@ -535,8 +544,8 @@ def run_one(
                 "if_mode": IF_MODE,
                 "sigma": sigma,
                 "acc": acc,
-                "checkpoint": str(ckpt.relative_to(ROOT)),
-                "matrix_csv": str(matrix.relative_to(ROOT)),
+                "checkpoint": _path_for_csv(ckpt),
+                "matrix_csv": _path_for_csv(matrix),
             }
         )
     return rows
