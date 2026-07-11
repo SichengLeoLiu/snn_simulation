@@ -220,7 +220,12 @@ def clear_test_artifacts(out: Path, method_key: str, seed: int) -> None:
 
 
 def train_one(
-    dataset: str, method_key: str, seed: int, run_tag: Optional[str] = None, retrain: bool = False
+    dataset: str,
+    method_key: str,
+    seed: int,
+    run_tag: Optional[str] = None,
+    retrain: bool = False,
+    ckpt_save_mode: str = "best",
 ) -> Path:
     cfg = METHOD_CONFIG[method_key]
     ckpt = ckpt_path(dataset, method_key, seed, run_tag)
@@ -273,6 +278,8 @@ def train_one(
         str(rc),
         "--suffix",
         build_suffix(method_key, seed, run_tag),
+        "--ckpt-save-mode",
+        ckpt_save_mode,
     ]
     if regularizer == "mne_l2":
         cmd.append("--mne_detach_lambda")
@@ -521,9 +528,17 @@ def run_one(
     run_tag: Optional[str] = None,
     retrain: bool = False,
     force_test: bool = False,
+    ckpt_save_mode: str = "best",
 ) -> list[dict]:
     cfg = METHOD_CONFIG[method_key]
-    ckpt = train_one(dataset, method_key, seed, run_tag=run_tag, retrain=retrain)
+    ckpt = train_one(
+        dataset,
+        method_key,
+        seed,
+        run_tag=run_tag,
+        retrain=retrain,
+        ckpt_save_mode=ckpt_save_mode,
+    )
     matrix = test_noise_sweep(
         dataset, method_key, seed, ckpt, out, force_test=force_test
     )
@@ -610,6 +625,12 @@ def parse_args() -> argparse.Namespace:
         help="删除已有 checkpoint 后重新训练",
     )
     parser.add_argument(
+        "--ckpt-save-mode",
+        choices=["best", "last"],
+        default="best",
+        help="训练时 checkpoint 保存策略：best=验证最优（默认），last=最后一个 epoch",
+    )
+    parser.add_argument(
         "--force-test",
         action="store_true",
         help="删除已有 noise_sweep matrix 后重新测试",
@@ -668,6 +689,7 @@ def main() -> None:
                 run_tag=run_tag,
                 retrain=args.retrain,
                 force_test=args.force_test,
+                ckpt_save_mode=args.ckpt_save_mode,
             )
             upsert_run_rows(raw_csv, method_key, seed, rows)
 

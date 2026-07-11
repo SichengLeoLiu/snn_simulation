@@ -124,6 +124,13 @@ parser.add_argument(
     choices=sorted(SPIKE_SCHEDULE_MODES),
     help="CNN2/VGG/diff1d：T>0 时第一层 IF 后脉冲时间重排模式（与 main_test 一致）",
 )
+parser.add_argument(
+    "--ckpt-save-mode",
+    default="best",
+    type=str,
+    choices=["best", "last"],
+    help="checkpoint 保存策略：best=验证集最优（默认），last=仅保存最后一个 epoch",
+)
 
 args = parser.parse_args()
 
@@ -258,6 +265,7 @@ def main():
         "regularizer=%s, weight_decay=%.6g, reg_coeff=%.6g"
         % (args.regularizer, args.weight_decay, args.reg_coeff)
     )
+    logger.info("ckpt_save_mode=%s", args.ckpt_save_mode)
     if args.regularizer == "mne_l2":
         logger.info(
             "mne_l2: L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s"
@@ -320,8 +328,14 @@ def main():
                     epoch, args.epochs, tmp
                 )
             )
-            if tmp < best_rmse:
+            is_better = tmp < best_rmse
+            if is_better:
                 best_rmse = tmp
+            should_save = (
+                (args.ckpt_save_mode == "best" and is_better)
+                or (args.ckpt_save_mode == "last" and epoch == args.epochs - 1)
+            )
+            if should_save:
                 filename = os.path.join(log_dir, "%s.pth" % (identifier,))
                 print("Saving model to %s" % (filename,))
                 torch.save(model.state_dict(), filename)
@@ -350,8 +364,14 @@ def main():
                 )
             )
 
-            if best_acc < tmp:
+            is_better = best_acc < tmp
+            if is_better:
                 best_acc = tmp
+            should_save = (
+                (args.ckpt_save_mode == "best" and is_better)
+                or (args.ckpt_save_mode == "last" and epoch == args.epochs - 1)
+            )
+            if should_save:
                 filename = os.path.join(log_dir, "%s.pth" % (identifier,))
                 print("Saving model to %s" % (filename,))
                 torch.save(model.state_dict(), filename)
