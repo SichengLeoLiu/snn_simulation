@@ -79,6 +79,36 @@ def GetMNIST(batch_size, num_workers=4, pin_memory=None):
     return train_loader, test_loader
 
 
+def GetFashionMNIST(batch_size, num_workers=4, pin_memory=None):
+    if pin_memory is None:
+        pin_memory = torch.cuda.is_available()
+    transform = transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize((0.2860,), (0.3530,))]
+    )
+    root = os.path.expanduser(MNIST_ROOT)
+    train_data = datasets.FashionMNIST(
+        root, train=True, download=True, transform=transform
+    )
+    test_data = datasets.FashionMNIST(
+        root, train=False, download=True, transform=transform
+    )
+    train_loader = DataLoader(
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    test_loader = DataLoader(
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    return train_loader, test_loader
+
+
 def GetCifar10(batchsize, num_workers=8, pin_memory=True, attack=False):
     aa = _cifar_pil_autoaugment()
     trans_t = transforms.Compose(

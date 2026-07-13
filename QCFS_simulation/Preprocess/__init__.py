@@ -2,6 +2,7 @@ import torch
 
 from .getdataloader import (
     GetMNIST,
+    GetFashionMNIST,
     GetCifar10,
     GetCifar100,
     GetDiff1D,
@@ -21,6 +22,10 @@ def datapool(
     name = dataset_name.lower().replace("-", "").replace("_", "")
     if name == "mnist":
         return GetMNIST(
+            batch_size, num_workers=num_workers, pin_memory=pin_memory
+        )
+    if name in ("fashionmnist", "fashion"):
+        return GetFashionMNIST(
             batch_size, num_workers=num_workers, pin_memory=pin_memory
         )
     if name in ("cifar10", "cifa10"):
@@ -45,6 +50,6 @@ def datapool(
             dist_sample=dist_sample,
         )
     raise ValueError(
-        "datapool 支持: mnist | cifar10 | cifar100 | diff1d | toy_diff1d | imagenet，收到: %s"
+        "datapool 支持: mnist | fashion_mnist | cifar10 | cifar100 | diff1d | toy_diff1d | imagenet，收到: %s"
         % (dataset_name,)
     )

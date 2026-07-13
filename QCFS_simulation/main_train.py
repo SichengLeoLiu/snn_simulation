@@ -18,7 +18,7 @@ from utils import (
     compute_conv_mne_l2_regularization,
 )
 
-DATASET_CHOICES = ["mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
+DATASET_CHOICES = ["mnist", "fashion_mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
 
 parser = argparse.ArgumentParser(
     description="训练（MNIST: CNN2；CIFAR: VGG 等）"
@@ -140,7 +140,7 @@ def _resolved_model_name(dataset, model):
     d = dataset.lower().replace("-", "").replace("_", "")
     if d in ("diff1d", "toydiff1d"):
         return "diff1d"
-    if d != "mnist" and m in ("cnn2", "cnn2_mnist"):
+    if d not in ("mnist", "fashionmnist") and m in ("cnn2", "cnn2_mnist"):
         return "vgg16"
     return model
 
