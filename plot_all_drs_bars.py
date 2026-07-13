@@ -125,6 +125,7 @@ def grouped_bar(
     out_stem: str,
     with_sem: bool = True,
     method_field: str = "method",
+    no_caption: bool = False,
 ) -> None:
     setup_style(16)
     x = np.arange(len(arch_keys))
@@ -169,7 +170,8 @@ def grouped_bar(
     ax.set_xticklabels(arch_labels)
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Derivative Robustness Score (DRS)")
-    ax.set_title(title)
+    if not no_caption:
+        ax.set_title(title)
     if all_means:
         ax.set_ylim(max(0.0, min(all_means) - 0.1), min(1.05, max(all_means) + 0.1))
     ax.grid(axis="y", alpha=0.25)
@@ -192,6 +194,7 @@ def single_dataset_bar(
     out_stem: str,
     with_sem: bool = True,
     method_field: str = "method",
+    no_caption: bool = False,
 ) -> None:
     setup_style(18)
     x = np.arange(len(METHODS))
@@ -215,7 +218,8 @@ def single_dataset_bar(
     ax.set_xticks(x)
     ax.set_xticklabels([METHOD_LABELS[m] for m in METHODS])
     ax.set_ylabel("Derivative Robustness Score (DRS)")
-    ax.set_title(title)
+    if not no_caption:
+        ax.set_title(title)
     valid = [m for m in means if not np.isnan(m)]
     if valid:
         ax.set_ylim(max(0.0, min(valid) - 0.12), min(1.08, max(valid) + 0.12))
@@ -230,7 +234,7 @@ def single_dataset_bar(
     plt.close(fig)
 
 
-def plot_fc3rev_h8_h16_h32(out_dir: Path) -> list[dict]:
+def plot_fc3rev_h8_h16_h32(out_dir: Path, *, no_caption: bool = False) -> list[dict]:
     raw = load_raw_csv(FC3REV_RAW)
     all_rows = aggregate_from_raw(raw, ("arch", "regularizer"))
     h_archs = [f"fc3rev_h{h}" for h in FC3REV_H_LIST]
@@ -241,11 +245,12 @@ def plot_fc3rev_h8_h16_h32(out_dir: Path) -> list[dict]:
         title="FC3rev (MNIST, 2h→h): DRS by hidden size",
         xlabel="Hidden size",
         out_stem="fc3rev_h8_h16_h32_drs_bar",
+        no_caption=no_caption,
     )
     return subset
 
 
-def plot_cnn2_all(out_dir: Path) -> list[dict]:
+def plot_cnn2_all(out_dir: Path, *, no_caption: bool = False) -> list[dict]:
     rows = []
     for arch in CNN2_ARCHES:
         for method in METHODS:
@@ -271,22 +276,24 @@ def plot_cnn2_all(out_dir: Path) -> list[dict]:
         title="CNN2 (MNIST): DRS by model scale",
         xlabel="CNN2 architecture",
         out_stem="cnn2_all_scales_drs_bar",
+        no_caption=no_caption,
     )
     return rows
 
 
-def plot_cifar(dataset: str, out_dir: Path) -> list[dict]:
+def plot_cifar(dataset: str, out_dir: Path, *, no_caption: bool = False) -> list[dict]:
     raw = load_raw_csv(CIFAR_RAW[dataset])
     rows = aggregate_from_raw(raw, ("method",), method_key="method")
     single_dataset_bar(
         rows, out_dir,
         title=f"{dataset.upper()} VGG16: DRS (three regularizers)",
         out_stem=f"{dataset}_vgg16_drs_bar",
+        no_caption=no_caption,
     )
     return rows
 
 
-def plot_imagenet(out_dir: Path) -> list[dict]:
+def plot_imagenet(out_dir: Path, *, no_caption: bool = False) -> list[dict]:
     sigmas, l2, mne = [], [], []
     with IMAGENET_L2_MNE.open(newline="", encoding="utf-8") as f:
         for r in csv.DictReader(f):
@@ -309,6 +316,7 @@ def plot_imagenet(out_dir: Path) -> list[dict]:
         title="ImageNet ResNet18: DRS (three regularizers)",
         out_stem="imagenet_resnet18_drs_bar",
         with_sem=False,
+        no_caption=no_caption,
     )
     return rows
 
@@ -326,15 +334,20 @@ def save_summary_csv(out_dir: Path, name: str, rows: list[dict], fields: list[st
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot all DRS bar charts")
     parser.add_argument("--out-dir", type=Path, default=OUT_DIR)
+    parser.add_argument(
+        "--no-caption",
+        action="store_true",
+        help="不显示图标题（caption）",
+    )
     args = parser.parse_args()
     out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fc3 = plot_fc3rev_h8_h16_h32(out_dir)
-    cnn2 = plot_cnn2_all(out_dir)
-    c10 = plot_cifar("cifar10", out_dir)
-    c100 = plot_cifar("cifar100", out_dir)
-    img = plot_imagenet(out_dir)
+    fc3 = plot_fc3rev_h8_h16_h32(out_dir, no_caption=args.no_caption)
+    cnn2 = plot_cnn2_all(out_dir, no_caption=args.no_caption)
+    c10 = plot_cifar("cifar10", out_dir, no_caption=args.no_caption)
+    c100 = plot_cifar("cifar100", out_dir, no_caption=args.no_caption)
+    img = plot_imagenet(out_dir, no_caption=args.no_caption)
 
     save_summary_csv(out_dir, "fc3rev_h8_h16_h32_drs", fc3,
                      ["arch", "method", "DRS_mean", "DRS_std", "DRS_sem", "n_seeds"])
