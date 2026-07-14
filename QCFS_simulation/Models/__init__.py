@@ -55,7 +55,7 @@ def modelpool(model_name, dataset_name="mnist"):
     if d in ("diff1d", "toydiff1d"):
         return toy_diff1d()
 
-    if d == "mnist":
+    if d in ("mnist", "fashionmnist"):
         channels = _parse_mnist_cnn2_variant(model_name)
         if channels is not None:
             c1, c2 = channels
