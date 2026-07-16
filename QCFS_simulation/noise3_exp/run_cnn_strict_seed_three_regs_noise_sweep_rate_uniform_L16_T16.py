@@ -207,7 +207,12 @@ def train_one(arch: str, reg: str, seed: int, retrain: bool) -> Path:
 
 
 def test_noise_sweep(
-    arch: str, reg: str, seed: int, ckpt: Path, force_test: bool
+    arch: str,
+    reg: str,
+    seed: int,
+    ckpt: Path,
+    force_test: bool,
+    first_layer_noise_position: str,
 ) -> Path:
     if force_test:
         clear_test_artifacts(arch, reg, seed)
@@ -236,6 +241,7 @@ def test_noise_sweep(
         "--noise_sigma_start", "0.0",
         "--noise_sigma_end", "1.0",
         "--noise_sigma_step", "0.05",
+        "--first_layer_noise_position", first_layer_noise_position,
         "--noise_output_dir", str(out_dir),
     ]
     print(f"[TEST] {arch} {reg} seed={seed} mode={IF_MODE}", flush=True)
@@ -476,6 +482,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="仅从 raw CSV 重算 agg 并重画图（不训练/测试）",
     )
+    p.add_argument(
+        "--first-layer-noise-position",
+        choices=["post_input_if", "pre_input_if"],
+        default="post_input_if",
+        help="噪声注入位置：post_input_if(默认) 或 pre_input_if",
+    )
     return p.parse_args()
 
 
@@ -509,7 +521,14 @@ def main() -> None:
         for reg in regs:
             for seed in seeds:
                 ckpt = train_one(arch, reg, seed, args.retrain)
-                mat = test_noise_sweep(arch, reg, seed, ckpt, args.force_test)
+                mat = test_noise_sweep(
+                    arch,
+                    reg,
+                    seed,
+                    ckpt,
+                    args.force_test,
+                    args.first_layer_noise_position,
+                )
                 for sigma, acc in read_matrix(mat):
                     new_rows.append(
                         {

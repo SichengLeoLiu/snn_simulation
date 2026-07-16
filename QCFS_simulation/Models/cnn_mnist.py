@@ -24,6 +24,7 @@ class CNN2MNIST(nn.Module):
         self.spike_schedule = "normal"
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.first_layer_input_noise_position = "post_input_if"
         self.c1 = int(c1)
         self.c2 = int(c2)
 
@@ -91,6 +92,15 @@ class CNN2MNIST(nn.Module):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
 
+    def set_first_layer_input_noise_position(self, position="post_input_if"):
+        pos = str(position).strip().lower()
+        if pos not in ("post_input_if", "pre_input_if"):
+            raise ValueError(
+                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                % (position,)
+            )
+        self.first_layer_input_noise_position = pos
+
     def resolution_aware_noise_regularization(self, T=None, eps=1e-8):
         """
         R_rho = sum_l [ L_l^2 / (C_l * T * lambda_l^2) ] * ||W_l||_2^2
@@ -147,6 +157,15 @@ class CNN2MNIST(nn.Module):
             noise = torch.randn_like(x)
         return x + noise * sigma
 
+    def _apply_input_if_and_noise(self, x):
+        if self.first_layer_input_noise_position == "pre_input_if":
+            x = self._inject_first_layer_input_noise(x)
+            x = self.input_if(x)
+            return x
+        x = self.input_if(x)
+        x = self._inject_first_layer_input_noise(x)
+        return x
+
     @staticmethod
     def _if_out_to_firing_map(x_tb, if_layer, T):
         """
@@ -172,8 +191,7 @@ class CNN2MNIST(nn.Module):
             x = add_dimention(x, T)
             x = self.merge(x)
 
-        x = self.input_if(x)
-        x = self._inject_first_layer_input_noise(x)
+        x = self._apply_input_if_and_noise(x)
 
         if T > 0:
             sch = self.spike_schedule
@@ -205,8 +223,7 @@ class CNN2MNIST(nn.Module):
             x = add_dimention(x, self.T)
             x = self.merge(x)
 
-        x = self.input_if(x)
-        x = self._inject_first_layer_input_noise(x)
+        x = self._apply_input_if_and_noise(x)
 
         if self.T > 0:
             sch = self.spike_schedule

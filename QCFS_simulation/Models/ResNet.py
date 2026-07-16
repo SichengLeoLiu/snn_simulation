@@ -49,6 +49,7 @@ class ResNet(nn.Module):
         self.expand = ExpandTemporalDim(0)
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.first_layer_input_noise_position = "post_input_if"
         if imagenet_stem:
             self.conv1 = nn.Sequential(
                 nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
@@ -116,6 +117,15 @@ class ResNet(nn.Module):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
 
+    def set_first_layer_input_noise_position(self, position="post_input_if"):
+        pos = str(position).strip().lower()
+        if pos not in ("post_input_if", "pre_input_if"):
+            raise ValueError(
+                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                % (position,)
+            )
+        self.first_layer_input_noise_position = pos
+
     def _inject_first_layer_noise(self, x):
         sigma = self.first_layer_input_noise_sigma
         if sigma <= 0:
@@ -161,8 +171,12 @@ class ResNet(nn.Module):
         if self.T > 0:
             x = add_dimention(x, self.T)
             x = self.merge(x)
-        output = self.conv1(x)
-        output = self._inject_first_layer_noise(output)
+        if self.first_layer_input_noise_position == "pre_input_if":
+            x = self._inject_first_layer_noise(x)
+            output = self.conv1(x)
+        else:
+            output = self.conv1(x)
+            output = self._inject_first_layer_noise(output)
         output = self.maxpool(output)
         output = self.conv2_x(output)
         output = self.conv3_x(output)

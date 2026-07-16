@@ -140,6 +140,13 @@ parser.add_argument(
     help="第一层输入噪声类型（input_if 后、conv1 前）",
 )
 parser.add_argument(
+    "--first_layer_noise_position",
+    type=str,
+    default="post_input_if",
+    choices=["post_input_if", "pre_input_if"],
+    help="第一层输入噪声注入位置：input_if 后（默认）或 input_if 前",
+)
+parser.add_argument(
     "--noise_sweep",
     action="store_true",
     help="扫描 sigma，寻找准确率首次降到目标阈值的点（仅分类任务）",
@@ -445,14 +452,24 @@ def main():
         model.set_first_layer_input_noise_sigma(args.first_layer_noise_sigma)
         if hasattr(model, "set_first_layer_input_noise_type"):
             model.set_first_layer_input_noise_type(args.first_layer_noise_type)
+        if hasattr(model, "set_first_layer_input_noise_position"):
+            model.set_first_layer_input_noise_position(args.first_layer_noise_position)
         logger.info(
-            "第一层输入噪声 type=%s sigma=%.6f (input_if 后、conv1 前)"
-            % (args.first_layer_noise_type, args.first_layer_noise_sigma)
+            "第一层输入噪声 type=%s sigma=%.6f position=%s"
+            % (
+                args.first_layer_noise_type,
+                args.first_layer_noise_sigma,
+                args.first_layer_noise_position,
+            )
         )
     elif args.first_layer_noise_sigma > 0:
         logger.warning("当前模型不支持第一层输入噪声注入，忽略 --first_layer_noise_sigma")
     elif args.first_layer_noise_type != "gaussian":
         logger.warning("当前模型不支持第一层噪声类型设置，忽略 --first_layer_noise_type")
+    elif args.first_layer_noise_position != "post_input_if":
+        logger.warning(
+            "当前模型不支持第一层噪声注入位置设置，忽略 --first_layer_noise_position"
+        )
 
     schedules = _schedules_to_run(args, model)
     if args.time == 0 and args.spike_schedule == "all":

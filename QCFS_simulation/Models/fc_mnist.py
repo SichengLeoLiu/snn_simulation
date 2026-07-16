@@ -15,6 +15,7 @@ class FC2MNIST(nn.Module):
         self.expand = ExpandTemporalDim(0)
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.first_layer_input_noise_position = "post_input_if"
 
         self.input_if = IF()
         self.fc1 = nn.Linear(28 * 28, self.hidden_dim)
@@ -61,6 +62,15 @@ class FC2MNIST(nn.Module):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
 
+    def set_first_layer_input_noise_position(self, position="post_input_if"):
+        pos = str(position).strip().lower()
+        if pos not in ("post_input_if", "pre_input_if"):
+            raise ValueError(
+                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                % (position,)
+            )
+        self.first_layer_input_noise_position = pos
+
     def _inject_first_layer_input_noise(self, x):
         sigma = self.first_layer_input_noise_sigma
         if sigma <= 0:
@@ -69,13 +79,21 @@ class FC2MNIST(nn.Module):
         noise = torch.randn_like(x)
         return x + noise * sigma
 
+    def _apply_input_if_and_noise(self, x):
+        if self.first_layer_input_noise_position == "pre_input_if":
+            x = self._inject_first_layer_input_noise(x)
+            x = self.input_if(x)
+            return x
+        x = self.input_if(x)
+        x = self._inject_first_layer_input_noise(x)
+        return x
+
     def forward(self, x):
         if self.T > 0:
             x = add_dimention(x, self.T)
             x = self.merge(x)
         x = torch.flatten(x, 1)
-        x = self.input_if(x)
-        x = self._inject_first_layer_input_noise(x)
+        x = self._apply_input_if_and_noise(x)
         x = self.fc1(x)
         x = self.if1(x)
         x = self.fc2(x)
@@ -100,6 +118,7 @@ class FC3MNIST(nn.Module):
         self.expand = ExpandTemporalDim(0)
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.first_layer_input_noise_position = "post_input_if"
 
         self.input_if = IF()
         self.fc1 = nn.Linear(28 * 28, self.hidden_dim)
@@ -148,6 +167,15 @@ class FC3MNIST(nn.Module):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
 
+    def set_first_layer_input_noise_position(self, position="post_input_if"):
+        pos = str(position).strip().lower()
+        if pos not in ("post_input_if", "pre_input_if"):
+            raise ValueError(
+                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                % (position,)
+            )
+        self.first_layer_input_noise_position = pos
+
     def _inject_first_layer_input_noise(self, x):
         sigma = self.first_layer_input_noise_sigma
         if sigma <= 0:
@@ -155,13 +183,21 @@ class FC3MNIST(nn.Module):
         noise = torch.randn_like(x)
         return x + noise * sigma
 
+    def _apply_input_if_and_noise(self, x):
+        if self.first_layer_input_noise_position == "pre_input_if":
+            x = self._inject_first_layer_input_noise(x)
+            x = self.input_if(x)
+            return x
+        x = self.input_if(x)
+        x = self._inject_first_layer_input_noise(x)
+        return x
+
     def forward(self, x):
         if self.T > 0:
             x = add_dimention(x, self.T)
             x = self.merge(x)
         x = torch.flatten(x, 1)
-        x = self.input_if(x)
-        x = self._inject_first_layer_input_noise(x)
+        x = self._apply_input_if_and_noise(x)
         x = self.fc1(x)
         x = self.if1(x)
         x = self.fc2(x)
@@ -188,6 +224,7 @@ class FC3MNISTRev(nn.Module):
         self.expand = ExpandTemporalDim(0)
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.first_layer_input_noise_position = "post_input_if"
 
         self.input_if = IF()
         self.fc1 = nn.Linear(28 * 28, self.hidden_dim2)
@@ -236,6 +273,15 @@ class FC3MNISTRev(nn.Module):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
 
+    def set_first_layer_input_noise_position(self, position="post_input_if"):
+        pos = str(position).strip().lower()
+        if pos not in ("post_input_if", "pre_input_if"):
+            raise ValueError(
+                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                % (position,)
+            )
+        self.first_layer_input_noise_position = pos
+
     def _inject_first_layer_input_noise(self, x):
         sigma = self.first_layer_input_noise_sigma
         if sigma <= 0:
@@ -243,13 +289,21 @@ class FC3MNISTRev(nn.Module):
         noise = torch.randn_like(x)
         return x + noise * sigma
 
+    def _apply_input_if_and_noise(self, x):
+        if self.first_layer_input_noise_position == "pre_input_if":
+            x = self._inject_first_layer_input_noise(x)
+            x = self.input_if(x)
+            return x
+        x = self.input_if(x)
+        x = self._inject_first_layer_input_noise(x)
+        return x
+
     def forward(self, x):
         if self.T > 0:
             x = add_dimention(x, self.T)
             x = self.merge(x)
         x = torch.flatten(x, 1)
-        x = self.input_if(x)
-        x = self._inject_first_layer_input_noise(x)
+        x = self._apply_input_if_and_noise(x)
         x = self.fc1(x)
         x = self.if1(x)
         x = self.fc2(x)

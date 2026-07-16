@@ -61,12 +61,24 @@ def _inject_noise_tensor(x, sigma, noise_type, T):
     return x + noise * sigma
 
 
-def _forward_sequential_first_if_spike_schedule(seq, x, T, spike_schedule, noise_sigma=0.0, noise_type="gaussian"):
+def _forward_sequential_first_if_spike_schedule(
+    seq,
+    x,
+    T,
+    spike_schedule,
+    noise_sigma=0.0,
+    noise_type="gaussian",
+    noise_position="post_input_if",
+):
     if_idx, conv_idx = _first_if_and_next_conv_idx(seq)
     for i in range(if_idx):
         x = seq[i](x)
-    x = seq[if_idx](x)
-    x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
+    if noise_position == "pre_input_if":
+        x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
+        x = seq[if_idx](x)
+    else:
+        x = seq[if_idx](x)
+        x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
     sch = spike_schedule
     if sch in ("weight_sign_pos_front", "weight_sign_neg_front"):
         x = first_conv_with_weight_sign_schedule(x, T, seq[conv_idx], sch)
@@ -79,15 +91,25 @@ def _forward_sequential_first_if_spike_schedule(seq, x, T, spike_schedule, noise
     return x
 
 
-def _forward_sequential_first_if_no_schedule(seq, x, noise_sigma=0.0, noise_type="gaussian"):
+def _forward_sequential_first_if_no_schedule(
+    seq,
+    x,
+    noise_sigma=0.0,
+    noise_type="gaussian",
+    noise_position="post_input_if",
+):
     """
     T=0 路径：在 layer1 的第一个 IF 后注入噪声，再继续后续层。
     """
     if_idx, _ = _first_if_and_next_conv_idx(seq)
     for i in range(if_idx):
         x = seq[i](x)
-    x = seq[if_idx](x)
-    x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
+    if noise_position == "pre_input_if":
+        x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
+        x = seq[if_idx](x)
+    else:
+        x = seq[if_idx](x)
+        x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
     for j in range(if_idx + 1, len(seq)):
         x = seq[j](x)
     return x
@@ -135,6 +157,7 @@ class VGG(nn.Module):
         self.spike_schedule = "normal"
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.first_layer_input_noise_position = "post_input_if"
         self.loss = 0
         self.layer1 = self._make_layers(cfg[vgg_name][0], dropout)
         self.layer2 = self._make_layers(cfg[vgg_name][1], dropout)
@@ -233,6 +256,15 @@ class VGG(nn.Module):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
 
+    def set_first_layer_input_noise_position(self, position="post_input_if"):
+        pos = str(position).strip().lower()
+        if pos not in ("post_input_if", "pre_input_if"):
+            raise ValueError(
+                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                % (position,)
+            )
+        self.first_layer_input_noise_position = pos
+
     def forward(self, x):
         if self.T > 0:
             x = add_dimention(x, self.T)
@@ -244,6 +276,7 @@ class VGG(nn.Module):
                 self.spike_schedule,
                 self.first_layer_input_noise_sigma,
                 self.first_layer_input_noise_type,
+                self.first_layer_input_noise_position,
             )
         else:
             out = _forward_sequential_first_if_no_schedule(
@@ -251,6 +284,7 @@ class VGG(nn.Module):
                 x,
                 self.first_layer_input_noise_sigma,
                 self.first_layer_input_noise_type,
+                self.first_layer_input_noise_position,
             )
         out = self.layer2(out)
         out = self.layer3(out)
@@ -309,6 +343,7 @@ class VGG_woBN(nn.Module):
         self.spike_schedule = "normal"
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
+        self.first_layer_input_noise_position = "post_input_if"
         self.layer1 = self._make_layers(cfg[vgg_name][0], dropout)
         self.layer2 = self._make_layers(cfg[vgg_name][1], dropout)
         self.layer3 = self._make_layers(cfg[vgg_name][2], dropout)
@@ -401,6 +436,15 @@ class VGG_woBN(nn.Module):
             raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
         self.first_layer_input_noise_type = nt
 
+    def set_first_layer_input_noise_position(self, position="post_input_if"):
+        pos = str(position).strip().lower()
+        if pos not in ("post_input_if", "pre_input_if"):
+            raise ValueError(
+                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                % (position,)
+            )
+        self.first_layer_input_noise_position = pos
+
     def forward(self, x):
         if self.T > 0:
             x = add_dimention(x, self.T)
@@ -412,6 +456,7 @@ class VGG_woBN(nn.Module):
                 self.spike_schedule,
                 self.first_layer_input_noise_sigma,
                 self.first_layer_input_noise_type,
+                self.first_layer_input_noise_position,
             )
         else:
             out = _forward_sequential_first_if_no_schedule(
@@ -419,6 +464,7 @@ class VGG_woBN(nn.Module):
                 x,
                 self.first_layer_input_noise_sigma,
                 self.first_layer_input_noise_type,
+                self.first_layer_input_noise_position,
             )
         out = self.layer2(out)
         out = self.layer3(out)

@@ -29,6 +29,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch", type=int, default=int(os.environ.get("FC3REV_BATCH", "128")))
     p.add_argument("--workers", type=int, default=int(os.environ.get("FC3REV_NUM_WORKERS", "0")))
     p.add_argument("--device", default="auto")
+    p.add_argument(
+        "--first-layer-noise-position",
+        choices=["post_input_if", "pre_input_if"],
+        default="post_input_if",
+    )
     p.add_argument("--ckpt-save-mode", choices=["best", "last"], default=os.environ.get("CKPT_SAVE_MODE", "best"))
     p.add_argument("--retrain", action="store_true")
     p.add_argument("--force-test", action="store_true")
@@ -158,6 +163,8 @@ def main() -> None:
                         "1.0",
                         "--noise_sigma_step",
                         "0.05",
+                        "--first_layer_noise_position",
+                        args.first_layer_noise_position,
                         "--noise_output_dir",
                         str(out_dir),
                     ]

@@ -302,6 +302,7 @@ def test_noise_sweep(
     ckpt: Path,
     out: Path,
     force_test: bool = False,
+    first_layer_noise_position: str = "post_input_if",
 ) -> Path:
     if force_test:
         clear_test_artifacts(out, method_key, seed)
@@ -347,6 +348,8 @@ def test_noise_sweep(
         "1.0",
         "--noise_sigma_step",
         "0.05",
+        "--first_layer_noise_position",
+        first_layer_noise_position,
         "--noise_output_dir",
         str(test_dir),
     ]
@@ -529,6 +532,7 @@ def run_one(
     retrain: bool = False,
     force_test: bool = False,
     ckpt_save_mode: str = "best",
+    first_layer_noise_position: str = "post_input_if",
 ) -> list[dict]:
     cfg = METHOD_CONFIG[method_key]
     ckpt = train_one(
@@ -540,7 +544,13 @@ def run_one(
         ckpt_save_mode=ckpt_save_mode,
     )
     matrix = test_noise_sweep(
-        dataset, method_key, seed, ckpt, out, force_test=force_test
+        dataset,
+        method_key,
+        seed,
+        ckpt,
+        out,
+        force_test=force_test,
+        first_layer_noise_position=first_layer_noise_position,
     )
     curve = read_matrix(matrix)
     rows = []
@@ -647,6 +657,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--font-size", type=float, default=20.0)
     parser.add_argument("--legend-font-size", type=float, default=18.0)
+    parser.add_argument(
+        "--first-layer-noise-position",
+        choices=["post_input_if", "pre_input_if"],
+        default="post_input_if",
+        help="噪声注入位置：post_input_if(默认) 或 pre_input_if",
+    )
     return parser.parse_args()
 
 
@@ -690,6 +706,7 @@ def main() -> None:
                 retrain=args.retrain,
                 force_test=args.force_test,
                 ckpt_save_mode=args.ckpt_save_mode,
+                first_layer_noise_position=args.first_layer_noise_position,
             )
             upsert_run_rows(raw_csv, method_key, seed, rows)
 
