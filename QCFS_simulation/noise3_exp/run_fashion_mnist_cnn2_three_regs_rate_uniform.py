@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--device", default="auto")
     p.add_argument(
         "--first-layer-noise-position",
-        choices=["post_input_if", "pre_input_if"],
+        choices=["post_input_if", "pre_input_if", "input_image"],
         default="post_input_if",
     )
     p.add_argument("--ckpt-save-mode", choices=["best", "last"], default=os.environ.get("CKPT_SAVE_MODE", "best"))

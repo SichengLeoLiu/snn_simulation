@@ -130,21 +130,21 @@ parser.add_argument(
     "--first_layer_noise_sigma",
     type=float,
     default=0.0,
-    help="第一层输入高斯噪声标准差（input_if 后、conv1 前）",
+    help="输入噪声标准差（默认第一层 input_if 附近；position=input_image 时直接加到输入图像）",
 )
 parser.add_argument(
     "--first_layer_noise_type",
     type=str,
     default="gaussian",
     choices=["gaussian", "pink"],
-    help="第一层输入噪声类型（input_if 后、conv1 前）",
+    help="输入噪声类型（input_image 位置当前按 gaussian 处理）",
 )
 parser.add_argument(
     "--first_layer_noise_position",
     type=str,
     default="post_input_if",
-    choices=["post_input_if", "pre_input_if"],
-    help="第一层输入噪声注入位置：input_if 后（默认）或 input_if 前",
+    choices=["post_input_if", "pre_input_if", "input_image"],
+    help="输入噪声注入位置：input_if 后（默认）/ input_if 前 / 直接输入图像",
 )
 parser.add_argument(
     "--noise_sweep",
@@ -265,6 +265,56 @@ def _build_sigma_values(start, end, step):
         vals.append(round(cur, 10))
         cur += step
     return vals
+
+
+def _inject_input_image_noise(inputs, sigma, noise_type):
+    sigma = float(sigma)
+    if sigma <= 0:
+        return inputs
+    # input_image 位置当前统一采用高斯噪声；pink 先回退到高斯，避免改动数据管线。
+    _ = noise_type
+    return inputs + torch.randn_like(inputs) * sigma
+
+
+def _val_with_input_image_noise(
+    model,
+    test_loader,
+    T,
+    device,
+    sigma,
+    noise_type="gaussian",
+    sample_iter=None,
+    verbose=True,
+):
+    if sample_iter is None:
+        sample_iter = len(test_loader)
+        if verbose:
+            print(f"sample_iter of the whole test data loader: {sample_iter}")
+
+    correct = 0
+    total = 0
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(test_loader):
+            batch_size = inputs.size(0)
+            noisy_inputs = _inject_input_image_noise(
+                inputs.to(device), sigma=sigma, noise_type=noise_type
+            )
+            targets = targets.to(device)
+            outputs = model(noisy_inputs)
+            if outputs.dim() == 3:
+                outputs = outputs.mean(0)
+            _, predicted = outputs.max(1)
+            total += float(targets.size(0))
+            correct += float(predicted.eq(targets).sum().item())
+            if verbose and (batch_idx + 1) % 20 == 0:
+                current_acc = 100 * correct / total
+                print(
+                    f"batch idx={batch_idx + 1}, batch size={batch_size}: current accuracy: {current_acc:.3f}%"
+                )
+            if batch_idx == sample_iter:
+                break
+    return 100 * correct / total
 
 
 def _sigma_key(sigma):
@@ -448,7 +498,11 @@ def main():
     if hasattr(model, "set_scaling_factor"):
         model.set_scaling_factor(args.scaling_factor)
     model.set_mode(args.mode)
-    if hasattr(model, "set_first_layer_input_noise_sigma"):
+    use_model_side_noise = args.first_layer_noise_position in (
+        "post_input_if",
+        "pre_input_if",
+    )
+    if use_model_side_noise and hasattr(model, "set_first_layer_input_noise_sigma"):
         model.set_first_layer_input_noise_sigma(args.first_layer_noise_sigma)
         if hasattr(model, "set_first_layer_input_noise_type"):
             model.set_first_layer_input_noise_type(args.first_layer_noise_type)
@@ -462,13 +516,28 @@ def main():
                 args.first_layer_noise_position,
             )
         )
-    elif args.first_layer_noise_sigma > 0:
+    elif use_model_side_noise and args.first_layer_noise_sigma > 0:
         logger.warning("当前模型不支持第一层输入噪声注入，忽略 --first_layer_noise_sigma")
-    elif args.first_layer_noise_type != "gaussian":
+    elif use_model_side_noise and args.first_layer_noise_type != "gaussian":
         logger.warning("当前模型不支持第一层噪声类型设置，忽略 --first_layer_noise_type")
-    elif args.first_layer_noise_position != "post_input_if":
+    elif use_model_side_noise and args.first_layer_noise_position != "post_input_if":
         logger.warning(
             "当前模型不支持第一层噪声注入位置设置，忽略 --first_layer_noise_position"
+        )
+    else:
+        # input_image：由测试阶段直接对输入图像加噪，关闭模型内部 first-layer 注入。
+        if hasattr(model, "set_first_layer_input_noise_sigma"):
+            model.set_first_layer_input_noise_sigma(0.0)
+        if hasattr(model, "set_first_layer_input_noise_position"):
+            model.set_first_layer_input_noise_position("post_input_if")
+        if args.first_layer_noise_type != "gaussian":
+            logger.warning(
+                "position=input_image 当前按 gaussian 处理，忽略 noise_type=%s"
+                % (args.first_layer_noise_type,)
+            )
+        logger.info(
+            "输入图像噪声 type=gaussian sigma=%.6f position=input_image"
+            % (args.first_layer_noise_sigma,)
         )
 
     schedules = _schedules_to_run(args, model)
@@ -552,8 +621,19 @@ def main():
                 hit = None
                 sigma_to_acc = {}
                 for sigma in sigma_values:
-                    model.set_first_layer_input_noise_sigma(sigma)
-                    acc = val(model, test_loader, args.time, device, verbose=False)
+                    if use_model_side_noise:
+                        model.set_first_layer_input_noise_sigma(sigma)
+                        acc = val(model, test_loader, args.time, device, verbose=False)
+                    else:
+                        acc = _val_with_input_image_noise(
+                            model,
+                            test_loader,
+                            args.time,
+                            device,
+                            sigma=sigma,
+                            noise_type=args.first_layer_noise_type,
+                            verbose=False,
+                        )
                     print(
                         "noise_sweep mode=%s sigma=%.6f acc=%.3f"
                         % (mode, sigma, acc)
@@ -598,7 +678,8 @@ def main():
                 print("noise_sweep 矩阵结果已更新: %s" % (matrix_csv_path,))
                 logger.info("noise_sweep 总表已更新: %s" % (combined_csv_path,))
                 print("noise_sweep 总表已更新: %s" % (combined_csv_path,))
-            model.set_first_layer_input_noise_sigma(args.first_layer_noise_sigma)
+            if use_model_side_noise:
+                model.set_first_layer_input_noise_sigma(args.first_layer_noise_sigma)
             if schedules and hasattr(model, "set_spike_schedule"):
                 model.set_spike_schedule(schedules[-1])
             return sweep_summary
@@ -644,9 +725,20 @@ def main():
                 "spike_schedule=%s  Test RMSE = %.6f" % (mode, acc)
             )
         else:
-            acc = val(
-                model, test_loader, args.time, device, verbose=val_verbose
-            )
+            if use_model_side_noise:
+                acc = val(
+                    model, test_loader, args.time, device, verbose=val_verbose
+                )
+            else:
+                acc = _val_with_input_image_noise(
+                    model,
+                    test_loader,
+                    args.time,
+                    device,
+                    sigma=args.first_layer_noise_sigma,
+                    noise_type=args.first_layer_noise_type,
+                    verbose=val_verbose,
+                )
             results.append((mode, acc))
             print("spike_schedule=%s  Test acc = %.3f" % (mode, acc))
             logger.info(

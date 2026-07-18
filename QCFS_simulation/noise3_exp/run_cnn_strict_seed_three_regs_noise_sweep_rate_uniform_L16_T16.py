@@ -484,9 +484,9 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--first-layer-noise-position",
-        choices=["post_input_if", "pre_input_if"],
+        choices=["post_input_if", "pre_input_if", "input_image"],
         default="post_input_if",
-        help="噪声注入位置：post_input_if(默认) 或 pre_input_if",
+        help="噪声注入位置：post_input_if(默认) / pre_input_if / input_image",
     )
     return p.parse_args()
 

@@ -437,7 +437,7 @@ def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
             {
                 "method": method_key,
                 "label": label,
-                "sigma": f"{sigma:.1f}",
+                "sigma": f"{sigma:.2f}",
                 "acc_mean": f"{mean:.6f}",
                 "acc_std": f"{std:.6f}",
                 "n_seeds": len(vals),
@@ -659,9 +659,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--legend-font-size", type=float, default=18.0)
     parser.add_argument(
         "--first-layer-noise-position",
-        choices=["post_input_if", "pre_input_if"],
+        choices=["post_input_if", "pre_input_if", "input_image"],
         default="post_input_if",
-        help="噪声注入位置：post_input_if(默认) 或 pre_input_if",
+        help="噪声注入位置：post_input_if(默认) / pre_input_if / input_image",
     )
     return parser.parse_args()
 
