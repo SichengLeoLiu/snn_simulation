@@ -28,6 +28,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--epochs", type=int, default=int(os.environ.get("FASHION_FC3REV_EPOCHS", "50")))
     p.add_argument("--batch", type=int, default=int(os.environ.get("FC3REV_BATCH", "128")))
     p.add_argument("--workers", type=int, default=int(os.environ.get("FC3REV_NUM_WORKERS", "0")))
+    p.add_argument("--L", type=int, default=int(os.environ.get("SNN_L", "16")))
+    p.add_argument("--T", type=int, default=int(os.environ.get("SNN_T", "16")))
     p.add_argument("--device", default="auto")
     p.add_argument(
         "--first-layer-noise-position",
@@ -37,13 +39,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ckpt-save-mode", choices=["best", "last"], default=os.environ.get("CKPT_SAVE_MODE", "best"))
     p.add_argument("--retrain", action="store_true")
     p.add_argument("--force-test", action="store_true")
-    p.add_argument(
-        "--out-root",
-        default=os.environ.get(
-            "OUT_ROOT",
-            "../important_results/fashion_mnist_fc3rev_three_regs/noise_sweep_rate_uniform_L16_T16",
-        ),
-    )
+    p.add_argument("--out-root", default=os.environ.get("OUT_ROOT"))
     return p.parse_args()
 
 
@@ -55,12 +51,15 @@ def main() -> None:
     args = parse_args()
     mnist_root = os.environ.get("MNIST_ROOT", f"{Path.home()}/datasets")
     os.environ["MNIST_ROOT"] = mnist_root
-    out_root = Path(args.out_root)
+    out_root = Path(
+        args.out_root
+        or f"../important_results/fashion_mnist_fc3rev_three_regs/noise_sweep_rate_uniform_L{args.L}_T{args.T}"
+    )
 
     print(f"[INFO] ROOT={ROOT}")
     print(f"[INFO] MNIST_ROOT={mnist_root}")
     print(f"[INFO] H_LIST={args.h_list} SEEDS={args.seeds} REGS={args.regs}")
-    print(f"[INFO] EPOCHS={args.epochs} BATCH={args.batch} WORKERS={args.workers}")
+    print(f"[INFO] EPOCHS={args.epochs} BATCH={args.batch} WORKERS={args.workers} L={args.L} T={args.T}")
     print(f"[INFO] CKPT_SAVE_MODE={args.ckpt_save_mode} RETRAIN={args.retrain} FORCE_TEST={args.force_test}")
 
     for h in args.h_list:
@@ -69,15 +68,15 @@ def main() -> None:
             for seed in args.seeds:
                 if reg == "mne_l2":
                     regularizer, wd, rc = "mne_l2", "0.0", "5e-2"
-                    suffix = f"fashion_strict_seed{seed}_ablation_mne_l2_l16_{arch}_rc5em02"
+                    suffix = f"fashion_strict_seed{seed}_ablation_mne_l2_l{args.L}_{arch}_rc5em02"
                 elif reg == "weight_decay":
                     regularizer, wd, rc = "weight_decay", "5e-4", "1.0"
-                    suffix = f"fashion_strict_seed{seed}_ablation_wd_l16_{arch}"
+                    suffix = f"fashion_strict_seed{seed}_ablation_wd_l{args.L}_{arch}"
                 else:
                     regularizer, wd, rc = "weight_decay", "0.0", "1.0"
-                    suffix = f"fashion_strict_seed{seed}_ablation_none_l16_{arch}"
+                    suffix = f"fashion_strict_seed{seed}_ablation_none_l{args.L}_{arch}"
 
-                ckpt = ROOT / "fashion_mnist-checkpoints" / f"{arch}_L[16]_{suffix}.pth"
+                ckpt = ROOT / "fashion_mnist-checkpoints" / f"{arch}_L[{args.L}]_{suffix}.pth"
                 out_dir = out_root / arch / reg / f"seed_{seed}"
 
                 if args.retrain and ckpt.exists():
@@ -100,7 +99,7 @@ def main() -> None:
                         "-arch",
                         arch,
                         "-L",
-                        "16",
+                        str(args.L),
                         "--epochs",
                         str(args.epochs),
                         "-j",
@@ -139,9 +138,9 @@ def main() -> None:
                         "-arch",
                         arch,
                         "-L",
-                        "16",
+                        str(args.L),
                         "-T",
-                        "16",
+                        str(args.T),
                         "-j",
                         str(args.workers),
                         "-b",
