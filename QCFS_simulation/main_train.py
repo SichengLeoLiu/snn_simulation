@@ -16,6 +16,7 @@ from utils import (
     get_torch_device,
     compute_mne_l2_regularization,
     compute_conv_mne_l2_regularization,
+    compute_l1_regularization,
 )
 
 DATASET_CHOICES = ["mnist", "fashion_mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
@@ -74,14 +75,14 @@ parser.add_argument(
     "--regularizer",
     default="weight_decay",
     type=str,
-    choices=["weight_decay", "resolution_aware", "mne_l2", "conv_mne_l2"],
-    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | conv_mne_l2",
+    choices=["weight_decay", "resolution_aware", "mne_l2", "conv_mne_l2", "l1"],
+    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | conv_mne_l2 | l1",
 )
 parser.add_argument(
     "--reg_coeff",
     default=1.0,
     type=float,
-    help="--regularizer=resolution_aware/mne_l2/conv_mne_l2 时的全局系数 beta",
+    help="--regularizer=resolution_aware/mne_l2/conv_mne_l2/l1 时的全局系数 beta",
 )
 parser.add_argument(
     "--mne_eps",
@@ -192,6 +193,7 @@ def main():
             return weight_decay
         if regularizer in ("mne_l2", "conv_mne_l2") and weight_decay > 0:
             return weight_decay
+        # l1 / resolution_aware：显式 reg_loss，不走 optimizer WD
         return 0.0
 
     if is_diff1d:
@@ -244,6 +246,8 @@ def main():
             use_max=args.mne_use_max,
             detach_lambda=(not args.conv_mne_no_detach_lambda),
         )
+    elif args.regularizer == "l1":
+        reg_loss_fn = lambda m, t, q: compute_l1_regularization(m, T=t, quant_level=q)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs
     )

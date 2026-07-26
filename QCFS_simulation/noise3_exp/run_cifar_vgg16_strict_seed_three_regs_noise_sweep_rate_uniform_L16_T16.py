@@ -2,31 +2,23 @@
 CIFAR-10 / CIFAR-100 VGG16：三路正则 strict-seed 训练 + 噪声扫描 + mean±std 折线图。
 
 方法（同一 pipeline）：
-  - weight_decay / L2 (wd=5e-4)
   - mne_l2 / MNE L2 (rc=1e-4)
-  - no_regularization / No reg (wd=0)
+  - weight_decay / L2 (wd=5e-4)
+  - l1 / L1 (rc=1e-5)
 
 默认 5 seeds: 40,41,42,43,44；L=16, T=16, rate_uniform, sigma=0~1.0 step=0.05。
 方案 C：输出层不参与 MNE-L2。
+L2 / MNE 的旧 checkpoint 可直接复用（同 suffix 时 [SKIP TRAIN]）。
 
 用法：
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10
-  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar100
-  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10 --method no_regularization
-  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar100 --plot-only
+  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10 --method l1
+  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py --dataset cifar10 --plot-only
 
-  # 强制重跑噪声扫描（不重新训练）
+  # 新目录：只训 L1，并复用旧 L2/MNE checkpoint
   python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \\
-      --dataset cifar10 --force-test
-
-  # 强制重训 + 重测（新 run-tag，不覆盖旧 checkpoint/结果）
-  python noise3_exp/run_cifar_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16.py \\
-      --dataset cifar10 --retrain --force-test \\
-      --run-tag drs_rerun \\
-      --out-dir ../important_results/cifar10_vgg16_three_regs_drs_rerun
-
-或：
-  bash noise3_exp/RUN_cifar10_vgg16_three_regs_rerun.sh
+      --dataset cifar10 \\
+      --out-dir ../important_results/cifar10_vgg16_three_regs_l1_l2_mne
 """
 from __future__ import annotations
 
@@ -67,9 +59,10 @@ SCHEME_TAG = "schemeC_noout"
 DEFAULT_SEEDS = [40, 41, 42, 43, 44]
 
 MNE_RC = 1e-4
+L1_RC = 1e-5
 WD_BASE = 5e-4
 
-METHOD_KEYS = ["weight_decay", "mne_l2", "no_regularization"]
+METHOD_KEYS = ["mne_l2", "weight_decay", "l1"]
 
 METHOD_ALIASES = {
     "weight_decay": "weight_decay",
@@ -77,6 +70,7 @@ METHOD_ALIASES = {
     "l2": "weight_decay",
     "mne_l2": "mne_l2",
     "mnel2": "mne_l2",
+    "l1": "l1",
     "no_regularization": "no_regularization",
     "no_reg": "no_regularization",
     "none": "no_regularization",
@@ -84,16 +78,22 @@ METHOD_ALIASES = {
 }
 
 METHOD_CONFIG = {
-    "weight_decay": {
-        "label": "weight_decay",
-        "reg_coeff": None,
-        "wd": WD_BASE,
-    },
     "mne_l2": {
         "label": "mne_l2 rc=1e-4",
         "reg_coeff": MNE_RC,
         "wd": 0.0,
     },
+    "weight_decay": {
+        "label": "weight_decay",
+        "reg_coeff": None,
+        "wd": WD_BASE,
+    },
+    "l1": {
+        "label": "l1 rc=1e-5",
+        "reg_coeff": L1_RC,
+        "wd": 0.0,
+    },
+    # 保留旧方法配置，便于 --method no_regularization 复现历史实验
     "no_regularization": {
         "label": "no regularization",
         "reg_coeff": None,
@@ -102,15 +102,15 @@ METHOD_CONFIG = {
 }
 
 PLOT_ORDER = [
-    "weight_decay",
     "mne_l2 rc=1e-4",
-    "no regularization",
+    "weight_decay",
+    "l1 rc=1e-5",
 ]
 
 LINE_STYLES = {
-    "weight_decay": {"color": "#ff7f0e", "label": "L2"},
-    "mne_l2 rc=1e-4": {"color": "#1f77b4", "label": "MNE L2"},
-    "no regularization": {"color": "#2ca02c", "label": "No reg"},
+    "mne_l2 rc=1e-4": {"color": "#ff7f0e", "label": "MNE-L2"},
+    "weight_decay": {"color": "#1f77b4", "label": "L2"},
+    "l1 rc=1e-5": {"color": "#2ca02c", "label": "L1"},
 }
 
 RAW_FIELDS = [
@@ -174,20 +174,27 @@ def build_suffix(method_key: str, seed: int, run_tag: Optional[str] = None) -> s
     mid = scheme_mid(run_tag)
     if method_key == "no_regularization":
         return f"strict_seed{seed}_{mid}_none_l{LVAL}_{ARCH}"
-    cfg = METHOD_CONFIG[method_key]
-    reg_coeff = cfg["reg_coeff"]
-    wd = cfg["wd"]
-    if reg_coeff is None:
+    if method_key == "weight_decay":
         return f"strict_seed{seed}_{mid}_wd_l{LVAL}_{ARCH}"
-    if wd > 0:
+    if method_key == "l1":
         return (
-            f"strict_seed{seed}_{mid}_mne_l2_wd_l{LVAL}_{ARCH}"
-            f"_rc{coeff_tag(reg_coeff)}_wd{coeff_tag(wd)}"
+            f"strict_seed{seed}_{mid}_l1_l{LVAL}_{ARCH}"
+            f"_rc{coeff_tag(METHOD_CONFIG['l1']['reg_coeff'])}"
         )
-    return (
-        f"strict_seed{seed}_{mid}_mne_l2_l{LVAL}_{ARCH}"
-        f"_rc{coeff_tag(reg_coeff)}"
-    )
+    if method_key == "mne_l2":
+        cfg = METHOD_CONFIG[method_key]
+        reg_coeff = cfg["reg_coeff"]
+        wd = cfg["wd"]
+        if wd > 0:
+            return (
+                f"strict_seed{seed}_{mid}_mne_l2_wd_l{LVAL}_{ARCH}"
+                f"_rc{coeff_tag(reg_coeff)}_wd{coeff_tag(wd)}"
+            )
+        return (
+            f"strict_seed{seed}_{mid}_mne_l2_l{LVAL}_{ARCH}"
+            f"_rc{coeff_tag(reg_coeff)}"
+        )
+    raise ValueError(f"未知 method_key: {method_key!r}")
 
 
 def ckpt_path(dataset: str, method_key: str, seed: int, run_tag: Optional[str] = None) -> Path:
@@ -236,14 +243,15 @@ def train_one(
         print(f"[SKIP TRAIN] {ckpt.name}", flush=True)
         return ckpt
 
-    reg_coeff = cfg["reg_coeff"]
     wd = cfg["wd"]
-    if method_key == "no_regularization":
+    if method_key in ("no_regularization", "weight_decay"):
         regularizer, rc = "weight_decay", 1.0
-    elif reg_coeff is None:
-        regularizer, rc = "weight_decay", 1.0
+    elif method_key == "l1":
+        regularizer, rc = "l1", cfg["reg_coeff"]
+    elif method_key == "mne_l2":
+        regularizer, rc = "mne_l2", cfg["reg_coeff"]
     else:
-        regularizer, rc = "mne_l2", reg_coeff
+        raise ValueError(f"未知 method_key: {method_key!r}")
 
     cmd = [
         sys.executable,
@@ -598,7 +606,7 @@ def finalize_outputs(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="CIFAR-10/100 VGG16 strict-seed 三路正则 (L2/MNE L2/No reg) + 噪声 mean±std"
+        description="CIFAR-10/100 VGG16 strict-seed 三路正则 (L1/L2/MNE-L2) + 噪声 mean±std"
     )
     parser.add_argument(
         "--dataset",
@@ -609,7 +617,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--method",
         default="all",
-        help="weight_decay | mne_l2 | no_regularization | all（默认 all=三路）",
+        help="l1 | weight_decay | mne_l2 | no_regularization | all（默认 all=L1/L2/MNE）",
     )
     parser.add_argument(
         "--seeds",
@@ -690,7 +698,7 @@ def main() -> None:
         method_keys = [resolve_method(args.method)]
 
     print(
-        f"\n=== {dataset.upper()} VGG16 strict-seed three-regs (L2 / MNE L2 / No reg) ===",
+        f"\n=== {dataset.upper()} VGG16 strict-seed three-regs (L1 / L2 / MNE-L2) ===",
         flush=True,
     )
     print(f"methods={method_keys} seeds={seeds} run_tag={run_tag!r} out={out}", flush=True)

@@ -207,6 +207,26 @@ def _resolve_bn_if_for_layer(layer_name, module_map):
     return bn_mod, if_mod
 
 
+def compute_l1_regularization(model, T=None, quant_level=None):
+    """
+    Standard L1 weight penalty: sum_i |W_i| over Conv/Linear weights (bias excluded).
+    """
+    reg = None
+    for layer in model.modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+        term = layer.weight.abs().sum()
+        reg = term if reg is None else (reg + term)
+    if reg is None:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return reg
+
+
 def compute_mne_l2_regularization(
     model,
     quant_level: int,
