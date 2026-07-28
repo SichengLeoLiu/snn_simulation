@@ -107,6 +107,7 @@ def _baseline_specs() -> dict:
 
 
 def _suffix(dataset, variant_key, rc, seed, args) -> str:
+    # Checkpoint identity is ANN (train T=0) + L; test T only affects noise matrix names.
     parts = [
         "mneablate",
         dataset,
@@ -114,7 +115,6 @@ def _suffix(dataset, variant_key, rc, seed, args) -> str:
         f"rc{_fmt_float(rc)}" if rc is not None else "rcnone",
         f"seed{seed}",
         f"L{args.L}",
-        f"T{args.T}",
     ]
     if args.reg_warmup_epochs > 0:
         parts.append(f"warm{args.reg_warmup_epochs}")
@@ -123,10 +123,8 @@ def _suffix(dataset, variant_key, rc, seed, args) -> str:
 
 def _checkpoint_path(dataset: str, suffix: str, args) -> Path:
     ckpt_dir = ROOT / f"{dataset}-checkpoints"
-    name = f"{args.arch}_L[{args.L}]"
-    if args.T > 0:
-        name += f"_T[{args.T}]"
-    name += f"_{suffix}.pth"
+    # ANN training: only L in filename (same convention as other CIFAR launchers).
+    name = f"{args.arch}_L[{args.L}]_{suffix}.pth"
     return ckpt_dir / name
 
 
@@ -154,7 +152,7 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, args) -
         "-L",
         str(args.L),
         "-T",
-        str(args.T),
+        "0",  # always train ANN
         "--epochs",
         str(args.epochs),
         "-lr",
@@ -395,7 +393,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--datasets", nargs="+", default=["cifar10"], choices=["cifar10", "cifar100"])
     parser.add_argument("--arch", default=ARCH)
     parser.add_argument("--L", default=DEFAULT_L, type=int)
-    parser.add_argument("--T", default=DEFAULT_T, type=int)
+    parser.add_argument(
+        "--T",
+        default=DEFAULT_T,
+        type=int,
+        help="SNN timesteps used only for noise-sweep testing (training is always ANN T=0)",
+    )
     parser.add_argument("--epochs", default=int(os.environ.get("CIFAR_EPOCHS", "300")), type=int)
     parser.add_argument("--lr", default=0.1, type=float)
     parser.add_argument("--batch-size", default=int(os.environ.get("CIFAR_BATCH", "128")), type=int)
