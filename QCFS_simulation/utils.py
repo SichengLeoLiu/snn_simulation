@@ -234,6 +234,10 @@ def compute_mne_l2_regularization(
     use_max: bool = False,
     detach_lambda: bool = False,
     detach_bn_stats: bool = True,
+    detach_bn_affine=None,
+    normalize_by_fan_in: bool = False,
+    layer_reduction: str = "sum",
+    l_ref=None,
 ):
     """
     Margin-Normalized Effective L2 (MNE-L2):
@@ -248,8 +252,16 @@ def compute_mne_l2_regularization(
       - mean 版本: mean_o ||W_tilde_{l,o}||_F^2
       - max  版本: max_o  ||W_tilde_{l,o}||_F^2
     """
+    if layer_reduction not in ("sum", "mean"):
+        raise ValueError(f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'.")
+    if detach_bn_affine is None:
+        detach_bn_affine = detach_bn_stats
+    if l_ref is not None and l_ref <= 0:
+        raise ValueError(f"l_ref must be positive, got {l_ref}.")
+
     module_map = dict(model.named_modules())
-    reg = None
+    terms = []
+    level_factor = (float(quant_level) / float(l_ref)) ** 2 if l_ref is not None else float(quant_level) ** 2
 
     for lname, layer in model.named_modules():
         if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
@@ -269,8 +281,9 @@ def compute_mne_l2_regularization(
             gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
             var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)
             if detach_bn_stats:
-                gamma = gamma.detach()
                 var = var.detach()
+            if detach_bn_affine:
+                gamma = gamma.detach()
             var = var.clamp(min=bn_eps)
             scale = gamma / torch.sqrt(var + bn_eps)
             view_shape = [scale.shape[0]] + [1] * (w.dim() - 1)
@@ -279,21 +292,50 @@ def compute_mne_l2_regularization(
         w_flat = w_eff.view(w_eff.shape[0], -1)
         per_out_norm_sq = (w_flat * w_flat).sum(dim=1)
         m_eff = per_out_norm_sq.max() if use_max else per_out_norm_sq.mean()
+        if normalize_by_fan_in:
+            m_eff = m_eff / max(1, w_flat.shape[1])
 
         lam_min = max(eps, 1e-3)
         lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=lam_min).view(-1)[0]
         if detach_lambda:
             lam = lam.detach()
 
-        term = (float(quant_level) ** 2) * m_eff / (lam.pow(2) + eps)
-        reg = term if reg is None else (reg + term)
+        terms.append(level_factor * m_eff / (lam.pow(2) + eps))
 
-    if reg is None:
+    if not terms:
         p = next(model.parameters(), None)
         if p is None:
             return torch.tensor(0.0)
         return torch.zeros((), device=p.device, dtype=p.dtype)
-    return reg
+    stacked = torch.stack([term.reshape(()) for term in terms])
+    return stacked.mean() if layer_reduction == "mean" else stacked.sum()
+
+
+def compute_stable_mne_l2_regularization(
+    model,
+    quant_level: int,
+    eps: float = 1e-6,
+    use_max: bool = False,
+    detach_lambda: bool = True,
+    detach_bn_running_stats: bool = True,
+    detach_bn_affine: bool = False,
+    normalize_by_fan_in: bool = True,
+    layer_reduction: str = "mean",
+    l_ref: float = 16.0,
+):
+    """Less coefficient-sensitive MNE-L2 variant for ablation."""
+    return compute_mne_l2_regularization(
+        model,
+        quant_level=quant_level,
+        eps=eps,
+        use_max=use_max,
+        detach_lambda=detach_lambda,
+        detach_bn_stats=detach_bn_running_stats,
+        detach_bn_affine=detach_bn_affine,
+        normalize_by_fan_in=normalize_by_fan_in,
+        layer_reduction=layer_reduction,
+        l_ref=l_ref,
+    )
 
 
 def compute_conv_mne_l2_regularization(

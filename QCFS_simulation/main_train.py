@@ -15,6 +15,7 @@ from utils import (
     get_logger,
     get_torch_device,
     compute_mne_l2_regularization,
+    compute_stable_mne_l2_regularization,
     compute_conv_mne_l2_regularization,
     compute_l1_regularization,
 )
@@ -75,14 +76,20 @@ parser.add_argument(
     "--regularizer",
     default="weight_decay",
     type=str,
-    choices=["weight_decay", "resolution_aware", "mne_l2", "conv_mne_l2", "l1"],
-    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | conv_mne_l2 | l1",
+    choices=["weight_decay", "resolution_aware", "mne_l2", "stable_mne_l2", "conv_mne_l2", "l1"],
+    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | conv_mne_l2 | l1",
 )
 parser.add_argument(
     "--reg_coeff",
     default=1.0,
     type=float,
-    help="--regularizer=resolution_aware/mne_l2/conv_mne_l2/l1 时的全局系数 beta",
+    help="--regularizer=resolution_aware/mne_l2/stable_mne_l2/conv_mne_l2/l1 时的全局系数 beta",
+)
+parser.add_argument(
+    "--reg_warmup_epochs",
+    default=0,
+    type=int,
+    help="正则系数线性 warmup 轮数；0 表示不 warmup",
 )
 parser.add_argument(
     "--mne_eps",
@@ -104,6 +111,34 @@ parser.add_argument(
     "--mne_no_detach_bn_stats",
     action="store_true",
     help="--regularizer=mne_l2 时允许正则梯度回传到 BN running_var/gamma",
+)
+parser.add_argument(
+    "--stable_mne_l_ref",
+    default=16.0,
+    type=float,
+    help="--regularizer=stable_mne_l2 时使用 (L/L_ref)^2 缩放",
+)
+parser.add_argument(
+    "--stable_mne_no_fan_in_norm",
+    action="store_true",
+    help="--regularizer=stable_mne_l2 时关闭 fan-in 归一化",
+)
+parser.add_argument(
+    "--stable_mne_layer_reduce",
+    default="mean",
+    type=str,
+    choices=["sum", "mean"],
+    help="--regularizer=stable_mne_l2 时跨层聚合方式",
+)
+parser.add_argument(
+    "--stable_mne_detach_bn_affine",
+    action="store_true",
+    help="--regularizer=stable_mne_l2 时也 detach BN affine gamma",
+)
+parser.add_argument(
+    "--stable_mne_no_detach_bn_running_stats",
+    action="store_true",
+    help="--regularizer=stable_mne_l2 时不 detach BN running_var",
 )
 parser.add_argument(
     "--conv_mne_no_detach_lambda",
@@ -191,7 +226,7 @@ def main():
     def _optimizer_weight_decay(regularizer: str, weight_decay: float) -> float:
         if regularizer == "weight_decay":
             return weight_decay
-        if regularizer in ("mne_l2", "conv_mne_l2") and weight_decay > 0:
+        if regularizer in ("mne_l2", "stable_mne_l2", "conv_mne_l2") and weight_decay > 0:
             return weight_decay
         # l1 / resolution_aware：显式 reg_loss，不走 optimizer WD
         return 0.0
@@ -238,6 +273,19 @@ def main():
             detach_lambda=args.mne_detach_lambda,
             detach_bn_stats=(not args.mne_no_detach_bn_stats),
         )
+    elif args.regularizer == "stable_mne_l2":
+        reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            eps=args.mne_eps,
+            use_max=args.mne_use_max,
+            detach_lambda=args.mne_detach_lambda,
+            detach_bn_running_stats=(not args.stable_mne_no_detach_bn_running_stats),
+            detach_bn_affine=args.stable_mne_detach_bn_affine,
+            normalize_by_fan_in=(not args.stable_mne_no_fan_in_norm),
+            layer_reduction=args.stable_mne_layer_reduce,
+            l_ref=args.stable_mne_l_ref,
+        )
     elif args.regularizer == "conv_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_conv_mne_l2_regularization(
             m,
@@ -269,6 +317,8 @@ def main():
         "regularizer=%s, weight_decay=%.6g, reg_coeff=%.6g"
         % (args.regularizer, args.weight_decay, args.reg_coeff)
     )
+    if args.reg_warmup_epochs > 0:
+        logger.info("reg_warmup_epochs=%d", args.reg_warmup_epochs)
     logger.info("ckpt_save_mode=%s", args.ckpt_save_mode)
     if args.regularizer == "mne_l2":
         logger.info(
@@ -279,6 +329,21 @@ def main():
                 str(bool(args.mne_use_max)),
                 str(bool(args.mne_detach_lambda)),
                 str(bool(not args.mne_no_detach_bn_stats)),
+            )
+        )
+    if args.regularizer == "stable_mne_l2":
+        logger.info(
+            "stable_mne_l2: L=%d, L_ref=%.6g, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_running_stats=%s, detach_bn_affine=%s, fan_in_norm=%s, layer_reduce=%s"
+            % (
+                args.L,
+                args.stable_mne_l_ref,
+                args.mne_eps,
+                str(bool(args.mne_use_max)),
+                str(bool(args.mne_detach_lambda)),
+                str(bool(not args.stable_mne_no_detach_bn_running_stats)),
+                str(bool(args.stable_mne_detach_bn_affine)),
+                str(bool(not args.stable_mne_no_fan_in_norm)),
+                args.stable_mne_layer_reduce,
             )
         )
     if args.regularizer == "conv_mne_l2":
@@ -305,7 +370,14 @@ def main():
             "diff1d：回归 y=x1-x2（数据上 x1>=x2）；Linear 无 bias、写死差分；指标为 RMSE"
         )
 
+    def _epoch_reg_coeff(epoch: int) -> float:
+        if reg_loss_fn is None or args.reg_warmup_epochs <= 0:
+            return args.reg_coeff
+        warmup_scale = min(1.0, float(epoch + 1) / float(args.reg_warmup_epochs))
+        return args.reg_coeff * warmup_scale
+
     for epoch in range(args.epochs):
+        epoch_reg_coeff = _epoch_reg_coeff(epoch)
         if is_diff1d:
             loss, mae = train_reg(
                 model,
@@ -316,7 +388,7 @@ def main():
                 args.time,
                 quant_level=args.L,
                 reg_loss_fn=reg_loss_fn,
-                reg_coeff=args.reg_coeff,
+                reg_coeff=epoch_reg_coeff,
             )
             logger.info(
                 "Epoch:[{}/{}]\t loss(sum)={:.5f}\t train_MAE={:.6f}".format(
@@ -353,7 +425,7 @@ def main():
                 args.time,
                 quant_level=args.L,
                 reg_loss_fn=reg_loss_fn,
-                reg_coeff=args.reg_coeff,
+                reg_coeff=epoch_reg_coeff,
             )
             logger.info(
                 "Epoch:[{}/{}]\t loss={:.5f}\t acc={:.3f}".format(
