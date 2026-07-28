@@ -77,41 +77,52 @@ METHOD_ALIASES = {
     "all": "all",
 }
 
-METHOD_CONFIG = {
-    "mne_l2": {
-        "label": "mne_l2 rc=1e-4",
-        "reg_coeff": MNE_RC,
-        "wd": 0.0,
-    },
-    "weight_decay": {
-        "label": "weight_decay",
-        "reg_coeff": None,
-        "wd": WD_BASE,
-    },
-    "l1": {
-        "label": "l1 rc=1e-5",
-        "reg_coeff": L1_RC,
-        "wd": 0.0,
-    },
-    # 保留旧方法配置，便于 --method no_regularization 复现历史实验
-    "no_regularization": {
-        "label": "no regularization",
-        "reg_coeff": None,
-        "wd": 0.0,
-    },
-}
 
-PLOT_ORDER = [
-    "mne_l2 rc=1e-4",
-    "weight_decay",
-    "l1 rc=1e-5",
-]
+def format_rc_label(rc: float) -> str:
+    s = f"{rc:.0e}"
+    return s.replace("e-0", "e-").replace("e+0", "e+")
 
-LINE_STYLES = {
-    "mne_l2 rc=1e-4": {"color": "#ff7f0e", "label": "MNE-L2"},
-    "weight_decay": {"color": "#1f77b4", "label": "L2"},
-    "l1 rc=1e-5": {"color": "#2ca02c", "label": "L1"},
-}
+
+def configure_l1_rc(l1_rc: float) -> None:
+    """Update global L1 config/labels so checkpoint suffix and plots follow --l1-rc."""
+    global L1_RC, METHOD_CONFIG, PLOT_ORDER, LINE_STYLES
+    L1_RC = float(l1_rc)
+    label = f"l1 rc={format_rc_label(L1_RC)}"
+    METHOD_CONFIG = {
+        "mne_l2": {
+            "label": "mne_l2 rc=1e-4",
+            "reg_coeff": MNE_RC,
+            "wd": 0.0,
+        },
+        "weight_decay": {
+            "label": "weight_decay",
+            "reg_coeff": None,
+            "wd": WD_BASE,
+        },
+        "l1": {
+            "label": label,
+            "reg_coeff": L1_RC,
+            "wd": 0.0,
+        },
+        "no_regularization": {
+            "label": "no regularization",
+            "reg_coeff": None,
+            "wd": 0.0,
+        },
+    }
+    PLOT_ORDER = [
+        "mne_l2 rc=1e-4",
+        "weight_decay",
+        label,
+    ]
+    LINE_STYLES = {
+        "mne_l2 rc=1e-4": {"color": "#ff7f0e", "label": "MNE-L2"},
+        "weight_decay": {"color": "#1f77b4", "label": "L2"},
+        label: {"color": "#2ca02c", "label": f"L1 ({format_rc_label(L1_RC)})"},
+    }
+
+
+configure_l1_rc(L1_RC)
 
 RAW_FIELDS = [
     "dataset",
@@ -671,11 +682,18 @@ def parse_args() -> argparse.Namespace:
         default="post_input_if",
         help="噪声注入位置：post_input_if(默认) / pre_input_if / input_image",
     )
+    parser.add_argument(
+        "--l1-rc",
+        type=float,
+        default=L1_RC,
+        help=f"L1 正则系数 reg_coeff（默认 {L1_RC:g}）；用于与 L2 强度对齐时单独重训 L1",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    configure_l1_rc(args.l1_rc)
     dataset = args.dataset
     run_tag = args.run_tag
     out = out_dir_for(
@@ -701,7 +719,11 @@ def main() -> None:
         f"\n=== {dataset.upper()} VGG16 strict-seed three-regs (L1 / L2 / MNE-L2) ===",
         flush=True,
     )
-    print(f"methods={method_keys} seeds={seeds} run_tag={run_tag!r} out={out}", flush=True)
+    print(
+        f"methods={method_keys} seeds={seeds} l1_rc={L1_RC:g} "
+        f"run_tag={run_tag!r} out={out}",
+        flush=True,
+    )
 
     for method_key in method_keys:
         for seed in seeds:
