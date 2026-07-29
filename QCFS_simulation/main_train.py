@@ -16,6 +16,7 @@ from utils import (
     get_torch_device,
     compute_mne_l2_regularization,
     compute_stable_mne_l2_regularization,
+    compute_hinge_mne_regularization,
     compute_conv_mne_l2_regularization,
     compute_l1_regularization,
 )
@@ -76,14 +77,14 @@ parser.add_argument(
     "--regularizer",
     default="weight_decay",
     type=str,
-    choices=["weight_decay", "resolution_aware", "mne_l2", "stable_mne_l2", "conv_mne_l2", "l1"],
-    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | conv_mne_l2 | l1",
+    choices=["weight_decay", "resolution_aware", "mne_l2", "stable_mne_l2", "hinge_mne", "conv_mne_l2", "l1"],
+    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | conv_mne_l2 | l1",
 )
 parser.add_argument(
     "--reg_coeff",
     default=1.0,
     type=float,
-    help="--regularizer=resolution_aware/mne_l2/stable_mne_l2/conv_mne_l2/l1 时的全局系数 beta",
+    help="--regularizer=resolution_aware/mne_l2/stable_mne_l2/hinge_mne/conv_mne_l2/l1 时的全局系数 beta",
 )
 parser.add_argument(
     "--reg_warmup_epochs",
@@ -139,6 +140,39 @@ parser.add_argument(
     "--stable_mne_no_detach_bn_running_stats",
     action="store_true",
     help="--regularizer=stable_mne_l2 时不 detach BN running_var",
+)
+parser.add_argument(
+    "--hinge_mne_tau",
+    default=1.0,
+    type=float,
+    help="--regularizer=hinge_mne 时的 gain 阈值 tau",
+)
+parser.add_argument(
+    "--hinge_mne_linear",
+    action="store_true",
+    help="--regularizer=hinge_mne 时使用 relu(gain-tau)^2；默认使用 log-hinge",
+)
+parser.add_argument(
+    "--hinge_mne_layer_reduce",
+    default="mean",
+    type=str,
+    choices=["sum", "mean"],
+    help="--regularizer=hinge_mne 时跨层聚合方式",
+)
+parser.add_argument(
+    "--hinge_mne_normalize_by_fan_in",
+    action="store_true",
+    help="--regularizer=hinge_mne 时对 M_eff 做 fan-in 归一化",
+)
+parser.add_argument(
+    "--hinge_mne_no_detach_bn_stats",
+    action="store_true",
+    help="--regularizer=hinge_mne 时不 detach BN running_var",
+)
+parser.add_argument(
+    "--hinge_mne_no_detach_bn_affine",
+    action="store_true",
+    help="--regularizer=hinge_mne 时不 detach BN affine gamma",
 )
 parser.add_argument(
     "--conv_mne_no_detach_lambda",
@@ -226,7 +260,7 @@ def main():
     def _optimizer_weight_decay(regularizer: str, weight_decay: float) -> float:
         if regularizer == "weight_decay":
             return weight_decay
-        if regularizer in ("mne_l2", "stable_mne_l2", "conv_mne_l2") and weight_decay > 0:
+        if regularizer in ("mne_l2", "stable_mne_l2", "hinge_mne", "conv_mne_l2") and weight_decay > 0:
             return weight_decay
         # l1 / resolution_aware：显式 reg_loss，不走 optimizer WD
         return 0.0
@@ -286,6 +320,20 @@ def main():
             layer_reduction=args.stable_mne_layer_reduce,
             l_ref=args.stable_mne_l_ref,
         )
+    elif args.regularizer == "hinge_mne":
+        reg_loss_fn = lambda m, t, q: compute_hinge_mne_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            eps=args.mne_eps,
+            use_max=args.mne_use_max,
+            detach_lambda=args.mne_detach_lambda,
+            detach_bn_stats=(not args.hinge_mne_no_detach_bn_stats),
+            detach_bn_affine=(not args.hinge_mne_no_detach_bn_affine),
+            tau=args.hinge_mne_tau,
+            use_log=(not args.hinge_mne_linear),
+            normalize_by_fan_in=args.hinge_mne_normalize_by_fan_in,
+            layer_reduction=args.hinge_mne_layer_reduce,
+        )
     elif args.regularizer == "conv_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_conv_mne_l2_regularization(
             m,
@@ -344,6 +392,22 @@ def main():
                 str(bool(args.stable_mne_detach_bn_affine)),
                 str(bool(not args.stable_mne_no_fan_in_norm)),
                 args.stable_mne_layer_reduce,
+            )
+        )
+    if args.regularizer == "hinge_mne":
+        logger.info(
+            "hinge_mne: L=%d, tau=%.6g, eps=%.3e, use_log=%s, use_max=%s, detach_lambda=%s, detach_bn_stats=%s, detach_bn_affine=%s, fan_in_norm=%s, layer_reduce=%s"
+            % (
+                args.L,
+                args.hinge_mne_tau,
+                args.mne_eps,
+                str(bool(not args.hinge_mne_linear)),
+                str(bool(args.mne_use_max)),
+                str(bool(args.mne_detach_lambda)),
+                str(bool(not args.hinge_mne_no_detach_bn_stats)),
+                str(bool(not args.hinge_mne_no_detach_bn_affine)),
+                str(bool(args.hinge_mne_normalize_by_fan_in)),
+                args.hinge_mne_layer_reduce,
             )
         )
     if args.regularizer == "conv_mne_l2":

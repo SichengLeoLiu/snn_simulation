@@ -338,6 +338,90 @@ def compute_stable_mne_l2_regularization(
     )
 
 
+def compute_hinge_mne_regularization(
+    model,
+    quant_level: int,
+    eps: float = 1e-6,
+    use_max: bool = False,
+    detach_lambda: bool = True,
+    detach_bn_stats: bool = True,
+    detach_bn_affine: bool = True,
+    tau: float = 1.0,
+    use_log: bool = True,
+    normalize_by_fan_in: bool = False,
+    layer_reduction: str = "mean",
+):
+    """
+    Hinge-MNE: only penalize layers whose effective gain exceeds tau.
+
+      gain_l = L * sqrt(M_eff,l) / lambda_l
+      R = mean_l relu(log(gain_l / tau))^2     if use_log
+      R = mean_l relu(gain_l - tau)^2          otherwise
+
+    The default detaches lambda and BN statistics/affine parameters so the
+    penalty mainly shapes weights instead of moving thresholds or BN gamma.
+    """
+    if tau <= 0:
+        raise ValueError(f"tau must be positive, got {tau}.")
+    if layer_reduction not in ("sum", "mean"):
+        raise ValueError(f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'.")
+
+    module_map = dict(model.named_modules())
+    terms = []
+
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        w = layer.weight
+        w_eff = w
+
+        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        if if_mod is None:
+            continue
+        if bn_mod is not None:
+            bn_eps = float(getattr(bn_mod, "eps", eps))
+            gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
+            var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)
+            if detach_bn_stats:
+                var = var.detach()
+            if detach_bn_affine:
+                gamma = gamma.detach()
+            var = var.clamp(min=bn_eps)
+            scale = gamma / torch.sqrt(var + bn_eps)
+            view_shape = [scale.shape[0]] + [1] * (w.dim() - 1)
+            w_eff = w * scale.view(*view_shape)
+
+        w_flat = w_eff.view(w_eff.shape[0], -1)
+        per_out_norm_sq = (w_flat * w_flat).sum(dim=1)
+        m_eff = per_out_norm_sq.max() if use_max else per_out_norm_sq.mean()
+        if normalize_by_fan_in:
+            m_eff = m_eff / max(1, w_flat.shape[1])
+
+        lam_min = max(eps, 1e-3)
+        lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=lam_min).view(-1)[0]
+        if detach_lambda:
+            lam = lam.detach()
+
+        gain = float(quant_level) * torch.sqrt(m_eff + eps) / (lam + eps)
+        tau_t = torch.tensor(float(tau), device=w.device, dtype=w.dtype)
+        if use_log:
+            violation = F.relu(torch.log((gain + eps) / (tau_t + eps)))
+        else:
+            violation = F.relu(gain - tau_t)
+        terms.append(violation.pow(2))
+
+    if not terms:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    stacked = torch.stack([term.reshape(()) for term in terms])
+    return stacked.mean() if layer_reduction == "mean" else stacked.sum()
+
+
 def compute_conv_mne_l2_regularization(
     model,
     quant_level: int,

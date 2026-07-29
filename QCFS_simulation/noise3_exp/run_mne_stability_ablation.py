@@ -84,6 +84,24 @@ def _variant_specs(l_ref: float) -> dict:
                 str(l_ref),
             ],
         },
+        "hinge_log": {
+            "regularizer": "hinge_mne",
+            "label": "hinge_mne_log",
+            "train_args": ["--mne_detach_lambda"],
+        },
+        "hinge_linear": {
+            "regularizer": "hinge_mne",
+            "label": "hinge_mne_linear",
+            "train_args": ["--mne_detach_lambda", "--hinge_mne_linear"],
+        },
+        "hinge_log_fanin": {
+            "regularizer": "hinge_mne",
+            "label": "hinge_mne_log_fanin_norm",
+            "train_args": [
+                "--mne_detach_lambda",
+                "--hinge_mne_normalize_by_fan_in",
+            ],
+        },
     }
 
 
@@ -103,11 +121,18 @@ def _baseline_specs() -> dict:
             "weight_decay": 0.0,
             "train_args": [],
         },
+        "l1": {
+            "regularizer": "l1",
+            "label": "l1_rc1e-5",
+            "reg_coeff": 1e-5,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
     }
 
 
-def _suffix(dataset, variant_key, rc, seed, args) -> str:
-    # Checkpoint identity is ANN (train T=0) + L; test T only affects noise matrix names.
+def _suffix(dataset, variant_key, rc, seed, args, hinge_tau=None) -> str:
+    # Checkpoint identity follows training T; test T only affects noise matrix names.
     parts = [
         "mneablate",
         dataset,
@@ -115,7 +140,10 @@ def _suffix(dataset, variant_key, rc, seed, args) -> str:
         f"rc{_fmt_float(rc)}" if rc is not None else "rcnone",
         f"seed{seed}",
         f"L{args.L}",
+        f"trainT{args.train_T}",
     ]
+    if hinge_tau is not None:
+        parts.append(f"tau{_fmt_float(hinge_tau)}")
     if args.reg_warmup_epochs > 0:
         parts.append(f"warm{args.reg_warmup_epochs}")
     return "_".join(parts)
@@ -123,8 +151,10 @@ def _suffix(dataset, variant_key, rc, seed, args) -> str:
 
 def _checkpoint_path(dataset: str, suffix: str, args) -> Path:
     ckpt_dir = ROOT / f"{dataset}-checkpoints"
-    # ANN training: only L in filename (same convention as other CIFAR launchers).
-    name = f"{args.arch}_L[{args.L}]_{suffix}.pth"
+    name = f"{args.arch}_L[{args.L}]"
+    if args.train_T > 0:
+        name += f"_T[{args.train_T}]"
+    name += f"_{suffix}.pth"
     return ckpt_dir / name
 
 
@@ -135,8 +165,8 @@ def _run(cmd, *, dry_run: bool):
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, args) -> Path:
-    suffix = _suffix(dataset, variant_key, rc, seed, args)
+def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, hinge_tau, args) -> Path:
+    suffix = _suffix(dataset, variant_key, rc, seed, args, hinge_tau=hinge_tau)
     ckpt = _checkpoint_path(dataset, suffix, args)
     if ckpt.exists() and not args.retrain:
         print(f"[SKIP TRAIN] {ckpt}", flush=True)
@@ -152,7 +182,7 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, args) -
         "-L",
         str(args.L),
         "-T",
-        "0",  # always train ANN
+        str(args.train_T),
         "--epochs",
         str(args.epochs),
         "-lr",
@@ -174,11 +204,18 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, args) -
     ]
     if rc is not None:
         cmd += ["--reg_coeff", str(rc)]
-    if args.reg_warmup_epochs > 0 and spec["regularizer"] != "weight_decay":
+    if args.reg_warmup_epochs > 0 and spec["regularizer"] in (
+        "mne_l2",
+        "stable_mne_l2",
+        "hinge_mne",
+        "conv_mne_l2",
+    ):
         cmd += ["--reg_warmup_epochs", str(args.reg_warmup_epochs)]
     cmd += ["--mne_eps", str(args.mne_eps)]
     if args.mne_use_max:
         cmd += ["--mne_use_max"]
+    if hinge_tau is not None:
+        cmd += ["--hinge_mne_tau", str(hinge_tau)]
     cmd += list(spec.get("train_args", []))
     _run(cmd, dry_run=args.dry_run)
     return ckpt
@@ -186,14 +223,14 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, args) -
 
 def _matrix_path(noise_dir: Path, dataset: str, seed: int, args) -> Path:
     name = (
-        f"noise_sweep_matrix_{dataset}_{args.arch}_T{args.T}_mode_{args.if_mode}"
+        f"noise_sweep_matrix_{dataset}_{args.arch}_T{args.test_T}_mode_{args.if_mode}"
         f"_schedule_{args.spike_schedule}_seed_{seed}.csv"
     )
     return noise_dir / name
 
 
-def test_one(dataset: str, variant_key: str, rc, seed: int, ckpt: Path, args) -> tuple[Path, dict]:
-    suffix = _suffix(dataset, variant_key, rc, seed, args)
+def test_one(dataset: str, variant_key: str, rc, seed: int, hinge_tau, ckpt: Path, args) -> tuple[Path, dict]:
+    suffix = _suffix(dataset, variant_key, rc, seed, args, hinge_tau=hinge_tau)
     noise_dir = args.out_root / dataset / suffix
     matrix = _matrix_path(noise_dir, dataset, seed, args)
     if matrix.exists() and not args.retest:
@@ -210,7 +247,7 @@ def test_one(dataset: str, variant_key: str, rc, seed: int, ckpt: Path, args) ->
         "-L",
         str(args.L),
         "-T",
-        str(args.T),
+        str(args.test_T),
         "--mode",
         args.if_mode,
         "--spike_schedule",
@@ -287,13 +324,14 @@ def _aggregate(rows: list[dict]) -> tuple[list[dict], list[dict]]:
             row["variant_label"],
             row["regularizer"],
             row["reg_coeff"],
+            row["hinge_tau"],
             row["sigma"],
         )
         grouped[key].append(float(row["acc"]))
 
     mean_rows = []
     for key, vals in sorted(grouped.items()):
-        dataset, variant, variant_label, regularizer, reg_coeff, sigma = key
+        dataset, variant, variant_label, regularizer, reg_coeff, hinge_tau, sigma = key
         mean_rows.append(
             {
                 "dataset": dataset,
@@ -301,6 +339,7 @@ def _aggregate(rows: list[dict]) -> tuple[list[dict], list[dict]]:
                 "variant_label": variant_label,
                 "regularizer": regularizer,
                 "reg_coeff": reg_coeff,
+                "hinge_tau": hinge_tau,
                 "sigma": sigma,
                 "n": len(vals),
                 "acc_mean": f"{statistics.mean(vals):.6f}",
@@ -316,6 +355,7 @@ def _aggregate(rows: list[dict]) -> tuple[list[dict], list[dict]]:
             row["variant_label"],
             row["regularizer"],
             row["reg_coeff"],
+            row["hinge_tau"],
         )
         by_variant[key][float(row["sigma"])] = row
 
@@ -329,7 +369,7 @@ def _aggregate(rows: list[dict]) -> tuple[list[dict], list[dict]]:
         clean = float(sigma_rows[start_sigma]["acc_mean"])
         end_acc = float(sigma_rows[end_sigma]["acc_mean"])
         retention = end_acc / clean if clean > 0 else float("nan")
-        dataset, variant, variant_label, regularizer, reg_coeff = key
+        dataset, variant, variant_label, regularizer, reg_coeff, hinge_tau = key
         summary_rows.append(
             {
                 "dataset": dataset,
@@ -337,6 +377,7 @@ def _aggregate(rows: list[dict]) -> tuple[list[dict], list[dict]]:
                 "variant_label": variant_label,
                 "regularizer": regularizer,
                 "reg_coeff": reg_coeff,
+                "hinge_tau": hinge_tau,
                 "clean_sigma": f"{start_sigma:.6g}",
                 "clean_acc_mean": f"{clean:.6f}",
                 "clean_acc_std": sigma_rows[start_sigma]["acc_std"],
@@ -365,24 +406,28 @@ def _expand_jobs(args) -> list[dict]:
                         "variant": baseline,
                         "spec": spec,
                         "reg_coeff": spec["reg_coeff"],
+                        "hinge_tau": None,
                         "seed": seed,
                     }
                 )
 
     for variant in args.variants:
         spec = specs[variant]
+        tau_values = args.hinge_taus if spec["regularizer"] == "hinge_mne" else [None]
         for dataset in args.datasets:
             for rc in args.rcs:
-                for seed in args.seeds:
-                    jobs.append(
-                        {
-                            "dataset": dataset,
-                            "variant": variant,
-                            "spec": spec,
-                            "reg_coeff": rc,
-                            "seed": seed,
-                        }
-                    )
+                for hinge_tau in tau_values:
+                    for seed in args.seeds:
+                        jobs.append(
+                            {
+                                "dataset": dataset,
+                                "variant": variant,
+                                "spec": spec,
+                                "reg_coeff": rc,
+                                "hinge_tau": hinge_tau,
+                                "seed": seed,
+                            }
+                        )
     return jobs
 
 
@@ -394,10 +439,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--arch", default=ARCH)
     parser.add_argument("--L", default=DEFAULT_L, type=int)
     parser.add_argument(
-        "--T",
+        "--train-T",
+        dest="train_T",
+        default=0,
+        type=int,
+        help="Training timesteps. Use 0 for ANN training before SNN conversion.",
+    )
+    parser.add_argument(
+        "--test-T",
+        dest="test_T",
         default=DEFAULT_T,
         type=int,
-        help="SNN timesteps used only for noise-sweep testing (training is always ANN T=0)",
+        help="SNN timesteps used for converted-model noise-sweep testing.",
+    )
+    parser.add_argument(
+        "--T",
+        dest="test_T",
+        type=int,
+        help="Backward-compatible alias for --test-T.",
     )
     parser.add_argument("--epochs", default=int(os.environ.get("CIFAR_EPOCHS", "300")), type=int)
     parser.add_argument("--lr", default=0.1, type=float)
@@ -407,11 +466,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--variants",
         nargs="+",
-        default=["old_detach", "fanin_mean", "full_bn"],
+        default=["old_detach", "hinge_log"],
         choices=sorted(_variant_specs(DEFAULT_L).keys()),
     )
     parser.add_argument("--rcs", nargs="+", default=[1e-4, 3e-4, 1e-3, 3e-3, 1e-2], type=float)
-    parser.add_argument("--baselines", nargs="*", default=["weight_decay"], choices=sorted(_baseline_specs().keys()))
+    parser.add_argument("--hinge-taus", nargs="+", default=[1.0, 2.0, 4.0], type=float)
+    parser.add_argument("--baselines", nargs="*", default=["weight_decay", "l1"], choices=sorted(_baseline_specs().keys()))
     parser.add_argument("--weight-decay", default=0.0, type=float)
     parser.add_argument("--mne-eps", default=1e-6, type=float)
     parser.add_argument("--mne-use-max", action="store_true")
@@ -456,13 +516,14 @@ def main() -> None:
         variant = job["variant"]
         spec = job["spec"]
         rc = job["reg_coeff"]
+        hinge_tau = job["hinge_tau"]
         seed = job["seed"]
         print(
-            f"[JOB] dataset={dataset} variant={variant} rc={_fmt_coeff(rc)} seed={seed}",
+            f"[JOB] dataset={dataset} variant={variant} rc={_fmt_coeff(rc)} tau={_fmt_coeff(hinge_tau)} seed={seed}",
             flush=True,
         )
-        ckpt = train_one(dataset, variant, spec, rc, seed, args)
-        matrix, sigma_to_acc = test_one(dataset, variant, rc, seed, ckpt, args)
+        ckpt = train_one(dataset, variant, spec, rc, seed, hinge_tau, args)
+        matrix, sigma_to_acc = test_one(dataset, variant, rc, seed, hinge_tau, ckpt, args)
         for sigma, acc in sigma_to_acc.items():
             raw_rows.append(
                 {
@@ -472,10 +533,12 @@ def main() -> None:
                     "variant_label": spec["label"],
                     "regularizer": spec["regularizer"],
                     "reg_coeff": _fmt_coeff(rc),
+                    "hinge_tau": _fmt_coeff(hinge_tau),
                     "weight_decay": spec.get("weight_decay", args.weight_decay),
                     "seed": seed,
                     "L": args.L,
-                    "T": args.T,
+                    "train_T": args.train_T,
+                    "test_T": args.test_T,
                     "if_mode": args.if_mode,
                     "spike_schedule": args.spike_schedule,
                     "noise_position": args.first_layer_noise_position,
@@ -502,10 +565,12 @@ def main() -> None:
         "variant_label",
         "regularizer",
         "reg_coeff",
+        "hinge_tau",
         "weight_decay",
         "seed",
         "L",
-        "T",
+        "train_T",
+        "test_T",
         "if_mode",
         "spike_schedule",
         "noise_position",
@@ -526,6 +591,7 @@ def main() -> None:
             "variant_label",
             "regularizer",
             "reg_coeff",
+            "hinge_tau",
             "sigma",
             "n",
             "acc_mean",
@@ -541,6 +607,7 @@ def main() -> None:
             "variant_label",
             "regularizer",
             "reg_coeff",
+            "hinge_tau",
             "clean_sigma",
             "clean_acc_mean",
             "clean_acc_std",
