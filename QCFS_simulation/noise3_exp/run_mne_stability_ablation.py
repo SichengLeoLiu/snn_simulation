@@ -102,6 +102,16 @@ def _variant_specs(l_ref: float) -> dict:
                 "--hinge_mne_normalize_by_fan_in",
             ],
         },
+        "group_lasso": {
+            "regularizer": "group_lasso",
+            "label": "filter_group_lasso",
+            "train_args": [],
+        },
+        "spectral_norm": {
+            "regularizer": "spectral_norm",
+            "label": "spectral_norm_power_iteration",
+            "train_args": [],
+        },
     }
 
 
@@ -209,6 +219,8 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, hinge_t
         "stable_mne_l2",
         "hinge_mne",
         "conv_mne_l2",
+        "group_lasso",
+        "spectral_norm",
     ):
         cmd += ["--reg_warmup_epochs", str(args.reg_warmup_epochs)]
     cmd += ["--mne_eps", str(args.mne_eps)]
@@ -216,6 +228,10 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, hinge_t
         cmd += ["--mne_use_max"]
     if hinge_tau is not None:
         cmd += ["--hinge_mne_tau", str(hinge_tau)]
+    if spec["regularizer"] == "group_lasso":
+        cmd += ["--group_lasso_eps", str(args.group_lasso_eps)]
+    if spec["regularizer"] == "spectral_norm":
+        cmd += ["--spectral_power_iters", str(args.spectral_power_iters)]
     cmd += list(spec.get("train_args", []))
     _run(cmd, dry_run=args.dry_run)
     return ckpt
@@ -414,8 +430,14 @@ def _expand_jobs(args) -> list[dict]:
     for variant in args.variants:
         spec = specs[variant]
         tau_values = args.hinge_taus if spec["regularizer"] == "hinge_mne" else [None]
+        if spec["regularizer"] == "group_lasso":
+            rc_values = args.group_lasso_rcs
+        elif spec["regularizer"] == "spectral_norm":
+            rc_values = args.spectral_norm_rcs
+        else:
+            rc_values = args.rcs
         for dataset in args.datasets:
-            for rc in args.rcs:
+            for rc in rc_values:
                 for hinge_tau in tau_values:
                     for seed in args.seeds:
                         jobs.append(
@@ -470,6 +492,22 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(_variant_specs(DEFAULT_L).keys()),
     )
     parser.add_argument("--rcs", nargs="+", default=[1e-4, 3e-4, 1e-3, 3e-3, 1e-2], type=float)
+    parser.add_argument(
+        "--group-lasso-rcs",
+        nargs="+",
+        default=[1e-5, 3e-5, 1e-4],
+        type=float,
+        help="Coefficient grid used only by the group_lasso variant.",
+    )
+    parser.add_argument(
+        "--spectral-norm-rcs",
+        nargs="+",
+        default=[1e-4, 3e-4, 1e-3],
+        type=float,
+        help="Coefficient grid used only by the spectral_norm variant.",
+    )
+    parser.add_argument("--group-lasso-eps", default=1e-12, type=float)
+    parser.add_argument("--spectral-power-iters", default=3, type=int)
     parser.add_argument("--hinge-taus", nargs="+", default=[1.0, 2.0, 4.0], type=float)
     parser.add_argument("--baselines", nargs="*", default=["weight_decay", "l1"], choices=sorted(_baseline_specs().keys()))
     parser.add_argument("--weight-decay", default=0.0, type=float)

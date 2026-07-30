@@ -227,6 +227,91 @@ def compute_l1_regularization(model, T=None, quant_level=None):
     return reg
 
 
+def compute_group_lasso_regularization(model, T=None, quant_level=None, eps: float = 1e-12):
+    """
+    Filter-wise group Lasso for CNNs:
+
+      R = sum_conv sum_output_filter ||W_filter||_2
+
+    Each output filter (the first weight dimension) is one group. Linear layers
+    are intentionally excluded because this baseline targets convolutional
+    filter/channel sparsity.
+    """
+    if eps < 0:
+        raise ValueError(f"eps must be non-negative, got {eps}.")
+
+    reg = None
+    for layer in model.modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+        filters = layer.weight.reshape(layer.weight.shape[0], -1)
+        term = torch.sqrt((filters * filters).sum(dim=1) + eps).sum()
+        reg = term if reg is None else (reg + term)
+    if reg is None:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return reg
+
+
+def compute_spectral_norm_regularization(
+    model,
+    T=None,
+    quant_level=None,
+    power_iters: int = 3,
+    eps: float = 1e-12,
+):
+    """
+    Sum of approximate largest singular values over Conv/Linear weights.
+
+      R = sum_l sigma_max(W_l)
+
+    Convolution kernels are flattened to [out_channels, fan_in]. Singular
+    vectors are estimated with detached power iteration, while the final
+    Rayleigh quotient remains differentiable with respect to the weights.
+    This avoids a full SVD for every layer and training batch.
+    """
+    if power_iters < 1:
+        raise ValueError(f"power_iters must be >= 1, got {power_iters}.")
+    if eps <= 0:
+        raise ValueError(f"eps must be positive, got {eps}.")
+
+    reg = None
+    for layer in model.modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        matrix = layer.weight.reshape(layer.weight.shape[0], -1)
+        detached = matrix.detach()
+        # A deterministic start keeps runs reproducible without storing extra
+        # optimizer state. Alternating signs reduce accidental orthogonality.
+        v = torch.ones(
+            detached.shape[1], device=detached.device, dtype=detached.dtype
+        )
+        v[1::2] = -1
+        v = v / (torch.linalg.vector_norm(v) + eps)
+        with torch.no_grad():
+            for _ in range(power_iters):
+                u = detached.mv(v)
+                u = u / (torch.linalg.vector_norm(u) + eps)
+                v = detached.t().mv(u)
+                v = v / (torch.linalg.vector_norm(v) + eps)
+
+        sigma = torch.dot(u, matrix.mv(v)).abs()
+        reg = sigma if reg is None else (reg + sigma)
+    if reg is None:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return reg
+
+
 def compute_mne_l2_regularization(
     model,
     quant_level: int,

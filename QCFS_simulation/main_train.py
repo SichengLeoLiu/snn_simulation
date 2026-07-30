@@ -19,6 +19,8 @@ from utils import (
     compute_hinge_mne_regularization,
     compute_conv_mne_l2_regularization,
     compute_l1_regularization,
+    compute_group_lasso_regularization,
+    compute_spectral_norm_regularization,
 )
 
 DATASET_CHOICES = ["mnist", "fashion_mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
@@ -77,20 +79,42 @@ parser.add_argument(
     "--regularizer",
     default="weight_decay",
     type=str,
-    choices=["weight_decay", "resolution_aware", "mne_l2", "stable_mne_l2", "hinge_mne", "conv_mne_l2", "l1"],
-    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | conv_mne_l2 | l1",
+    choices=[
+        "weight_decay",
+        "resolution_aware",
+        "mne_l2",
+        "stable_mne_l2",
+        "hinge_mne",
+        "conv_mne_l2",
+        "l1",
+        "group_lasso",
+        "spectral_norm",
+    ],
+    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | conv_mne_l2 | l1 | group_lasso | spectral_norm",
 )
 parser.add_argument(
     "--reg_coeff",
     default=1.0,
     type=float,
-    help="--regularizer=resolution_aware/mne_l2/stable_mne_l2/hinge_mne/conv_mne_l2/l1 时的全局系数 beta",
+    help="显式正则项（MNE/L1/group_lasso/spectral_norm 等）的全局系数 beta",
 )
 parser.add_argument(
     "--reg_warmup_epochs",
     default=0,
     type=int,
     help="正则系数线性 warmup 轮数；0 表示不 warmup",
+)
+parser.add_argument(
+    "--group_lasso_eps",
+    default=1e-12,
+    type=float,
+    help="--regularizer=group_lasso 时 filter L2 norm 的数值稳定项",
+)
+parser.add_argument(
+    "--spectral_power_iters",
+    default=3,
+    type=int,
+    help="--regularizer=spectral_norm 时估计最大奇异值的 power iteration 次数",
 )
 parser.add_argument(
     "--mne_eps",
@@ -262,7 +286,7 @@ def main():
             return weight_decay
         if regularizer in ("mne_l2", "stable_mne_l2", "hinge_mne", "conv_mne_l2") and weight_decay > 0:
             return weight_decay
-        # l1 / resolution_aware：显式 reg_loss，不走 optimizer WD
+        # Other regularizers are explicit losses and do not use optimizer WD.
         return 0.0
 
     if is_diff1d:
@@ -344,6 +368,20 @@ def main():
         )
     elif args.regularizer == "l1":
         reg_loss_fn = lambda m, t, q: compute_l1_regularization(m, T=t, quant_level=q)
+    elif args.regularizer == "group_lasso":
+        reg_loss_fn = lambda m, t, q: compute_group_lasso_regularization(
+            m,
+            T=t,
+            quant_level=q,
+            eps=args.group_lasso_eps,
+        )
+    elif args.regularizer == "spectral_norm":
+        reg_loss_fn = lambda m, t, q: compute_spectral_norm_regularization(
+            m,
+            T=t,
+            quant_level=q,
+            power_iters=args.spectral_power_iters,
+        )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs
     )
@@ -419,6 +457,13 @@ def main():
                 str(bool(args.mne_use_max)),
                 str(bool(not args.conv_mne_no_detach_lambda)),
             )
+        )
+    if args.regularizer == "group_lasso":
+        logger.info("group_lasso: conv_filters_only=True, eps=%.3e", args.group_lasso_eps)
+    if args.regularizer == "spectral_norm":
+        logger.info(
+            "spectral_norm: conv_linear=True, power_iters=%d",
+            args.spectral_power_iters,
         )
     if ds not in ("mnist", "diff1d", "toy_diff1d", "diff_1d"):
         if ds in ("imagenet", "imagenet1k"):
