@@ -21,6 +21,8 @@ from utils import (
     compute_l1_regularization,
     compute_group_lasso_regularization,
     compute_spectral_norm_regularization,
+    compute_orthogonal_regularization,
+    compute_spectral_mne_regularization,
 )
 
 DATASET_CHOICES = ["mnist", "fashion_mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
@@ -85,18 +87,20 @@ parser.add_argument(
         "mne_l2",
         "stable_mne_l2",
         "hinge_mne",
+        "spectral_mne",
         "conv_mne_l2",
         "l1",
         "group_lasso",
         "spectral_norm",
+        "orthogonal",
     ],
-    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | conv_mne_l2 | l1 | group_lasso | spectral_norm",
+    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | group_lasso | spectral_norm | orthogonal",
 )
 parser.add_argument(
     "--reg_coeff",
     default=1.0,
     type=float,
-    help="显式正则项（MNE/L1/group_lasso/spectral_norm 等）的全局系数 beta",
+    help="显式正则项（MNE/L1/group_lasso/spectral_norm/orthogonal 等）的全局系数 beta",
 )
 parser.add_argument(
     "--reg_warmup_epochs",
@@ -115,6 +119,29 @@ parser.add_argument(
     default=3,
     type=int,
     help="--regularizer=spectral_norm 时估计最大奇异值的 power iteration 次数",
+)
+parser.add_argument(
+    "--spectral_mne_power_iters",
+    default=3,
+    type=int,
+    help="--regularizer=spectral_mne 时估计最大奇异值的 power iteration 次数",
+)
+parser.add_argument(
+    "--spectral_mne_layer_reduce",
+    default="sum",
+    type=str,
+    choices=["sum", "mean"],
+    help="--regularizer=spectral_mne 时跨层聚合方式",
+)
+parser.add_argument(
+    "--spectral_mne_no_detach_bn_stats",
+    action="store_true",
+    help="--regularizer=spectral_mne 时不 detach BN running_var",
+)
+parser.add_argument(
+    "--spectral_mne_no_detach_bn_affine",
+    action="store_true",
+    help="--regularizer=spectral_mne 时不 detach BN affine gamma",
 )
 parser.add_argument(
     "--mne_eps",
@@ -284,7 +311,7 @@ def main():
     def _optimizer_weight_decay(regularizer: str, weight_decay: float) -> float:
         if regularizer == "weight_decay":
             return weight_decay
-        if regularizer in ("mne_l2", "stable_mne_l2", "hinge_mne", "conv_mne_l2") and weight_decay > 0:
+        if regularizer in ("mne_l2", "stable_mne_l2", "hinge_mne", "spectral_mne", "conv_mne_l2") and weight_decay > 0:
             return weight_decay
         # Other regularizers are explicit losses and do not use optimizer WD.
         return 0.0
@@ -358,6 +385,17 @@ def main():
             normalize_by_fan_in=args.hinge_mne_normalize_by_fan_in,
             layer_reduction=args.hinge_mne_layer_reduce,
         )
+    elif args.regularizer == "spectral_mne":
+        reg_loss_fn = lambda m, t, q: compute_spectral_mne_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            eps=args.mne_eps,
+            power_iters=args.spectral_mne_power_iters,
+            detach_lambda=args.mne_detach_lambda,
+            detach_bn_stats=(not args.spectral_mne_no_detach_bn_stats),
+            detach_bn_affine=(not args.spectral_mne_no_detach_bn_affine),
+            layer_reduction=args.spectral_mne_layer_reduce,
+        )
     elif args.regularizer == "conv_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_conv_mne_l2_regularization(
             m,
@@ -381,6 +419,12 @@ def main():
             T=t,
             quant_level=q,
             power_iters=args.spectral_power_iters,
+        )
+    elif args.regularizer == "orthogonal":
+        reg_loss_fn = lambda m, t, q: compute_orthogonal_regularization(
+            m,
+            T=t,
+            quant_level=q,
         )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs
@@ -448,6 +492,19 @@ def main():
                 args.hinge_mne_layer_reduce,
             )
         )
+    if args.regularizer == "spectral_mne":
+        logger.info(
+            "spectral_mne: L=%d, eps=%.3e, power_iters=%d, detach_lambda=%s, detach_bn_stats=%s, detach_bn_affine=%s, layer_reduce=%s"
+            % (
+                args.L,
+                args.mne_eps,
+                args.spectral_mne_power_iters,
+                str(bool(args.mne_detach_lambda)),
+                str(bool(not args.spectral_mne_no_detach_bn_stats)),
+                str(bool(not args.spectral_mne_no_detach_bn_affine)),
+                args.spectral_mne_layer_reduce,
+            )
+        )
     if args.regularizer == "conv_mne_l2":
         logger.info(
             "conv_mne_l2: L=%d, eps=%.3e, use_max=%s, detach_lambda=%s"
@@ -465,6 +522,8 @@ def main():
             "spectral_norm: conv_linear=True, power_iters=%d",
             args.spectral_power_iters,
         )
+    if args.regularizer == "orthogonal":
+        logger.info("orthogonal: conv_linear=True, penalty=||gram-I||_F^2")
     if ds not in ("mnist", "diff1d", "toy_diff1d", "diff_1d"):
         if ds in ("imagenet", "imagenet1k"):
             logger.info(

@@ -112,6 +112,11 @@ def _variant_specs(l_ref: float) -> dict:
             "label": "spectral_norm_power_iteration",
             "train_args": [],
         },
+        "orthogonal": {
+            "regularizer": "orthogonal",
+            "label": "orthogonal_frobenius",
+            "train_args": [],
+        },
     }
 
 
@@ -221,6 +226,7 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, hinge_t
         "conv_mne_l2",
         "group_lasso",
         "spectral_norm",
+        "orthogonal",
     ):
         cmd += ["--reg_warmup_epochs", str(args.reg_warmup_epochs)]
     cmd += ["--mne_eps", str(args.mne_eps)]
@@ -434,6 +440,8 @@ def _expand_jobs(args) -> list[dict]:
             rc_values = args.group_lasso_rcs
         elif spec["regularizer"] == "spectral_norm":
             rc_values = args.spectral_norm_rcs
+        elif spec["regularizer"] == "orthogonal":
+            rc_values = args.orthogonal_rcs
         else:
             rc_values = args.rcs
         for dataset in args.datasets:
@@ -505,6 +513,13 @@ def parse_args() -> argparse.Namespace:
         default=[1e-4, 3e-4, 1e-3],
         type=float,
         help="Coefficient grid used only by the spectral_norm variant.",
+    )
+    parser.add_argument(
+        "--orthogonal-rcs",
+        nargs="+",
+        default=[1e-4],
+        type=float,
+        help="Coefficient grid used only by the orthogonal variant.",
     )
     parser.add_argument("--group-lasso-eps", default=1e-12, type=float)
     parser.add_argument("--spectral-power-iters", default=3, type=int)

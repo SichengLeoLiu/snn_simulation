@@ -312,6 +312,138 @@ def compute_spectral_norm_regularization(
     return reg
 
 
+def compute_orthogonal_regularization(model, T=None, quant_level=None):
+    """
+    Soft orthogonal regularization over Conv/Linear weights.
+
+      W = reshape(weight, [out_features, fan_in])
+      R = sum_l ||G_l - I||_F^2
+
+    where G_l is the smaller feasible Gram matrix:
+      - W W^T when out_features <= fan_in
+      - W^T W otherwise
+
+    This keeps the target feasible for both tall and wide layers and avoids
+    constructing the much larger infeasible Gram matrix.
+    """
+    reg = None
+    for layer in model.modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        matrix = layer.weight.reshape(layer.weight.shape[0], -1)
+        if matrix.shape[0] <= matrix.shape[1]:
+            gram = matrix @ matrix.t()
+            eye = torch.eye(
+                matrix.shape[0], device=matrix.device, dtype=matrix.dtype
+            )
+        else:
+            gram = matrix.t() @ matrix
+            eye = torch.eye(
+                matrix.shape[1], device=matrix.device, dtype=matrix.dtype
+            )
+        term = (gram - eye).pow(2).sum()
+        reg = term if reg is None else (reg + term)
+
+    if reg is None:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return reg
+
+
+def _approx_largest_singular_value(matrix, power_iters: int = 3, eps: float = 1e-12):
+    if power_iters < 1:
+        raise ValueError(f"power_iters must be >= 1, got {power_iters}.")
+    if eps <= 0:
+        raise ValueError(f"eps must be positive, got {eps}.")
+
+    detached = matrix.detach()
+    v = torch.ones(detached.shape[1], device=detached.device, dtype=detached.dtype)
+    v[1::2] = -1
+    v = v / (torch.linalg.vector_norm(v) + eps)
+    with torch.no_grad():
+        for _ in range(power_iters):
+            u = detached.mv(v)
+            u = u / (torch.linalg.vector_norm(u) + eps)
+            v = detached.t().mv(u)
+            v = v / (torch.linalg.vector_norm(v) + eps)
+    return torch.dot(u, matrix.mv(v)).abs()
+
+
+def compute_spectral_mne_regularization(
+    model,
+    quant_level: int,
+    eps: float = 1e-6,
+    power_iters: int = 3,
+    detach_lambda: bool = True,
+    detach_bn_stats: bool = True,
+    detach_bn_affine: bool = True,
+    layer_reduction: str = "sum",
+):
+    """
+    Spectral-MNE: replace MNE-L2's average effective weight energy with the
+    largest singular direction of the BN-folded effective weight matrix.
+
+      R = sum_l (L^2 * sigma_max(W_eff,l)^2) / (lambda_l^2 + eps)
+
+    Layers without a matched IF threshold are skipped, matching MNE-L2.
+    """
+    if layer_reduction not in ("sum", "mean"):
+        raise ValueError(f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'.")
+
+    module_map = dict(model.named_modules())
+    terms = []
+
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        w = layer.weight
+        w_eff = w
+
+        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        if if_mod is None:
+            continue
+        if bn_mod is not None:
+            bn_eps = float(getattr(bn_mod, "eps", eps))
+            gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
+            var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)
+            if detach_bn_stats:
+                var = var.detach()
+            if detach_bn_affine:
+                gamma = gamma.detach()
+            var = var.clamp(min=bn_eps)
+            scale = gamma / torch.sqrt(var + bn_eps)
+            view_shape = [scale.shape[0]] + [1] * (w.dim() - 1)
+            w_eff = w * scale.view(*view_shape)
+
+        matrix = w_eff.reshape(w_eff.shape[0], -1)
+        sigma = _approx_largest_singular_value(
+            matrix, power_iters=power_iters, eps=max(eps, 1e-12)
+        )
+
+        lam_min = max(eps, 1e-3)
+        lam = if_mod.thresh.to(device=w.device, dtype=w.dtype).clamp(min=lam_min).view(-1)[0]
+        if detach_lambda:
+            lam = lam.detach()
+
+        terms.append((float(quant_level) ** 2) * sigma.pow(2) / (lam.pow(2) + eps))
+
+    if not terms:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    stacked = torch.stack([term.reshape(()) for term in terms])
+    return stacked.mean() if layer_reduction == "mean" else stacked.sum()
+
+
 def compute_mne_l2_regularization(
     model,
     quant_level: int,
