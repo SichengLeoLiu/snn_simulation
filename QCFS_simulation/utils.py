@@ -227,6 +227,30 @@ def compute_l1_regularization(model, T=None, quant_level=None):
     return reg
 
 
+def compute_manual_l2_regularization(model, T=None, quant_level=None):
+    """
+    Explicit L2 penalty over Conv/Linear weights (bias excluded):
+
+      R = sum_l ||W_l||_F^2
+
+    Unlike optimizer weight decay, this value is added directly to the loss.
+    """
+    reg = None
+    for layer in model.modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+        term = layer.weight.pow(2).sum()
+        reg = term if reg is None else (reg + term)
+    if reg is None:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return reg
+
+
 def compute_group_lasso_regularization(model, T=None, quant_level=None, eps: float = 1e-12):
     """
     Filter-wise group Lasso for CNNs:
@@ -353,6 +377,170 @@ def compute_orthogonal_regularization(model, T=None, quant_level=None):
             return torch.tensor(0.0)
         return torch.zeros((), device=p.device, dtype=p.dtype)
     return reg
+
+
+def compute_effective_l2_regularization(
+    model,
+    T=None,
+    quant_level=None,
+    eps: float = 1e-6,
+    detach_bn_stats: bool = True,
+    detach_bn_affine: bool = True,
+    normalize_by_fan_in: bool = True,
+    layer_reduction: str = "mean",
+):
+    """
+    BN-folded Effective-L2:
+
+      W_eff = gamma / sqrt(var + eps) * W
+      R = mean_l mean_o ||W_eff,l,o||_2^2
+
+    This is a decomposed L2-family baseline that keeps BN folding from MNE-L2
+    but removes threshold normalization and quantization-level scaling.
+    """
+    if layer_reduction not in ("sum", "mean"):
+        raise ValueError(
+            f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'."
+        )
+
+    module_map = dict(model.named_modules())
+    terms = []
+
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        w = layer.weight
+        w_eff = w
+        bn_mod, _ = _resolve_bn_if_for_layer(lname, module_map)
+        if bn_mod is not None:
+            bn_eps = float(getattr(bn_mod, "eps", eps))
+            gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
+            var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)
+            if detach_bn_stats:
+                var = var.detach()
+            if detach_bn_affine:
+                gamma = gamma.detach()
+            var = var.clamp(min=bn_eps)
+            scale = gamma / torch.sqrt(var + bn_eps)
+            view_shape = [scale.shape[0]] + [1] * (w.dim() - 1)
+            w_eff = w * scale.view(*view_shape)
+
+        w_flat = w_eff.reshape(w_eff.shape[0], -1)
+        term = (w_flat * w_flat).sum(dim=1).mean()
+        if normalize_by_fan_in:
+            term = term / max(1, w_flat.shape[1])
+        terms.append(term)
+
+    if not terms:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    stacked = torch.stack([term.reshape(()) for term in terms])
+    return stacked.mean() if layer_reduction == "mean" else stacked.sum()
+
+
+def compute_threshold_normalized_l2_regularization(
+    model,
+    T=None,
+    quant_level=None,
+    eps: float = 1e-6,
+    use_max: bool = False,
+    detach_lambda: bool = True,
+    normalize_by_fan_in: bool = True,
+    layer_reduction: str = "mean",
+):
+    """
+    Threshold-normalized L2:
+
+      R = mean_l M_raw,l / (lambda_l^2 + eps)
+
+    where M_raw,l is the raw per-layer weight energy (without BN folding). This
+    isolates the IF-threshold normalization effect from full MNE-L2.
+    """
+    if layer_reduction not in ("sum", "mean"):
+        raise ValueError(
+            f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'."
+        )
+
+    module_map = dict(model.named_modules())
+    terms = []
+
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        _, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        if if_mod is None:
+            continue
+
+        w_flat = layer.weight.reshape(layer.weight.shape[0], -1)
+        per_out_norm_sq = (w_flat * w_flat).sum(dim=1)
+        m_raw = per_out_norm_sq.max() if use_max else per_out_norm_sq.mean()
+        if normalize_by_fan_in:
+            m_raw = m_raw / max(1, w_flat.shape[1])
+
+        lam_min = max(eps, 1e-3)
+        lam = if_mod.thresh.to(device=w_flat.device, dtype=w_flat.dtype).clamp(min=lam_min).view(-1)[0]
+        if detach_lambda:
+            lam = lam.detach()
+
+        terms.append(m_raw / (lam.pow(2) + eps))
+
+    if not terms:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    stacked = torch.stack([term.reshape(()) for term in terms])
+    return stacked.mean() if layer_reduction == "mean" else stacked.sum()
+
+
+def compute_l2_sp_regularization(
+    model,
+    reference_weights: dict[str, torch.Tensor],
+    T=None,
+    quant_level=None,
+    layer_reduction: str = "mean",
+):
+    """
+    L2-SP baseline:
+
+      R = mean_l ||W_l - W_l^(0)||_F^2
+
+    The reference weights are captured at initialization time. Using per-layer
+    means keeps the coefficient scale more stable across model sizes.
+    """
+    if layer_reduction not in ("sum", "mean"):
+        raise ValueError(
+            f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'."
+        )
+
+    terms = []
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+
+        key = f"{lname}.weight"
+        ref = reference_weights.get(key)
+        if ref is None:
+            continue
+        terms.append((layer.weight - ref).pow(2).mean())
+
+    if not terms:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    stacked = torch.stack([term.reshape(()) for term in terms])
+    return stacked.mean() if layer_reduction == "mean" else stacked.sum()
 
 
 def _approx_largest_singular_value(matrix, power_iters: int = 3, eps: float = 1e-12):

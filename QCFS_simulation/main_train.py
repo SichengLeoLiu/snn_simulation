@@ -19,10 +19,14 @@ from utils import (
     compute_hinge_mne_regularization,
     compute_conv_mne_l2_regularization,
     compute_l1_regularization,
+    compute_manual_l2_regularization,
     compute_group_lasso_regularization,
     compute_spectral_norm_regularization,
     compute_orthogonal_regularization,
     compute_spectral_mne_regularization,
+    compute_effective_l2_regularization,
+    compute_threshold_normalized_l2_regularization,
+    compute_l2_sp_regularization,
 )
 
 DATASET_CHOICES = ["mnist", "fashion_mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
@@ -90,11 +94,15 @@ parser.add_argument(
         "spectral_mne",
         "conv_mne_l2",
         "l1",
+        "manual_l2",
         "group_lasso",
         "spectral_norm",
         "orthogonal",
+        "effective_l2",
+        "threshold_l2",
+        "l2_sp",
     ],
-    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | group_lasso | spectral_norm | orthogonal",
+    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | manual_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
 )
 parser.add_argument(
     "--reg_coeff",
@@ -305,6 +313,14 @@ def main():
     model.to(device)
 
     reg_loss_fn = None
+    l2_sp_reference = None
+    if args.regularizer == "l2_sp":
+        l2_sp_reference = {
+            f"{name}.weight": module.weight.detach().clone()
+            for name, module in model.named_modules()
+            if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear))
+            and getattr(module, "weight", None) is not None
+        }
 
     is_diff1d = log_ds == "diff1d"
 
@@ -406,6 +422,10 @@ def main():
         )
     elif args.regularizer == "l1":
         reg_loss_fn = lambda m, t, q: compute_l1_regularization(m, T=t, quant_level=q)
+    elif args.regularizer == "manual_l2":
+        reg_loss_fn = lambda m, t, q: compute_manual_l2_regularization(
+            m, T=t, quant_level=q
+        )
     elif args.regularizer == "group_lasso":
         reg_loss_fn = lambda m, t, q: compute_group_lasso_regularization(
             m,
@@ -423,6 +443,28 @@ def main():
     elif args.regularizer == "orthogonal":
         reg_loss_fn = lambda m, t, q: compute_orthogonal_regularization(
             m,
+            T=t,
+            quant_level=q,
+        )
+    elif args.regularizer == "effective_l2":
+        reg_loss_fn = lambda m, t, q: compute_effective_l2_regularization(
+            m,
+            T=t,
+            quant_level=q,
+        )
+    elif args.regularizer == "threshold_l2":
+        reg_loss_fn = lambda m, t, q: compute_threshold_normalized_l2_regularization(
+            m,
+            T=t,
+            quant_level=q,
+            eps=args.mne_eps,
+            use_max=args.mne_use_max,
+            detach_lambda=True,
+        )
+    elif args.regularizer == "l2_sp":
+        reg_loss_fn = lambda m, t, q: compute_l2_sp_regularization(
+            m,
+            reference_weights=l2_sp_reference,
             T=t,
             quant_level=q,
         )
@@ -517,6 +559,8 @@ def main():
         )
     if args.regularizer == "group_lasso":
         logger.info("group_lasso: conv_filters_only=True, eps=%.3e", args.group_lasso_eps)
+    if args.regularizer == "manual_l2":
+        logger.info("manual_l2: conv_linear_weights=True, bias=False, optimizer_wd=0")
     if args.regularizer == "spectral_norm":
         logger.info(
             "spectral_norm: conv_linear=True, power_iters=%d",
@@ -524,6 +568,16 @@ def main():
         )
     if args.regularizer == "orthogonal":
         logger.info("orthogonal: conv_linear=True, penalty=||gram-I||_F^2")
+    if args.regularizer == "effective_l2":
+        logger.info(
+            "effective_l2: bn_folded=True, fan_in_norm=True, layer_reduce=mean"
+        )
+    if args.regularizer == "threshold_l2":
+        logger.info(
+            "threshold_l2: raw_weight_energy/lambda^2, detach_lambda=True, fan_in_norm=True, layer_reduce=mean"
+        )
+    if args.regularizer == "l2_sp":
+        logger.info("l2_sp: reference=initial_weights, conv_linear=True, layer_reduce=mean")
     if ds not in ("mnist", "diff1d", "toy_diff1d", "diff_1d"):
         if ds in ("imagenet", "imagenet1k"):
             logger.info(
