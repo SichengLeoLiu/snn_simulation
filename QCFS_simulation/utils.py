@@ -227,6 +227,17 @@ def compute_l1_regularization(model, T=None, quant_level=None):
     return reg
 
 
+def compute_l1_all_regularization(model, T=None, quant_level=None):
+    """Explicit L1 penalty over every trainable parameter."""
+    terms = [parameter.abs().sum() for parameter in model.parameters() if parameter.requires_grad]
+    if not terms:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return torch.stack([term.reshape(()) for term in terms]).sum()
+
+
 def compute_manual_l2_regularization(model, T=None, quant_level=None):
     """
     Explicit L2 penalty over Conv/Linear weights (bias excluded):
@@ -249,6 +260,72 @@ def compute_manual_l2_regularization(model, T=None, quant_level=None):
             return torch.tensor(0.0)
         return torch.zeros((), device=p.device, dtype=p.dtype)
     return reg
+
+
+def compute_manual_l2_all_regularization(model, T=None, quant_level=None):
+    """
+    Explicit L2 penalty over every trainable parameter:
+
+      R = sum_p ||p||_2^2
+
+    With ``reg_coeff = weight_decay / 2``, this has the same gradient as
+    coupled optimizer weight decay over the same parameters.
+    """
+    reg = None
+    for parameter in model.parameters():
+        if not parameter.requires_grad:
+            continue
+        term = parameter.pow(2).sum()
+        reg = term if reg is None else (reg + term)
+    if reg is None:
+        return torch.tensor(0.0)
+    return reg
+
+
+def compute_elastic_net_all_regularization(
+    model,
+    T=None,
+    quant_level=None,
+    l1_ratio: float = 0.04,
+):
+    """
+    Elastic Net over every trainable parameter:
+
+      R = sum_p ||p||_2^2 + l1_ratio * sum_p ||p||_1
+
+    The global ``reg_coeff`` controls the L2 coefficient; its product with
+    ``l1_ratio`` is the effective L1 coefficient.
+    """
+    if l1_ratio < 0:
+        raise ValueError(f"l1_ratio must be non-negative, got {l1_ratio}.")
+    l2 = compute_manual_l2_all_regularization(model, T=T, quant_level=quant_level)
+    l1 = compute_l1_all_regularization(model, T=T, quant_level=quant_level)
+    return l2 + float(l1_ratio) * l1
+
+
+def compute_scale_l2_regularization(model, T=None, quant_level=None):
+    """
+    Mechanism-only L2 diagnostic over BN affine parameters and IF thresholds.
+
+    This isolates the scale parameters that all-parameter weight decay reaches
+    in addition to Conv/Linear weights. It is not intended as a general-purpose
+    regularization baseline.
+    """
+    terms = []
+    for module in model.modules():
+        if isinstance(module, IF):
+            if module.thresh.requires_grad:
+                terms.append(module.thresh.pow(2).sum())
+        elif isinstance(module, nn.modules.batchnorm._BatchNorm):
+            for parameter in (module.weight, module.bias):
+                if parameter is not None and parameter.requires_grad:
+                    terms.append(parameter.pow(2).sum())
+    if not terms:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return torch.stack([term.reshape(()) for term in terms]).sum()
 
 
 def compute_group_lasso_regularization(model, T=None, quant_level=None, eps: float = 1e-12):

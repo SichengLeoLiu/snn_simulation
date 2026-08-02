@@ -19,7 +19,11 @@ from utils import (
     compute_hinge_mne_regularization,
     compute_conv_mne_l2_regularization,
     compute_l1_regularization,
+    compute_l1_all_regularization,
     compute_manual_l2_regularization,
+    compute_manual_l2_all_regularization,
+    compute_elastic_net_all_regularization,
+    compute_scale_l2_regularization,
     compute_group_lasso_regularization,
     compute_spectral_norm_regularization,
     compute_orthogonal_regularization,
@@ -94,7 +98,12 @@ parser.add_argument(
         "spectral_mne",
         "conv_mne_l2",
         "l1",
+        "l1_all",
         "manual_l2",
+        "manual_l2_all",
+        "elastic_net_all",
+        "scale_l2",
+        "weight_decay_weights_only",
         "group_lasso",
         "spectral_norm",
         "orthogonal",
@@ -102,7 +111,7 @@ parser.add_argument(
         "threshold_l2",
         "l2_sp",
     ],
-    help="正则方式：weight_decay（默认）| resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | manual_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
+    help="正则方式：weight_decay（默认）| weight_decay_weights_only | resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | l1_all | manual_l2 | manual_l2_all | elastic_net_all | scale_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
 )
 parser.add_argument(
     "--reg_coeff",
@@ -115,6 +124,12 @@ parser.add_argument(
     default=0,
     type=int,
     help="正则系数线性 warmup 轮数；0 表示不 warmup",
+)
+parser.add_argument(
+    "--elastic_l1_ratio",
+    default=0.04,
+    type=float,
+    help="--regularizer=elastic_net_all 时，显式 L1 系数与全局 reg_coeff 的比值",
 )
 parser.add_argument(
     "--group_lasso_eps",
@@ -325,17 +340,35 @@ def main():
     is_diff1d = log_ds == "diff1d"
 
     def _optimizer_weight_decay(regularizer: str, weight_decay: float) -> float:
-        if regularizer == "weight_decay":
+        if regularizer in ("weight_decay", "weight_decay_weights_only"):
             return weight_decay
         if regularizer in ("mne_l2", "stable_mne_l2", "hinge_mne", "spectral_mne", "conv_mne_l2") and weight_decay > 0:
             return weight_decay
         # Other regularizers are explicit losses and do not use optimizer WD.
         return 0.0
 
+    optimizer_parameters = model.parameters()
+    if args.regularizer == "weight_decay_weights_only":
+        decay_ids = {
+            id(module.weight)
+            for module in model.modules()
+            if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear))
+            and getattr(module, "weight", None) is not None
+        }
+        decay_parameters = []
+        no_decay_parameters = []
+        for parameter in model.parameters():
+            target = decay_parameters if id(parameter) in decay_ids else no_decay_parameters
+            target.append(parameter)
+        optimizer_parameters = [
+            {"params": decay_parameters},
+            {"params": no_decay_parameters, "weight_decay": 0.0},
+        ]
+
     if is_diff1d:
         criterion = nn.MSELoss().to(device)
         optimizer = torch.optim.Adam(
-            model.parameters(),
+            optimizer_parameters,
             lr=args.lr,
             weight_decay=_optimizer_weight_decay(args.regularizer, args.weight_decay),
         )
@@ -343,13 +376,13 @@ def main():
         criterion = nn.CrossEntropyLoss().to(device)
         if ds == "mnist":
             optimizer = torch.optim.Adam(
-                model.parameters(),
+                optimizer_parameters,
                 lr=args.lr,
                 weight_decay=_optimizer_weight_decay(args.regularizer, args.weight_decay),
             )
         else:
             optimizer = torch.optim.SGD(
-                model.parameters(),
+                optimizer_parameters,
                 lr=args.lr,
                 momentum=0.9,
                 weight_decay=_optimizer_weight_decay(args.regularizer, args.weight_decay),
@@ -422,8 +455,27 @@ def main():
         )
     elif args.regularizer == "l1":
         reg_loss_fn = lambda m, t, q: compute_l1_regularization(m, T=t, quant_level=q)
+    elif args.regularizer == "l1_all":
+        reg_loss_fn = lambda m, t, q: compute_l1_all_regularization(
+            m, T=t, quant_level=q
+        )
     elif args.regularizer == "manual_l2":
         reg_loss_fn = lambda m, t, q: compute_manual_l2_regularization(
+            m, T=t, quant_level=q
+        )
+    elif args.regularizer == "manual_l2_all":
+        reg_loss_fn = lambda m, t, q: compute_manual_l2_all_regularization(
+            m, T=t, quant_level=q
+        )
+    elif args.regularizer == "elastic_net_all":
+        reg_loss_fn = lambda m, t, q: compute_elastic_net_all_regularization(
+            m,
+            T=t,
+            quant_level=q,
+            l1_ratio=args.elastic_l1_ratio,
+        )
+    elif args.regularizer == "scale_l2":
+        reg_loss_fn = lambda m, t, q: compute_scale_l2_regularization(
             m, T=t, quant_level=q
         )
     elif args.regularizer == "group_lasso":
@@ -560,7 +612,26 @@ def main():
     if args.regularizer == "group_lasso":
         logger.info("group_lasso: conv_filters_only=True, eps=%.3e", args.group_lasso_eps)
     if args.regularizer == "manual_l2":
-        logger.info("manual_l2: conv_linear_weights=True, bias=False, optimizer_wd=0")
+        logger.info(
+            "manual_l2: penalty=sum(W^2), conv_linear_weights=True, bias=False, optimizer_wd=0"
+        )
+    if args.regularizer == "manual_l2_all":
+        logger.info(
+            "manual_l2_all: penalty=sum(p^2), all_trainable_parameters=True, optimizer_wd=0"
+        )
+    if args.regularizer == "l1_all":
+        logger.info("l1_all: penalty=sum(abs(p)), all_trainable_parameters=True")
+    if args.regularizer == "elastic_net_all":
+        logger.info(
+            "elastic_net_all: penalty=sum(p^2)+%.6g*sum(abs(p)), all_trainable_parameters=True",
+            args.elastic_l1_ratio,
+        )
+    if args.regularizer == "scale_l2":
+        logger.info("scale_l2: bn_affine=True, if_thresholds=True, diagnostic_only=True")
+    if args.regularizer == "weight_decay_weights_only":
+        logger.info(
+            "weight_decay_weights_only: conv_linear_weights=True, bias_bn_if=False"
+        )
     if args.regularizer == "spectral_norm":
         logger.info(
             "spectral_norm: conv_linear=True, power_iters=%d",

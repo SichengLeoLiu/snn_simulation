@@ -134,6 +134,20 @@ def _baseline_specs() -> dict:
             "weight_decay": 5e-4,
             "train_args": [],
         },
+        "weight_decay_weights_only": {
+            "regularizer": "weight_decay_weights_only",
+            "label": "weight_decay_conv_linear_only",
+            "reg_coeff": None,
+            "weight_decay": 5e-4,
+            "train_args": [],
+        },
+        "manual_l2_all": {
+            "regularizer": "manual_l2_all",
+            "label": "manual_l2_all_parameters",
+            "reg_coeff": 2.5e-4,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
         "no_reg": {
             "regularizer": "weight_decay",
             "label": "no_regularization",
