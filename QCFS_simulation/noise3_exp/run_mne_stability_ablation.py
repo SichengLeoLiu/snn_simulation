@@ -162,6 +162,13 @@ def _baseline_specs() -> dict:
             "weight_decay": 0.0,
             "train_args": [],
         },
+        "l1_all": {
+            "regularizer": "l1_all",
+            "label": "l1_all_parameters_rc1e-5",
+            "reg_coeff": 1e-5,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
     }
 
 

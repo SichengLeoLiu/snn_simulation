@@ -282,6 +282,41 @@ def compute_manual_l2_all_regularization(model, T=None, quant_level=None):
     return reg
 
 
+def compute_selective_l2_regularization(
+    model,
+    T=None,
+    quant_level=None,
+    *,
+    include_bn: bool = False,
+    include_if: bool = False,
+):
+    """L2 over Conv/Linear weights plus selected scale-parameter families."""
+    parameters = []
+    seen = set()
+
+    def _append(parameter):
+        if parameter is None or not parameter.requires_grad or id(parameter) in seen:
+            return
+        seen.add(id(parameter))
+        parameters.append(parameter)
+
+    for module in model.modules():
+        if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            _append(getattr(module, "weight", None))
+        elif include_bn and isinstance(module, nn.modules.batchnorm._BatchNorm):
+            _append(module.weight)
+            _append(module.bias)
+        elif include_if and isinstance(module, IF):
+            _append(module.thresh)
+
+    if not parameters:
+        p = next(model.parameters(), None)
+        if p is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=p.device, dtype=p.dtype)
+    return torch.stack([parameter.pow(2).sum().reshape(()) for parameter in parameters]).sum()
+
+
 def compute_elastic_net_all_regularization(
     model,
     T=None,
