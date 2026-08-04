@@ -148,6 +148,27 @@ def _baseline_specs() -> dict:
             "weight_decay": 0.0,
             "train_args": [],
         },
+        "manual_l2_w_bn": {
+            "regularizer": "manual_l2_w_bn",
+            "label": "manual_l2_weights_plus_bn",
+            "reg_coeff": 2.5e-4,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
+        "manual_l2_w_if": {
+            "regularizer": "manual_l2_w_if",
+            "label": "manual_l2_weights_plus_if",
+            "reg_coeff": 2.5e-4,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
+        "manual_l2_w_bn_if": {
+            "regularizer": "manual_l2_w_bn_if",
+            "label": "manual_l2_weights_plus_bn_plus_if",
+            "reg_coeff": 2.5e-4,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
         "no_reg": {
             "regularizer": "weight_decay",
             "label": "no_regularization",
@@ -524,9 +545,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seeds", nargs="+", default=DEFAULT_SEEDS, type=int)
     parser.add_argument(
         "--variants",
-        nargs="+",
+        nargs="*",
         default=["old_detach", "hinge_log"],
         choices=sorted(_variant_specs(DEFAULT_L).keys()),
+        help="Ablation variants. Pass --variants with no values to run baselines only.",
     )
     parser.add_argument("--rcs", nargs="+", default=[1e-4, 3e-4, 1e-3, 3e-3, 1e-2], type=float)
     parser.add_argument(
