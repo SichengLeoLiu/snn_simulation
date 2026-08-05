@@ -288,6 +288,8 @@ def compute_selective_l2_regularization(
     quant_level=None,
     *,
     include_bn: bool = False,
+    include_bn_weight: bool = False,
+    include_bn_bias: bool = False,
     include_if: bool = False,
 ):
     """L2 over Conv/Linear weights plus selected scale-parameter families."""
@@ -303,9 +305,11 @@ def compute_selective_l2_regularization(
     for module in model.modules():
         if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
             _append(getattr(module, "weight", None))
-        elif include_bn and isinstance(module, nn.modules.batchnorm._BatchNorm):
-            _append(module.weight)
-            _append(module.bias)
+        elif isinstance(module, nn.modules.batchnorm._BatchNorm):
+            if include_bn or include_bn_weight:
+                _append(module.weight)
+            if include_bn or include_bn_bias:
+                _append(module.bias)
         elif include_if and isinstance(module, IF):
             _append(module.thresh)
 

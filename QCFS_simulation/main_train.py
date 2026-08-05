@@ -103,6 +103,8 @@ parser.add_argument(
         "manual_l2",
         "manual_l2_all",
         "manual_l2_w_bn",
+        "manual_l2_w_bn_gamma",
+        "manual_l2_w_bn_beta",
         "manual_l2_w_if",
         "manual_l2_w_bn_if",
         "elastic_net_all",
@@ -115,7 +117,7 @@ parser.add_argument(
         "threshold_l2",
         "l2_sp",
     ],
-    help="正则方式：weight_decay（默认）| weight_decay_weights_only | resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | l1_all | manual_l2 | manual_l2_all | manual_l2_w_bn | manual_l2_w_if | manual_l2_w_bn_if | elastic_net_all | scale_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
+    help="正则方式：weight_decay（默认）| weight_decay_weights_only | resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | l1_all | manual_l2 | manual_l2_all | manual_l2_w_bn | manual_l2_w_bn_gamma | manual_l2_w_bn_beta | manual_l2_w_if | manual_l2_w_bn_if | elastic_net_all | scale_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
 )
 parser.add_argument(
     "--reg_coeff",
@@ -475,6 +477,14 @@ def main():
         reg_loss_fn = lambda m, t, q: compute_selective_l2_regularization(
             m, T=t, quant_level=q, include_bn=True
         )
+    elif args.regularizer == "manual_l2_w_bn_gamma":
+        reg_loss_fn = lambda m, t, q: compute_selective_l2_regularization(
+            m, T=t, quant_level=q, include_bn_weight=True
+        )
+    elif args.regularizer == "manual_l2_w_bn_beta":
+        reg_loss_fn = lambda m, t, q: compute_selective_l2_regularization(
+            m, T=t, quant_level=q, include_bn_bias=True
+        )
     elif args.regularizer == "manual_l2_w_if":
         reg_loss_fn = lambda m, t, q: compute_selective_l2_regularization(
             m, T=t, quant_level=q, include_if=True
@@ -635,12 +645,21 @@ def main():
         logger.info(
             "manual_l2_all: penalty=sum(p^2), all_trainable_parameters=True, optimizer_wd=0"
         )
-    if args.regularizer in ("manual_l2_w_bn", "manual_l2_w_if", "manual_l2_w_bn_if"):
+    if args.regularizer in (
+        "manual_l2_w_bn",
+        "manual_l2_w_bn_gamma",
+        "manual_l2_w_bn_beta",
+        "manual_l2_w_if",
+        "manual_l2_w_bn_if",
+    ):
         logger.info(
-            "%s: conv_linear_weights=True, bn=%s, if_thresholds=%s, biases=False, optimizer_wd=0"
+            "%s: conv_linear_weights=True, bn_gamma=%s, bn_beta=%s, if_thresholds=%s, optimizer_wd=0"
             % (
                 args.regularizer,
-                args.regularizer in ("manual_l2_w_bn", "manual_l2_w_bn_if"),
+                args.regularizer
+                in ("manual_l2_w_bn", "manual_l2_w_bn_gamma", "manual_l2_w_bn_if"),
+                args.regularizer
+                in ("manual_l2_w_bn", "manual_l2_w_bn_beta", "manual_l2_w_bn_if"),
                 args.regularizer in ("manual_l2_w_if", "manual_l2_w_bn_if"),
             )
         )

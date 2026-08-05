@@ -155,6 +155,20 @@ def _baseline_specs() -> dict:
             "weight_decay": 0.0,
             "train_args": [],
         },
+        "manual_l2_w_bn_gamma": {
+            "regularizer": "manual_l2_w_bn_gamma",
+            "label": "manual_l2_weights_plus_bn_gamma",
+            "reg_coeff": 2.5e-4,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
+        "manual_l2_w_bn_beta": {
+            "regularizer": "manual_l2_w_bn_beta",
+            "label": "manual_l2_weights_plus_bn_beta",
+            "reg_coeff": 2.5e-4,
+            "weight_decay": 0.0,
+            "train_args": [],
+        },
         "manual_l2_w_if": {
             "regularizer": "manual_l2_w_if",
             "label": "manual_l2_weights_plus_if",
