@@ -127,6 +127,11 @@ def _variant_specs(l_ref: float) -> dict:
             "label": "manual_l2_no_weight_decay",
             "train_args": [],
         },
+        "l1_all": {
+            "regularizer": "l1_all",
+            "label": "l1_all_parameters",
+            "train_args": [],
+        },
     }
 
 
@@ -512,6 +517,8 @@ def _expand_jobs(args) -> list[dict]:
             rc_values = args.orthogonal_rcs
         elif spec["regularizer"] == "manual_l2":
             rc_values = args.manual_l2_rcs
+        elif spec["regularizer"] == "l1_all":
+            rc_values = args.l1_all_rcs
         else:
             rc_values = args.rcs
         for dataset in args.datasets:
@@ -598,6 +605,13 @@ def parse_args() -> argparse.Namespace:
         default=[2.5e-4],
         type=float,
         help="Coefficient grid for explicit sum(||W||^2); 2.5e-4 matches weight_decay=5e-4 gradients.",
+    )
+    parser.add_argument(
+        "--l1-all-rcs",
+        nargs="+",
+        default=[1e-5],
+        type=float,
+        help="Coefficient grid used only by the l1_all variant.",
     )
     parser.add_argument("--group-lasso-eps", default=1e-12, type=float)
     parser.add_argument("--spectral-power-iters", default=3, type=int)
