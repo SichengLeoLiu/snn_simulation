@@ -832,6 +832,69 @@ def compute_mne_l2_regularization(
     return stacked.mean() if layer_reduction == "mean" else stacked.sum()
 
 
+def _mne_covered_weight_ids(model) -> set[int]:
+    """Conv/Linear weight ids that receive an MNE-L2 term (matched IF required)."""
+    module_map = dict(model.named_modules())
+    covered = set()
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        weight = getattr(layer, "weight", None)
+        if weight is None or not weight.requires_grad:
+            continue
+        _, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        if if_mod is None:
+            continue
+        covered.add(id(weight))
+    return covered
+
+
+def compute_mne_l2_all_regularization(
+    model,
+    quant_level: int,
+    eps: float = 1e-6,
+    use_max: bool = False,
+    detach_lambda: bool = False,
+    detach_bn_stats: bool = True,
+    detach_bn_affine=None,
+    normalize_by_fan_in: bool = False,
+    layer_reduction: str = "sum",
+    l_ref=None,
+):
+    """
+    All-parameter coverage built on MNE-L2:
+
+      R = MNE-L2(matched Conv/Linear weights)
+        + sum_{p not in matched weights} ||p||_2^2
+
+    Matched weights keep margin-normalized effective-L2 treatment; remaining
+    trainable parameters (BN affine, IF thresholds, biases, unmatched heads)
+    receive plain L2 so the regularizer covers every trainable parameter once.
+    """
+    mne = compute_mne_l2_regularization(
+        model,
+        quant_level=quant_level,
+        eps=eps,
+        use_max=use_max,
+        detach_lambda=detach_lambda,
+        detach_bn_stats=detach_bn_stats,
+        detach_bn_affine=detach_bn_affine,
+        normalize_by_fan_in=normalize_by_fan_in,
+        layer_reduction=layer_reduction,
+        l_ref=l_ref,
+    )
+    covered = _mne_covered_weight_ids(model)
+    residual = None
+    for parameter in model.parameters():
+        if not parameter.requires_grad or id(parameter) in covered:
+            continue
+        term = parameter.pow(2).sum()
+        residual = term if residual is None else (residual + term)
+    if residual is None:
+        return mne
+    return mne + residual
+
+
 def compute_stable_mne_l2_regularization(
     model,
     quant_level: int,

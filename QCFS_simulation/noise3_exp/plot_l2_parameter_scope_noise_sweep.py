@@ -8,13 +8,21 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 
-ORDER = [
-    "weight_decay_weights_only",
-    "manual_l2_w_bn",
-    "manual_l2_w_if",
-    "manual_l2_w_bn_if",
-    "manual_l2_all",
-]
+ORDERS = {
+    "parameter_scope": [
+        "weight_decay_weights_only",
+        "manual_l2_w_bn",
+        "manual_l2_w_if",
+        "manual_l2_w_bn_if",
+        "manual_l2_all",
+    ],
+    "bn_affine": [
+        "weight_decay_weights_only",
+        "manual_l2_w_bn_gamma",
+        "manual_l2_w_bn_beta",
+        "manual_l2_w_bn",
+    ],
+}
 
 STYLES = {
     "weight_decay_weights_only": {
@@ -22,8 +30,16 @@ STYLES = {
         "color": "#0072B2",
     },
     "manual_l2_w_bn": {
-        "label": "Weights + BN",
+        "label": "Weights + BN γ + β",
         "color": "#56B4E9",
+    },
+    "manual_l2_w_bn_gamma": {
+        "label": "Weights + BN γ",
+        "color": "#009E73",
+    },
+    "manual_l2_w_bn_beta": {
+        "label": "Weights + BN β",
+        "color": "#E69F00",
     },
     "manual_l2_w_if": {
         "label": "Weights + IF threshold",
@@ -48,6 +64,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", default="cifar10")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--title", default="")
+    parser.add_argument(
+        "--scope-set",
+        choices=("auto", *ORDERS),
+        default="auto",
+        help="Curves to plot; auto selects BN-affine curves when gamma/beta are present.",
+    )
     return parser.parse_args()
 
 
@@ -63,7 +85,15 @@ def main() -> None:
             if row["dataset"] == args.dataset and row["variant"] in STYLES:
                 grouped[row["variant"]].append(row)
 
-    missing = [variant for variant in ORDER if not grouped[variant]]
+    scope_set = args.scope_set
+    if scope_set == "auto":
+        scope_set = (
+            "bn_affine"
+            if grouped["manual_l2_w_bn_gamma"] or grouped["manual_l2_w_bn_beta"]
+            else "parameter_scope"
+        )
+    order = ORDERS[scope_set]
+    missing = [variant for variant in order if not grouped[variant]]
     if missing:
         raise ValueError(f"Missing variants in {args.csv}: {', '.join(missing)}")
 
@@ -80,7 +110,7 @@ def main() -> None:
     )
     fig, ax = plt.subplots(figsize=(9.5, 6.2), dpi=220)
 
-    for variant in ORDER:
+    for variant in order:
         rows = sorted(grouped[variant], key=lambda row: float(row["sigma"]))
         sigma = [float(row["sigma"]) for row in rows]
         mean = [float(row["acc_mean"]) for row in rows]

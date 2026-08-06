@@ -15,6 +15,7 @@ from utils import (
     get_logger,
     get_torch_device,
     compute_mne_l2_regularization,
+    compute_mne_l2_all_regularization,
     compute_stable_mne_l2_regularization,
     compute_hinge_mne_regularization,
     compute_conv_mne_l2_regularization,
@@ -94,6 +95,7 @@ parser.add_argument(
         "weight_decay",
         "resolution_aware",
         "mne_l2",
+        "mne_l2_all",
         "stable_mne_l2",
         "hinge_mne",
         "spectral_mne",
@@ -117,7 +119,7 @@ parser.add_argument(
         "threshold_l2",
         "l2_sp",
     ],
-    help="正则方式：weight_decay（默认）| weight_decay_weights_only | resolution_aware | mne_l2 | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | l1_all | manual_l2 | manual_l2_all | manual_l2_w_bn | manual_l2_w_bn_gamma | manual_l2_w_bn_beta | manual_l2_w_if | manual_l2_w_bn_if | elastic_net_all | scale_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
+    help="正则方式：weight_decay（默认）| weight_decay_weights_only | resolution_aware | mne_l2 | mne_l2_all | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | l1_all | manual_l2 | manual_l2_all | manual_l2_w_bn | manual_l2_w_bn_gamma | manual_l2_w_bn_beta | manual_l2_w_if | manual_l2_w_bn_if | elastic_net_all | scale_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
 )
 parser.add_argument(
     "--reg_coeff",
@@ -413,6 +415,15 @@ def main():
             detach_lambda=args.mne_detach_lambda,
             detach_bn_stats=(not args.mne_no_detach_bn_stats),
         )
+    elif args.regularizer == "mne_l2_all":
+        reg_loss_fn = lambda m, t, q: compute_mne_l2_all_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            eps=args.mne_eps,
+            use_max=args.mne_use_max,
+            detach_lambda=args.mne_detach_lambda,
+            detach_bn_stats=(not args.mne_no_detach_bn_stats),
+        )
     elif args.regularizer == "stable_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
             m,
@@ -573,6 +584,18 @@ def main():
     if args.regularizer == "mne_l2":
         logger.info(
             "mne_l2: L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s"
+            % (
+                args.L,
+                args.mne_eps,
+                str(bool(args.mne_use_max)),
+                str(bool(args.mne_detach_lambda)),
+                str(bool(not args.mne_no_detach_bn_stats)),
+            )
+        )
+    if args.regularizer == "mne_l2_all":
+        logger.info(
+            "mne_l2_all: MNE on matched Conv/Linear weights + L2 on remaining trainable params; "
+            "L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s, optimizer_wd=0"
             % (
                 args.L,
                 args.mne_eps,

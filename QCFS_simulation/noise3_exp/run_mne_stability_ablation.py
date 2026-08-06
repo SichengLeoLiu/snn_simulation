@@ -52,6 +52,11 @@ def _variant_specs(l_ref: float) -> dict:
             "label": "old_mne_detach_lambda",
             "train_args": ["--mne_detach_lambda"],
         },
+        "mne_l2_all": {
+            "regularizer": "mne_l2_all",
+            "label": "mne_l2_plus_residual_l2_all_params",
+            "train_args": ["--mne_detach_lambda"],
+        },
         "lref_only": {
             "regularizer": "stable_mne_l2",
             "label": "stable_lref_only",
@@ -282,6 +287,7 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, hinge_t
         cmd += ["--reg_coeff", str(rc)]
     if args.reg_warmup_epochs > 0 and spec["regularizer"] in (
         "mne_l2",
+        "mne_l2_all",
         "stable_mne_l2",
         "hinge_mne",
         "conv_mne_l2",
