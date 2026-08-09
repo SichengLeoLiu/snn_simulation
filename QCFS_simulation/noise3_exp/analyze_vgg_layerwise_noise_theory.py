@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gc
 import math
 from collections import defaultdict
 from pathlib import Path
@@ -54,6 +55,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--max-batches", type=int, default=20)
+    parser.add_argument(
+        "--d-max-samples",
+        type=int,
+        default=2_000_000,
+        help="Reservoir size for d_l percentile estimates (caps CPU RAM).",
+    )
     parser.add_argument("--noise-sigma", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--power-iters", type=int, default=5)
@@ -237,19 +244,56 @@ class LayerActivationProbe:
             handle.remove()
 
 
-def _percentile(values: torch.Tensor, q: float, max_samples: int = 2_000_000) -> float:
-    """Robust percentile for very large activation tensors."""
-    if values.numel() == 0:
+def _percentile(values: torch.Tensor, q: float) -> float:
+    """Order-statistic percentile on a 1D CPU tensor (already subsampled if needed)."""
+    if values is None or values.numel() == 0:
         return float("nan")
     flat = values.reshape(-1).float().cpu()
-    if flat.numel() > max_samples:
-        # Uniform subsample keeps percentile estimates stable without blowing memory.
-        idx = torch.randint(0, flat.numel(), (max_samples,))
-        flat = flat[idx]
-    # Avoid torch.quantile's large-tensor limit by using sorted order statistics.
     k = int(round((flat.numel() - 1) * float(q)))
     k = max(0, min(k, flat.numel() - 1))
     return float(torch.kthvalue(flat, k + 1).values.item())
+
+
+def _reservoir_update(state: dict, values: torch.Tensor, max_samples: int) -> None:
+    """Streaming uniform reservoir sample into state['buf'] / state['seen']."""
+    flat = values.reshape(-1).detach().float().cpu()
+    n_new = int(flat.numel())
+    if n_new == 0 or max_samples <= 0:
+        return
+    seen = int(state.get("seen", 0))
+    buf = state.get("buf")
+    if buf is None:
+        if n_new <= max_samples:
+            state["buf"] = flat.clone()
+        else:
+            idx = torch.randint(0, n_new, (max_samples,))
+            state["buf"] = flat[idx].clone()
+        state["seen"] = seen + n_new
+        return
+
+    capacity = int(buf.numel())
+    if capacity < max_samples:
+        take = min(max_samples - capacity, n_new)
+        state["buf"] = torch.cat([buf, flat[:take]], dim=0)
+        buf = state["buf"]
+        flat = flat[take:]
+        seen += take
+        n_new = int(flat.numel())
+        capacity = int(buf.numel())
+        if n_new == 0:
+            state["seen"] = seen
+            return
+
+    # buf is full: each arriving sample at time t replaces a random slot with prob capacity/t.
+    ts = torch.arange(1, n_new + 1, dtype=torch.float32) + float(seen)
+    take_mask = torch.rand(n_new) < (float(capacity) / ts)
+    candidates = flat[take_mask]
+    n_take = int(candidates.numel())
+    if n_take > 0:
+        slots = torch.randint(0, capacity, (n_take,))
+        buf[slots] = candidates
+    state["buf"] = buf
+    state["seen"] = seen + n_new
 
 
 def _accumulate_activation_stats(
@@ -259,12 +303,13 @@ def _accumulate_activation_stats(
     args,
 ) -> dict[str, dict]:
     probe = LayerActivationProbe(model, args.T)
+    max_d_samples = int(getattr(args, "d_max_samples", 2_000_000))
     totals = defaultdict(
         lambda: {
             "clean_sq": 0.0,
             "diff_sq": 0.0,
             "n": 0,
-            "d_values": [],
+            "d_reservoir": {"buf": None, "seen": 0},
             "event_hits": 0,
             "event_total": 0,
         }
@@ -281,16 +326,20 @@ def _accumulate_activation_stats(
             model.set_first_layer_input_noise_sigma(0.0)
             with torch.no_grad():
                 model(images.clone())
-            clean = {k: v.clone() for k, v in probe.z_maps.items()}
-            clean_inject = None if probe.post_input_if_z is None else probe.post_input_if_z.clone()
+            clean = {k: v.detach().cpu() for k, v in probe.z_maps.items()}
+            clean_inject = (
+                None if probe.post_input_if_z is None else probe.post_input_if_z.detach().cpu()
+            )
 
             seed_all(args.seed + 10007 + batch_index)
             probe.reset(keep)
             model.set_first_layer_input_noise_sigma(args.noise_sigma)
             with torch.no_grad():
                 model(images.clone())
-            noisy = probe.z_maps
-            noisy_inject = probe.post_input_if_z
+            noisy = {k: v.detach().cpu() for k, v in probe.z_maps.items()}
+            noisy_inject = (
+                None if probe.post_input_if_z is None else probe.post_input_if_z.detach().cpu()
+            )
             model.set_first_layer_input_noise_sigma(0.0)
 
             if clean_inject is not None and noisy_inject is not None:
@@ -323,9 +372,10 @@ def _accumulate_activation_stats(
                 bucket["clean_sq"] += float(z_clean.float().pow(2).sum().item())
                 bucket["diff_sq"] += float(diff.pow(2).sum().item())
                 bucket["n"] += int(z_clean.numel())
-                bucket["d_values"].append(d_physical.reshape(-1).cpu())
+                _reservoir_update(bucket["d_reservoir"], d_physical, max_d_samples)
                 bucket["event_hits"] += int(n_clean.ne(n_noisy).sum().item())
                 bucket["event_total"] += int(n_clean.numel())
+            del clean, noisy, clean_inject, noisy_inject
     finally:
         probe.close()
         model.set_first_layer_input_noise_sigma(0.0)
@@ -334,7 +384,9 @@ def _accumulate_activation_stats(
     inject_sigma = math.sqrt(inject["diff_sq"] / max(inject["n"], 1)) if inject["n"] else float("nan")
     inject_rms = math.sqrt(inject["clean_sq"] / max(inject["n"], 1)) if inject["n"] else float("nan")
     for name, bucket in totals.items():
-        d_all = torch.cat(bucket["d_values"]) if bucket["d_values"] else torch.tensor([])
+        d_all = bucket["d_reservoir"].get("buf")
+        if d_all is None:
+            d_all = torch.tensor([])
         sigma_eff = math.sqrt(bucket["diff_sq"] / max(bucket["n"], 1))
         clean_rms = math.sqrt(bucket["clean_sq"] / max(bucket["n"], 1))
         d_p01 = _percentile(d_all, 0.01)
@@ -436,6 +488,10 @@ def analyze_one(method: str, ckpt: Path, loader, args, device) -> list[dict]:
             f"P(E)={row.get('p_e_empirical', float('nan')):.4f}",
             flush=True,
         )
+    del model, act_stats, weight_rows, weight_by_if
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     return rows
 
 
