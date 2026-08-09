@@ -237,10 +237,19 @@ class LayerActivationProbe:
             handle.remove()
 
 
-def _percentile(values: torch.Tensor, q: float) -> float:
+def _percentile(values: torch.Tensor, q: float, max_samples: int = 2_000_000) -> float:
+    """Robust percentile for very large activation tensors."""
     if values.numel() == 0:
         return float("nan")
-    return float(torch.quantile(values, q).item())
+    flat = values.reshape(-1).float().cpu()
+    if flat.numel() > max_samples:
+        # Uniform subsample keeps percentile estimates stable without blowing memory.
+        idx = torch.randint(0, flat.numel(), (max_samples,))
+        flat = flat[idx]
+    # Avoid torch.quantile's large-tensor limit by using sorted order statistics.
+    k = int(round((flat.numel() - 1) * float(q)))
+    k = max(0, min(k, flat.numel() - 1))
+    return float(torch.kthvalue(flat, k + 1).values.item())
 
 
 def _accumulate_activation_stats(
