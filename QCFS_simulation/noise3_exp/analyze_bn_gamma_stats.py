@@ -7,13 +7,16 @@ import argparse
 import csv
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 
 DEFAULT_CKPTS = {
-    "L1 (all params)": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_l1_all_rc1em05_seed42_L16_trainT0.pth",
-    "MNE-L2 (all params)": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_mne_l2_all_rc0p0001_seed42_L16_trainT0.pth",
-    "L2 (all params)": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_manual_l2_all_rc0p00025_seed42_L16_trainT0.pth",
+    "L1-all": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_l1_all_rc1em05_seed42_L16_trainT0.pth",
+    "MNE-all": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_mne_l2_all_rc0p0001_seed42_L16_trainT0.pth",
+    "L2-all": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_manual_l2_all_rc0p00025_seed42_L16_trainT0.pth",
+    "MNE-standard": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_old_detach_rc0p0001_seed42_L16_trainT0.pth",
 }
 
 
@@ -57,6 +60,62 @@ def _stats(values: torch.Tensor) -> dict:
     }
 
 
+def _plot_distributions(
+    method_values: dict[str, np.ndarray],
+    layer_values: dict[str, list[tuple[str, np.ndarray]]],
+    out_dir: Path,
+) -> None:
+    colors = {
+        "L1-all": "#0072B2",
+        "MNE-all": "#009E73",
+        "L2-all": "#D55E00",
+        "MNE-standard": "#CC79A7",
+    }
+    fallback_colors = plt.get_cmap("tab10").colors
+
+    fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.7))
+
+    # ECDF preserves the point mass near zero and does not depend on histogram bins.
+    for method_index, (method, values) in enumerate(method_values.items()):
+        abs_values = np.abs(values)
+        sorted_values = np.sort(abs_values)
+        cdf = np.arange(1, sorted_values.size + 1) / sorted_values.size
+        color = colors.get(method, fallback_colors[method_index % len(fallback_colors)])
+        axes[0].step(sorted_values, cdf, where="post", linewidth=2.2, label=method, color=color)
+
+    axes[0].set_xscale("symlog", linthresh=1e-3)
+    axes[0].set_xlabel(r"Absolute BN scale $|\gamma|$")
+    axes[0].set_ylabel("Cumulative fraction")
+    axes[0].set_ylim(0.0, 1.01)
+    axes[0].grid(True, which="both", alpha=0.25)
+    axes[0].legend(frameon=False, fontsize=9)
+
+    for method_index, (method, layers) in enumerate(layer_values.items()):
+        medians = []
+        q25 = []
+        q75 = []
+        for _, values in layers:
+            abs_values = np.abs(values)
+            medians.append(np.median(abs_values))
+            q25.append(np.quantile(abs_values, 0.25))
+            q75.append(np.quantile(abs_values, 0.75))
+        layer_indices = np.arange(1, len(layers) + 1)
+        color = colors.get(method, fallback_colors[method_index % len(fallback_colors)])
+        axes[1].plot(layer_indices, medians, marker="o", linewidth=2.0, label=method, color=color)
+        axes[1].fill_between(layer_indices, q25, q75, color=color, alpha=0.16)
+
+    axes[1].set_yscale("symlog", linthresh=1e-3)
+    axes[1].set_xlabel("BN layer index")
+    axes[1].set_ylabel(r"Layerwise $|\gamma|$ (median and IQR)")
+    axes[1].set_xticks(np.arange(1, max(len(v) for v in layer_values.values()) + 1))
+    axes[1].grid(True, which="both", alpha=0.25)
+
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out_dir / f"bn_gamma_distribution.{suffix}", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -83,6 +142,9 @@ def main() -> None:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     layer_rows = []
     method_rows = []
+    value_rows = []
+    method_values: dict[str, np.ndarray] = {}
+    layer_values: dict[str, list[tuple[str, np.ndarray]]] = {}
 
     print(
         f"{'method':22s} {'layer':28s} n  median|γ|     RMS     p90|γ|   max|γ|  "
@@ -100,6 +162,8 @@ def main() -> None:
             raise RuntimeError(f"No BN gamma found in {path}")
 
         all_gamma = torch.cat([tensor for _, tensor in layers])
+        method_values[method] = all_gamma.numpy()
+        layer_values[method] = [(key, tensor.numpy()) for key, tensor in layers]
         method_stats = _stats(all_gamma)
         method_rows.append({"method": method, "layer": "ALL", **method_stats, "checkpoint": str(path)})
         print(
@@ -112,6 +176,17 @@ def main() -> None:
 
         for index, (key, tensor) in enumerate(layers):
             stats = _stats(tensor)
+            value_rows.extend(
+                {
+                    "method": method,
+                    "layer_index": index,
+                    "layer": key,
+                    "channel_index": channel_index,
+                    "gamma": float(gamma),
+                    "abs_gamma": abs(float(gamma)),
+                }
+                for channel_index, gamma in enumerate(tensor.tolist())
+            )
             layer_rows.append(
                 {
                     "method": method,
@@ -147,6 +222,7 @@ def main() -> None:
     ]
     layer_csv = args.out_dir / "bn_gamma_stats_by_layer.csv"
     method_csv = args.out_dir / "bn_gamma_stats_by_method.csv"
+    values_csv = args.out_dir / "bn_gamma_values.csv"
     with layer_csv.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -158,9 +234,21 @@ def main() -> None:
         )
         writer.writeheader()
         writer.writerows(method_rows)
+    with values_csv.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["method", "layer_index", "layer", "channel_index", "gamma", "abs_gamma"],
+        )
+        writer.writeheader()
+        writer.writerows(value_rows)
+
+    _plot_distributions(method_values, layer_values, args.out_dir)
 
     print(f"[DONE] method summary: {method_csv}")
     print(f"[DONE] layer summary:  {layer_csv}")
+    print(f"[DONE] raw gamma values: {values_csv}")
+    print(f"[DONE] distribution plot: {args.out_dir / 'bn_gamma_distribution.png'}")
+    print(f"[DONE] vector plot:       {args.out_dir / 'bn_gamma_distribution.pdf'}")
 
 
 if __name__ == "__main__":
