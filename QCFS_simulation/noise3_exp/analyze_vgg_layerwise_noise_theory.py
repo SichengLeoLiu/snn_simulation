@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-Per-layer VGG16 diagnostics for post-IF noise theory:
+Per-layer post-IF noise-theory diagnostics (VGG16 or BN-free CIFAR MLP):
 
   λ_l, RMS(γ_l)/λ_l, BN-folded Frobenius/spectral gains,
   clean activation RMS, σ_eff,l, d_l percentiles, ρ_l=d_l/σ_eff,
   and empirical/Gaussian P(E_l).
+
+Presets:
+  --preset vgg_all_params   (default) VGG all-parameter / BN-scope suite
+  --preset mlp_four_regs    BN-free fc5_cifar: No-reg / L2-weights-only / L2-all / MNE-standard
 
 Default evaluation matches the CIFAR noise-sweep setting:
 ANN-trained checkpoint tested as SNN with T=L, mode=rate_uniform,
@@ -35,7 +39,7 @@ from utils import (
 )
 
 
-DEFAULT_CKPTS = {
+VGG_DEFAULT_CKPTS = {
     "L1-all": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_l1_all_rc1em05_seed42_L16_trainT0.pth",
     "MNE-all": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_mne_l2_all_rc0p0001_seed42_L16_trainT0.pth",
     "L2-all": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_manual_l2_all_rc0p00025_seed42_L16_trainT0.pth",
@@ -44,11 +48,30 @@ DEFAULT_CKPTS = {
     "MNE-standard": "cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_old_detach_rc0p0001_seed42_L16_trainT0.pth",
 }
 
+# Backward-compatible alias used by older CLI defaults.
+DEFAULT_CKPTS = VGG_DEFAULT_CKPTS
+
+
+def _mlp_ckpts_for_dataset(dataset: str) -> dict[str, str]:
+    ds = dataset.lower()
+    return {
+        "No-reg": f"{ds}-checkpoints/fc5_cifar_L[16]_{ds}_fc5_cifar_no_reg_rcnone_seed42_L16_trainT0.pth",
+        "L2-weights-only": f"{ds}-checkpoints/fc5_cifar_L[16]_{ds}_fc5_cifar_weight_decay_weights_only_rcnone_seed42_L16_trainT0.pth",
+        "L2-all": f"{ds}-checkpoints/fc5_cifar_L[16]_{ds}_fc5_cifar_manual_l2_all_rc0p00025_seed42_L16_trainT0.pth",
+        "MNE-standard": f"{ds}-checkpoints/fc5_cifar_L[16]_{ds}_fc5_cifar_old_detach_rc0p0001_seed42_L16_trainT0.pth",
+    }
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", default="cifar10")
     parser.add_argument("--arch", default="vgg16")
+    parser.add_argument(
+        "--preset",
+        default="vgg_all_params",
+        choices=["vgg_all_params", "mlp_four_regs"],
+        help="Checkpoint preset: VGG all-parameter suite or BN-free MLP four-reg suite.",
+    )
     parser.add_argument("--L", type=int, default=16)
     parser.add_argument("--T", type=int, default=16)
     parser.add_argument("--mode", default="rate_uniform", choices=["rate_uniform", "normal"])
@@ -73,8 +96,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--methods",
         nargs="+",
-        default=list(DEFAULT_CKPTS),
-        choices=sorted(DEFAULT_CKPTS),
+        default=None,
+        help="Subset of preset method labels. Default: all methods in the chosen preset.",
     )
     parser.add_argument(
         "--ckpt",
@@ -83,7 +106,19 @@ def parse_args() -> argparse.Namespace:
         metavar=("LABEL", "PATH"),
         help="Optional extra/override checkpoint: --ckpt Label path.pth",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.preset == "mlp_four_regs":
+        if args.arch == "vgg16":
+            args.arch = "fc5_cifar"
+        if args.out_dir == Path("../important_results/vgg_layerwise_noise_theory_seed42"):
+            args.out_dir = Path(
+                f"../important_results/{args.dataset}_mlp_fc5_layerwise_noise_theory_seed42"
+            )
+    return args
+
+
+def _is_input_if_name(name: str) -> bool:
+    return name in ("layer1.2", "input_if") or name.endswith(".input_if")
 
 
 def _load_model(path: Path, args, device):
@@ -91,7 +126,8 @@ def _load_model(path: Path, args, device):
     state = torch.load(path, map_location="cpu")
     if isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
-    state = remap_legacy_vgg_state_dict(state)
+    if "vgg" in str(args.arch).lower():
+        state = remap_legacy_vgg_state_dict(state)
     model.load_state_dict(state, strict=True)
     model.to(device)
     model.eval()
@@ -183,7 +219,7 @@ def _weight_metrics(spec: dict, L: int, power_iters: int) -> dict:
         "frobenius_gain": float(L) * math.sqrt(float(m_eff.item()) + 1e-12) / lam,
         "spectral_sigma_max": float(sigma_max.item()),
         "spectral_gain": float(L) * float(sigma_max.item()) / lam,
-        "is_input_if": spec["if_name"] == "layer1.2",
+        "is_input_if": _is_input_if_name(spec["if_name"] or ""),
     }
 
 
@@ -204,15 +240,21 @@ class LayerActivationProbe:
         self.handles = []
         self.z_maps: dict[str, torch.Tensor] = {}
         self.post_input_if_z: torch.Tensor | None = None
+        modules = dict(model.named_modules())
         for name, module in _enumerate_if_layers(model):
             self.handles.append(module.register_forward_pre_hook(self._make_pre_hook(name)))
-        # For post_input_if, noise is added after layer1.2 and before layer1.3 (Dropout).
-        # Hooking layer1.3 input therefore sees the actual injected noise.
-        if "layer1.3" in dict(model.named_modules()):
+        # Capture the tensor that actually receives post_input_if noise.
+        # VGG: after layer1.2 IF, before layer1.3 Dropout.
+        # FC MLP: after input_if, before fc1.
+        if "layer1.3" in modules:
+            inject_module = modules["layer1.3"]
+        elif "fc1" in modules:
+            inject_module = modules["fc1"]
+        else:
+            inject_module = None
+        if inject_module is not None:
             self.handles.append(
-                dict(model.named_modules())["layer1.3"].register_forward_pre_hook(
-                    self._make_injection_site_hook()
-                )
+                inject_module.register_forward_pre_hook(self._make_injection_site_hook())
             )
 
     def _sum_over_time(self, x: torch.Tensor) -> torch.Tensor:
@@ -445,7 +487,7 @@ def analyze_one(method: str, ckpt: Path, loader, args, device) -> list[dict]:
             "method": method,
             "layer_index": layer_index,
             "if_name": if_name,
-            "is_input_if": if_name == "layer1.2",
+            "is_input_if": _is_input_if_name(if_name),
             "checkpoint": str(ckpt),
             "L": args.L,
             "T": args.T,
@@ -501,7 +543,19 @@ def main() -> None:
     device = get_torch_device(args.device)
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    ckpts = {name: DEFAULT_CKPTS[name] for name in args.methods}
+    if args.preset == "mlp_four_regs":
+        preset_ckpts = _mlp_ckpts_for_dataset(args.dataset)
+    else:
+        preset_ckpts = dict(VGG_DEFAULT_CKPTS)
+    methods = args.methods if args.methods is not None else list(preset_ckpts)
+    ckpts = {}
+    for name in methods:
+        if name not in preset_ckpts:
+            raise ValueError(
+                f"Unknown method {name!r} for preset {args.preset}. "
+                f"Choices: {sorted(preset_ckpts)}"
+            )
+        ckpts[name] = preset_ckpts[name]
     if args.ckpt:
         for label, path in args.ckpt:
             ckpts[label] = path
