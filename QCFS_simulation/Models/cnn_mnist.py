@@ -251,8 +251,179 @@ class CNN2MNIST(nn.Module):
         return x
 
 
+class CNNDeepMNIST(CNN2MNIST):
+    """CNN2-compatible deeper network with additional Conv-BN-IF blocks."""
+
+    def __init__(self, num_classes=10, channels=(2, 4, 4, 4), pool_after=(1, 2)):
+        channels = tuple(int(channel) for channel in channels)
+        if len(channels) not in (4, 6, 8, 10):
+            raise ValueError(
+                "CNNDeepMNIST supports exactly 4, 6, 8, or 10 convolution layers"
+            )
+        if any(channel <= 0 for channel in channels):
+            raise ValueError("all CNNDeepMNIST channel counts must be positive")
+        pool_after = tuple(int(index) for index in pool_after)
+        if len(pool_after) != 2 or tuple(sorted(set(pool_after))) != pool_after:
+            raise ValueError("pool_after must contain two increasing unique layer indices")
+        if pool_after[0] < 1 or pool_after[-1] > len(channels):
+            raise ValueError("pool_after indices must refer to convolution layers")
+
+        super().__init__(num_classes=num_classes, c1=channels[0], c2=channels[1])
+        self.channels = channels
+        self.num_conv_layers = len(channels)
+        self.pool_after = pool_after
+
+        for index in range(3, self.num_conv_layers + 1):
+            in_channels = channels[index - 2]
+            out_channels = channels[index - 1]
+            conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+            bn = nn.BatchNorm2d(out_channels)
+            if_layer = IF()
+            nn.init.kaiming_normal_(conv.weight, mode="fan_out", nonlinearity="relu")
+            nn.init.constant_(bn.weight, 1)
+            nn.init.zeros_(bn.bias)
+            setattr(self, f"conv{index}", conv)
+            setattr(self, f"bn{index}", bn)
+            setattr(self, f"if{index}", if_layer)
+
+        self.classifier = nn.Linear(channels[-1] * 7 * 7, num_classes)
+        nn.init.zeros_(self.classifier.bias)
+
+    def _pool_after_layer(self, x, index):
+        if index not in self.pool_after:
+            return x
+        pool_number = self.pool_after.index(index) + 1
+        return getattr(self, f"pool{pool_number}")(x)
+
+    def resolution_aware_noise_regularization(self, T=None, eps=1e-8):
+        t_eff = max(int(self.T if T is None else T), 1)
+        reg = None
+        for index in range(1, self.num_conv_layers + 1):
+            conv = getattr(self, f"conv{index}")
+            if_layer = getattr(self, f"if{index}")
+            level = float(if_layer.L)
+            threshold = float(if_layer.thresh.detach().clamp(min=eps).item())
+            omega = (level * level) / (
+                float(conv.weight.shape[0]) * float(t_eff) * threshold * threshold
+            )
+            term = conv.weight.pow(2).sum() * omega
+            reg = term if reg is None else reg + term
+        return reg
+
+    def forward_with_if_features(self, x):
+        T = self.T
+        if T > 0:
+            x = x.clone()
+            x = add_dimention(x, T)
+            x = self.merge(x)
+
+        x = self._apply_input_if_and_noise(x)
+        if T > 0:
+            schedule = self.spike_schedule
+            if schedule in ("weight_sign_pos_front", "weight_sign_neg_front"):
+                x = first_conv_with_weight_sign_schedule(
+                    x, T, self.conv1, schedule
+                )
+            else:
+                x = temporal_rearrange_after_first_if(x, T, schedule)
+                x = self.conv1(x)
+        else:
+            x = self.conv1(x)
+
+        x = self.if1(self.bn1(x))
+        feat_if1 = self._if_out_to_firing_map(x, self.if1, T)
+        x = self._pool_after_layer(x, 1)
+
+        feat_if2 = None
+        for index in range(2, self.num_conv_layers + 1):
+            x = getattr(self, f"conv{index}")(x)
+            x = getattr(self, f"bn{index}")(x)
+            x = getattr(self, f"if{index}")(x)
+            if index == 2:
+                feat_if2 = self._if_out_to_firing_map(x, self.if2, T)
+            x = self._pool_after_layer(x, index)
+
+        x = self.classifier(torch.flatten(x, 1))
+        if T > 0:
+            x = self.expand(x)
+        return x, feat_if1, feat_if2
+
+    def forward(self, x):
+        if self.T > 0:
+            x = add_dimention(x, self.T)
+            x = self.merge(x)
+
+        x = self._apply_input_if_and_noise(x)
+        if self.T > 0:
+            schedule = self.spike_schedule
+            if schedule in ("weight_sign_pos_front", "weight_sign_neg_front"):
+                x = first_conv_with_weight_sign_schedule(
+                    x, self.T, self.conv1, schedule
+                )
+            else:
+                x = temporal_rearrange_after_first_if(x, self.T, schedule)
+                x = self.conv1(x)
+        else:
+            x = self.conv1(x)
+
+        x = self.if1(self.bn1(x))
+        x = self._pool_after_layer(x, 1)
+
+        for index in range(2, self.num_conv_layers + 1):
+            x = getattr(self, f"conv{index}")(x)
+            x = getattr(self, f"bn{index}")(x)
+            x = getattr(self, f"if{index}")(x)
+            x = self._pool_after_layer(x, index)
+
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        if self.T > 0:
+            x = self.expand(x)
+        return x
+
+
 def cnn2_mnist(num_classes=10, c1=2, c2=4):
     return CNN2MNIST(num_classes=num_classes, c1=c1, c2=c2)
+
+
+def cnn4_mnist(num_classes=10, channels=(2, 4, 4, 4)):
+    return CNNDeepMNIST(num_classes=num_classes, channels=channels)
+
+
+def cnn6_mnist(num_classes=10, channels=(2, 4, 4, 4, 4, 4)):
+    return CNNDeepMNIST(num_classes=num_classes, channels=channels)
+
+
+def cnn8_mnist(num_classes=10, channels=(2, 4, 4, 4, 4, 4, 4, 4)):
+    return CNNDeepMNIST(num_classes=num_classes, channels=channels)
+
+
+def cnn10_mnist(num_classes=10, channels=(2, 4, 4, 4, 4, 4, 4, 4, 4, 4)):
+    return CNNDeepMNIST(num_classes=num_classes, channels=channels)
+
+
+def cnn6_vgg_mnist(num_classes=10, channels=(8, 8, 16, 16, 32, 32)):
+    return CNNDeepMNIST(
+        num_classes=num_classes,
+        channels=channels,
+        pool_after=(2, 4),
+    )
+
+
+def cnn6_narrow_staged_mnist(num_classes=10, channels=(2, 4, 4, 4, 4, 4)):
+    return CNNDeepMNIST(
+        num_classes=num_classes,
+        channels=channels,
+        pool_after=(2, 4),
+    )
+
+
+def cnn6_wide_early_mnist(num_classes=10, channels=(8, 8, 16, 16, 32, 32)):
+    return CNNDeepMNIST(
+        num_classes=num_classes,
+        channels=channels,
+        pool_after=(1, 2),
+    )
 
 
 # 旧版 checkpoint：nn.Sequential 命名为 features，下标与当前子模块对应关系
