@@ -66,6 +66,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42, help="Checkpoint seed / dataloader seed.")
     parser.add_argument("--noise-seed", type=int, default=20260809)
     parser.add_argument("--noise-repeats", type=int, default=5)
+    parser.add_argument(
+        "--noise-position",
+        default="post_input_if",
+        choices=["post_input_if", "pre_input_if"],
+        help="Where to inject first-layer Gaussian noise relative to the input IF.",
+    )
     parser.add_argument("--rms-calibration-batches", type=int, default=20)
     parser.add_argument(
         "--methods",
@@ -164,7 +170,7 @@ def _load_model(path: Path, args, device):
     if hasattr(model, "set_first_layer_input_noise_type"):
         model.set_first_layer_input_noise_type("gaussian")
     if hasattr(model, "set_first_layer_input_noise_position"):
-        model.set_first_layer_input_noise_position("post_input_if")
+        model.set_first_layer_input_noise_position(args.noise_position)
     model.set_first_layer_input_noise_sigma(0.0)
     return model
 
@@ -176,19 +182,34 @@ def _first_input_if(model) -> tuple[str, IF]:
     raise RuntimeError("No IF layer found for input-IF calibration")
 
 
-def _estimate_post_input_if_rms(model, loader, device, max_batches: int) -> float:
-    """RMS of clean first-IF outputs (the tensor that receives post_input_if noise)."""
+def _estimate_injection_site_rms(
+    model, loader, device, max_batches: int, noise_position: str
+) -> float:
+    """
+    RMS of the clean tensor that receives noise:
+      post_input_if -> first IF output
+      pre_input_if  -> first IF input (BN output)
+    """
     _, input_if = _first_input_if(model)
     total_sq = 0.0
     total_count = 0
 
-    def capture(_module, _inputs, output):
+    def _accumulate(tensor):
         nonlocal total_sq, total_count
-        detached = output.detach().float()
+        detached = tensor.detach().float()
         total_sq += float(detached.pow(2).sum().item())
         total_count += int(detached.numel())
 
-    handle = input_if.register_forward_hook(capture)
+    if noise_position == "pre_input_if":
+        def capture(_module, inputs):
+            _accumulate(inputs[0])
+
+        handle = input_if.register_forward_pre_hook(capture)
+    else:
+        def capture(_module, _inputs, output):
+            _accumulate(output)
+
+        handle = input_if.register_forward_hook(capture)
     try:
         model.set_first_layer_input_noise_sigma(0.0)
         with torch.no_grad():
@@ -199,15 +220,19 @@ def _estimate_post_input_if_rms(model, loader, device, max_batches: int) -> floa
     finally:
         handle.remove()
     if total_count <= 0:
-        raise RuntimeError("Could not estimate post-input-IF RMS")
+        raise RuntimeError(f"Could not estimate RMS at {noise_position}")
     return math.sqrt(total_sq / total_count)
 
 
 def _calibrate_scales(model, loader, device, args) -> dict[str, float]:
     _, input_if = _first_input_if(model)
     lam = float(input_if.thresh.detach().float().abs().clamp(min=1e-8).view(-1)[0].item())
-    rms = _estimate_post_input_if_rms(
-        model, loader, device, args.rms_calibration_batches
+    rms = _estimate_injection_site_rms(
+        model,
+        loader,
+        device,
+        args.rms_calibration_batches,
+        args.noise_position,
     )
     return {"lambda_input": lam, "rms_input": rms}
 
@@ -331,7 +356,7 @@ def _aggregate(raw_rows: list[dict]):
     return mean_rows, summary_rows
 
 
-def _plot(mean_rows: list[dict], out_dir: Path) -> None:
+def _plot(mean_rows: list[dict], out_dir: Path, noise_position: str) -> None:
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -401,16 +426,16 @@ def _plot(mean_rows: list[dict], out_dir: Path) -> None:
                 ax.set_xticks(snr_tick_xs)
                 ax.set_xticklabels(snr_tick_labels)
             ax.set_xlabel("SNR (dB)  [left = cleaner]")
-            ax.set_title("CIFAR-10 VGG16 post-input-IF noise (SNR-matched)")
+            ax.set_title(f"CIFAR-10 VGG16 {noise_position} (SNR-matched)")
         elif scale_mode == "absolute":
             ax.set_xlabel(r"Absolute $\sigma$")
-            ax.set_title("CIFAR-10 VGG16 post-input-IF noise (absolute)")
+            ax.set_title(f"CIFAR-10 VGG16 {noise_position} (absolute)")
         elif scale_mode == "lambda_relative":
             ax.set_xlabel(r"$\alpha$  ($\sigma=\alpha\lambda_{\mathrm{input}}$)")
-            ax.set_title("CIFAR-10 VGG16 post-input-IF noise (λ-relative)")
+            ax.set_title(f"CIFAR-10 VGG16 {noise_position} (λ-relative)")
         else:
-            ax.set_xlabel(r"$\alpha$  ($\sigma=\alpha\,\mathrm{RMS}(h_{\mathrm{input}})$)")
-            ax.set_title("CIFAR-10 VGG16 post-input-IF noise (activation-relative)")
+            ax.set_xlabel(r"$\alpha$  ($\sigma=\alpha\,\mathrm{RMS}(h)$)")
+            ax.set_title(f"CIFAR-10 VGG16 {noise_position} (activation-relative)")
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
         fig.tight_layout()
@@ -449,8 +474,9 @@ def main() -> None:
         model = _load_model(path, args, device)
         scales = _calibrate_scales(model, test_loader, device, args)
         print(
-            f"  λ_input={scales['lambda_input']:.6g}  "
-            f"RMS(h_input)={scales['rms_input']:.6g}",
+            f"  noise_position={args.noise_position}  "
+            f"λ_input={scales['lambda_input']:.6g}  "
+            f"RMS(h)={scales['rms_input']:.6g}",
             flush=True,
         )
 
@@ -490,7 +516,7 @@ def main() -> None:
                             "L": args.L,
                             "T": args.T,
                             "mode": args.mode,
-                            "noise_position": "post_input_if",
+                            "noise_position": args.noise_position,
                             "noise_type": "gaussian",
                             "scale_mode": scale_mode,
                             "level_name": level_name,
@@ -520,7 +546,7 @@ def main() -> None:
     print(f"[DONE] summary: {args.out_dir / 'relative_snr_noise_summary.csv'}", flush=True)
 
     if not args.no_plot:
-        _plot(mean_rows, args.out_dir)
+        _plot(mean_rows, args.out_dir, args.noise_position)
 
 
 if __name__ == "__main__":
