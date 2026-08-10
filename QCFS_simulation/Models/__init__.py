@@ -12,7 +12,7 @@ from .cnn_mnist import (
     cnn6_wide_early_mnist,
 )
 from .fc_mnist import fc2_mnist, fc3_mnist, fc3rev_mnist
-from .fc_cifar import fc2_cifar, fc3_cifar
+from .fc_cifar import fc2_cifar, fc3_cifar, fc5_cifar
 from .toy_diff1d import toy_diff1d
 from .VGG import vgg16, vgg19, vgg16_wobn
 from .ResNet import resnet18, resnet18_imagenet, resnet34, resnet34_imagenet
@@ -93,6 +93,21 @@ def _parse_cifar_fc3_variant(model_name: str):
     return None
 
 
+def _parse_cifar_fc5_variant(model_name: str):
+    """
+    Deep tapering BN-free CIFAR MLP.
+    Names: fc5_cifar / mlp_cifar / fc5_cifar_w{mult}
+    width_mult scales 1024-512-256-128 (default 1.0).
+    """
+    m = model_name.lower()
+    if m in ("fc5_cifar", "mlp_cifar", "mlp5_cifar", "fc5"):
+        return 1.0
+    match = re.fullmatch(r"(?:fc5|mlp5|mlp)(?:_cifar)?_w(\d+(?:\.\d+)?)", m)
+    if match:
+        return float(match.group(1))
+    return None
+
+
 def modelpool(model_name, dataset_name="mnist"):
     m = model_name.lower()
     d = dataset_name.lower().replace("-", "").replace("_", "")
@@ -144,6 +159,10 @@ def modelpool(model_name, dataset_name="mnist"):
         raise ValueError("未知数据集: %s" % (dataset_name,))
 
     if d in ("cifar10", "cifa10", "cifar100"):
+        # Prefer deep tapering MLP first (recommended default: fc5_cifar).
+        width_mult = _parse_cifar_fc5_variant(model_name)
+        if width_mult is not None:
+            return fc5_cifar(num_classes=num_classes, width_mult=width_mult)
         hidden3 = _parse_cifar_fc3_variant(model_name)
         if hidden3 is not None:
             return fc3_cifar(num_classes=num_classes, hidden_dim=hidden3)
@@ -153,7 +172,7 @@ def modelpool(model_name, dataset_name="mnist"):
 
     if m in ("cnn2", "cnn2_mnist"):
         raise ValueError(
-            "数据集 %s 请使用 VGG（-arch vgg16 / vgg19 / vgg16_wobn）或 BN-free MLP（fc3_cifar / fc2_cifar），勿用 cnn2"
+            "数据集 %s 请使用 VGG（-arch vgg16 / vgg19 / vgg16_wobn）或 BN-free MLP（fc5_cifar / fc3_cifar / fc2_cifar），勿用 cnn2"
             % (dataset_name,)
         )
     dropout = 0.5 if d in ("cifar10", "cifar100") else 0.0
@@ -173,6 +192,6 @@ def modelpool(model_name, dataset_name="mnist"):
         return vgg19(num_classes=num_classes, dropout=dropout)
     raise ValueError(
         "数据集 %s 下支持的模型: vgg16 | vgg16_wobn | vgg19 | resnet18 | resnet34 | "
-        "fc3_cifar[_hN] | fc2_cifar[_hN]，收到: %s"
+        "fc5_cifar[_wMULT] | fc3_cifar[_hN] | fc2_cifar[_hN]，收到: %s"
         % (dataset_name, model_name)
     )

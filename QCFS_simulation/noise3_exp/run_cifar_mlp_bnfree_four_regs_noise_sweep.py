@@ -69,8 +69,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--arch",
-        default="fc3_cifar_h512",
-        help="BN-free CIFAR MLP arch, e.g. fc3_cifar_h512 / fc2_cifar_h1024",
+        default="fc5_cifar",
+        help="BN-free CIFAR MLP arch, e.g. fc5_cifar / fc5_cifar_w2 / fc3_cifar_h512",
     )
     parser.add_argument(
         "--methods",
