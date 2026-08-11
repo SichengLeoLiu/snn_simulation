@@ -63,14 +63,28 @@ L1_RC = 1e-5
 WD_BASE = 5e-4
 
 METHOD_KEYS = ["mne_l2", "weight_decay", "l1"]
-ALLOWED_METHODS = ["mne_l2", "weight_decay", "l1", "no_regularization"]
+ALLOWED_METHODS = [
+    "mne_l2",
+    "mne_l2_all",
+    "weight_decay",
+    "weight_decay_weights_only",
+    "l1",
+    "no_regularization",
+]
 
 METHOD_ALIASES = {
     "weight_decay": "weight_decay",
     "wd": "weight_decay",
     "l2": "weight_decay",
+    "weight_decay_weights_only": "weight_decay_weights_only",
+    "wd_weights_only": "weight_decay_weights_only",
+    "l2_weights_only": "weight_decay_weights_only",
+    "l2_wo": "weight_decay_weights_only",
     "mne_l2": "mne_l2",
     "mnel2": "mne_l2",
+    "mne_l2_all": "mne_l2_all",
+    "mne_all": "mne_l2_all",
+    "mneall": "mne_l2_all",
     "l1": "l1",
     "no_regularization": "no_regularization",
     "no_reg": "no_regularization",
@@ -95,8 +109,18 @@ def configure_l1_rc(l1_rc: float) -> None:
             "reg_coeff": MNE_RC,
             "wd": 0.0,
         },
+        "mne_l2_all": {
+            "label": "mne_l2_all rc=1e-4",
+            "reg_coeff": MNE_RC,
+            "wd": 0.0,
+        },
         "weight_decay": {
             "label": "weight_decay",
+            "reg_coeff": None,
+            "wd": WD_BASE,
+        },
+        "weight_decay_weights_only": {
+            "label": "weight_decay_weights_only",
             "reg_coeff": None,
             "wd": WD_BASE,
         },
@@ -112,16 +136,23 @@ def configure_l1_rc(l1_rc: float) -> None:
         },
     }
     PLOT_ORDER = [
-        "mne_l2 rc=1e-4",
-        "weight_decay",
-        label,
         "no regularization",
+        "weight_decay",
+        "weight_decay_weights_only",
+        "mne_l2 rc=1e-4",
+        "mne_l2_all rc=1e-4",
+        label,
     ]
     LINE_STYLES = {
-        "mne_l2 rc=1e-4": {"color": "#ff7f0e", "label": "MNE-L2"},
-        "weight_decay": {"color": "#1f77b4", "label": "L2"},
-        label: {"color": "#2ca02c", "label": f"L1 ({format_rc_label(L1_RC)})"},
         "no regularization": {"color": "#7f7f7f", "label": "No-reg"},
+        "weight_decay": {"color": "#1f77b4", "label": "L2 (all-param WD)"},
+        "weight_decay_weights_only": {
+            "color": "#2ca02c",
+            "label": "L2 weights-only",
+        },
+        "mne_l2 rc=1e-4": {"color": "#ff7f0e", "label": "MNE-standard"},
+        "mne_l2_all rc=1e-4": {"color": "#d62728", "label": "MNE-all"},
+        label: {"color": "#9467bd", "label": f"L1 ({format_rc_label(L1_RC)})"},
     }
 
 
@@ -190,30 +221,67 @@ def build_suffix(method_key: str, seed: int, run_tag: Optional[str] = None) -> s
         return f"strict_seed{seed}_{mid}_none_l{LVAL}_{ARCH}"
     if method_key == "weight_decay":
         return f"strict_seed{seed}_{mid}_wd_l{LVAL}_{ARCH}"
+    if method_key == "weight_decay_weights_only":
+        return f"strict_seed{seed}_{mid}_wd_weights_only_l{LVAL}_{ARCH}"
     if method_key == "l1":
         return (
             f"strict_seed{seed}_{mid}_l1_l{LVAL}_{ARCH}"
             f"_rc{coeff_tag(METHOD_CONFIG['l1']['reg_coeff'])}"
         )
-    if method_key == "mne_l2":
+    if method_key in ("mne_l2", "mne_l2_all"):
         cfg = METHOD_CONFIG[method_key]
         reg_coeff = cfg["reg_coeff"]
         wd = cfg["wd"]
+        tag = "mne_l2_all" if method_key == "mne_l2_all" else "mne_l2"
         if wd > 0:
             return (
-                f"strict_seed{seed}_{mid}_mne_l2_wd_l{LVAL}_{ARCH}"
+                f"strict_seed{seed}_{mid}_{tag}_wd_l{LVAL}_{ARCH}"
                 f"_rc{coeff_tag(reg_coeff)}_wd{coeff_tag(wd)}"
             )
         return (
-            f"strict_seed{seed}_{mid}_mne_l2_l{LVAL}_{ARCH}"
+            f"strict_seed{seed}_{mid}_{tag}_l{LVAL}_{ARCH}"
             f"_rc{coeff_tag(reg_coeff)}"
         )
     raise ValueError(f"未知 method_key: {method_key!r}")
 
 
+def _mneablate_ckpt_path(dataset: str, method_key: str, seed: int) -> Optional[Path]:
+    """Reuse older mneablate suite checkpoints when available (seed42 typically)."""
+    ckpt_dir = ROOT / f"{dataset}-checkpoints"
+    if method_key == "mne_l2_all":
+        name = (
+            f"{ARCH}_L[{LVAL}]_mneablate_{dataset}_mne_l2_all"
+            f"_rc0p0001_seed{seed}_L{LVAL}_trainT0.pth"
+        )
+        return ckpt_dir / name
+    if method_key == "weight_decay_weights_only":
+        name = (
+            f"{ARCH}_L[{LVAL}]_mneablate_{dataset}_weight_decay_weights_only"
+            f"_rcnone_seed{seed}_L{LVAL}_trainT0.pth"
+        )
+        return ckpt_dir / name
+    if method_key == "mne_l2":
+        # Prefer strict-seed path; also allow old_detach mneablate alias.
+        name = (
+            f"{ARCH}_L[{LVAL}]_mneablate_{dataset}_old_detach"
+            f"_rc0p0001_seed{seed}_L{LVAL}_trainT0.pth"
+        )
+        return ckpt_dir / name
+    return None
+
+
 def ckpt_path(dataset: str, method_key: str, seed: int, run_tag: Optional[str] = None) -> Path:
-    suffix = build_suffix(method_key, seed, run_tag)
-    return ROOT / f"{dataset}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix}.pth"
+    primary = (
+        ROOT
+        / f"{dataset}-checkpoints"
+        / f"{ARCH}_L[{LVAL}]_{build_suffix(method_key, seed, run_tag)}.pth"
+    )
+    if primary.exists():
+        return primary
+    alt = _mneablate_ckpt_path(dataset, method_key, seed)
+    if alt is not None and alt.exists():
+        return alt
+    return primary
 
 
 def resolve_method(name: str) -> str:
@@ -249,21 +317,32 @@ def train_one(
     ckpt_save_mode: str = "best",
 ) -> Path:
     cfg = METHOD_CONFIG[method_key]
+    primary = (
+        ROOT
+        / f"{dataset}-checkpoints"
+        / f"{ARCH}_L[{LVAL}]_{build_suffix(method_key, seed, run_tag)}.pth"
+    )
+    if retrain and primary.exists():
+        primary.unlink()
+        print(f"[RETRAIN] removed {primary.name}", flush=True)
     ckpt = ckpt_path(dataset, method_key, seed, run_tag)
-    if retrain and ckpt.exists():
-        ckpt.unlink()
-        print(f"[RETRAIN] removed {ckpt.name}", flush=True)
     if ckpt.exists():
         print(f"[SKIP TRAIN] {ckpt.name}", flush=True)
         return ckpt
 
     wd = cfg["wd"]
-    if method_key in ("no_regularization", "weight_decay"):
+    if method_key == "no_regularization":
         regularizer, rc = "weight_decay", 1.0
+    elif method_key == "weight_decay":
+        regularizer, rc = "weight_decay", 1.0
+    elif method_key == "weight_decay_weights_only":
+        regularizer, rc = "weight_decay_weights_only", 1.0
     elif method_key == "l1":
         regularizer, rc = "l1", cfg["reg_coeff"]
     elif method_key == "mne_l2":
         regularizer, rc = "mne_l2", cfg["reg_coeff"]
+    elif method_key == "mne_l2_all":
+        regularizer, rc = "mne_l2_all", cfg["reg_coeff"]
     else:
         raise ValueError(f"未知 method_key: {method_key!r}")
 
@@ -303,7 +382,7 @@ def train_one(
         "--ckpt-save-mode",
         ckpt_save_mode,
     ]
-    if regularizer == "mne_l2":
+    if regularizer in ("mne_l2", "mne_l2_all"):
         cmd.append("--mne_detach_lambda")
 
     print(
@@ -639,7 +718,10 @@ def parse_args() -> argparse.Namespace:
         "--methods",
         nargs="+",
         default=None,
-        help="多方法列表（覆盖 --method），如：mne_l2 weight_decay no_regularization",
+        help=(
+            "多方法列表（覆盖 --method），如："
+            "mne_l2 mne_l2_all weight_decay weight_decay_weights_only no_regularization"
+        ),
     )
     parser.add_argument(
         "--seeds",
