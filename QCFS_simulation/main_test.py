@@ -143,8 +143,14 @@ parser.add_argument(
     "--first_layer_noise_position",
     type=str,
     default="post_input_if",
-    choices=["post_input_if", "pre_input_if", "input_image"],
-    help="输入噪声注入位置：input_if 后（默认）/ input_if 前 / 直接输入图像",
+    choices=["post_input_if", "pre_input_if", "pre_first_conv", "input_image"],
+    help=(
+        "输入噪声注入位置："
+        "post_input_if=首个IF后（默认）；"
+        "pre_input_if=首个IF前（VGG为BN后）；"
+        "pre_first_conv=入口展开T后、首个Conv/BN前；"
+        "input_image=直接加到输入图像"
+    ),
 )
 parser.add_argument(
     "--noise_sweep",
@@ -501,6 +507,7 @@ def main():
     use_model_side_noise = args.first_layer_noise_position in (
         "post_input_if",
         "pre_input_if",
+        "pre_first_conv",
     )
     if use_model_side_noise and hasattr(model, "set_first_layer_input_noise_sigma"):
         model.set_first_layer_input_noise_sigma(args.first_layer_noise_sigma)

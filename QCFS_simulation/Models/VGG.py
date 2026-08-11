@@ -61,6 +61,13 @@ def _inject_noise_tensor(x, sigma, noise_type, T):
     return x + noise * sigma
 
 
+# Noise injection sites for VGG layer1 (Conv -> BN -> IF ...):
+#   pre_first_conv  : after temporal expand/merge, before first Conv/BN
+#   pre_input_if    : after first Conv/BN, before first IF
+#   post_input_if   : after first IF (default)
+NOISE_POSITIONS = ("post_input_if", "pre_input_if", "pre_first_conv")
+
+
 def _forward_sequential_first_if_spike_schedule(
     seq,
     x,
@@ -70,15 +77,21 @@ def _forward_sequential_first_if_spike_schedule(
     noise_type="gaussian",
     noise_position="post_input_if",
 ):
+    pos = str(noise_position).strip().lower()
+    if pos == "pre_first_conv":
+        x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
+        noise_sigma = 0.0
     if_idx, conv_idx = _first_if_and_next_conv_idx(seq)
     for i in range(if_idx):
         x = seq[i](x)
-    if noise_position == "pre_input_if":
+    if pos == "pre_input_if":
         x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
         x = seq[if_idx](x)
     else:
+        # post_input_if (default), or pre_first_conv with noise already applied
         x = seq[if_idx](x)
-        x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
+        if pos != "pre_first_conv":
+            x = _inject_noise_tensor(x, noise_sigma, noise_type, T)
     sch = spike_schedule
     if sch in ("weight_sign_pos_front", "weight_sign_neg_front"):
         x = first_conv_with_weight_sign_schedule(x, T, seq[conv_idx], sch)
@@ -99,17 +112,22 @@ def _forward_sequential_first_if_no_schedule(
     noise_position="post_input_if",
 ):
     """
-    T=0 路径：在 layer1 的第一个 IF 后注入噪声，再继续后续层。
+    T=0 路径：按 noise_position 在 layer1 入口 / 首个 IF 前 / 首个 IF 后注入噪声。
     """
+    pos = str(noise_position).strip().lower()
+    if pos == "pre_first_conv":
+        x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
+        noise_sigma = 0.0
     if_idx, _ = _first_if_and_next_conv_idx(seq)
     for i in range(if_idx):
         x = seq[i](x)
-    if noise_position == "pre_input_if":
+    if pos == "pre_input_if":
         x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
         x = seq[if_idx](x)
     else:
         x = seq[if_idx](x)
-        x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
+        if pos != "pre_first_conv":
+            x = _inject_noise_tensor(x, noise_sigma, noise_type, 0)
     for j in range(if_idx + 1, len(seq)):
         x = seq[j](x)
     return x
@@ -258,10 +276,10 @@ class VGG(nn.Module):
 
     def set_first_layer_input_noise_position(self, position="post_input_if"):
         pos = str(position).strip().lower()
-        if pos not in ("post_input_if", "pre_input_if"):
+        if pos not in NOISE_POSITIONS:
             raise ValueError(
-                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
-                % (position,)
+                "first_layer_input_noise_position 必须为 %s，收到: %s"
+                % (list(NOISE_POSITIONS), position)
             )
         self.first_layer_input_noise_position = pos
 
@@ -438,10 +456,10 @@ class VGG_woBN(nn.Module):
 
     def set_first_layer_input_noise_position(self, position="post_input_if"):
         pos = str(position).strip().lower()
-        if pos not in ("post_input_if", "pre_input_if"):
+        if pos not in NOISE_POSITIONS:
             raise ValueError(
-                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
-                % (position,)
+                "first_layer_input_noise_position 必须为 %s，收到: %s"
+                % (list(NOISE_POSITIONS), position)
             )
         self.first_layer_input_noise_position = pos
 

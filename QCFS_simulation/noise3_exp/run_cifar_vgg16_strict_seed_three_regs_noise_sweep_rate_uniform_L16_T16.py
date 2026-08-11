@@ -63,6 +63,7 @@ L1_RC = 1e-5
 WD_BASE = 5e-4
 
 METHOD_KEYS = ["mne_l2", "weight_decay", "l1"]
+ALLOWED_METHODS = ["mne_l2", "weight_decay", "l1", "no_regularization"]
 
 METHOD_ALIASES = {
     "weight_decay": "weight_decay",
@@ -114,11 +115,13 @@ def configure_l1_rc(l1_rc: float) -> None:
         "mne_l2 rc=1e-4",
         "weight_decay",
         label,
+        "no regularization",
     ]
     LINE_STYLES = {
         "mne_l2 rc=1e-4": {"color": "#ff7f0e", "label": "MNE-L2"},
         "weight_decay": {"color": "#1f77b4", "label": "L2"},
         label: {"color": "#2ca02c", "label": f"L1 ({format_rc_label(L1_RC)})"},
+        "no regularization": {"color": "#7f7f7f", "label": "No-reg"},
     }
 
 
@@ -434,7 +437,7 @@ def upsert_run_rows(
 def aggregate_rows(raw_rows: list[dict]) -> list[dict]:
     bucket: dict[tuple[str, str, float], list[float]] = defaultdict(list)
     for row in raw_rows:
-        if row["method"] not in METHOD_KEYS:
+        if row["method"] not in ALLOWED_METHODS:
             continue
         bucket[(row["method"], row["label"], float(row["sigma"]))].append(
             float(row["acc"])
@@ -498,7 +501,9 @@ def plot_results(
             s = [float(r["acc_std"]) for r in rr]
             all_y.extend([yy - ss for yy, ss in zip(y, s)])
             all_y.extend([yy + ss for yy, ss in zip(y, s)])
-            style = LINE_STYLES[label]
+            style = LINE_STYLES.get(
+                label, {"color": "#333333", "label": label}
+            )
             ax.plot(
                 x,
                 y,
@@ -628,7 +633,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--method",
         default="all",
-        help="l1 | weight_decay | mne_l2 | no_regularization | all（默认 all=L1/L2/MNE）",
+        help="单方法：l1 | weight_decay | mne_l2 | no_regularization | all（默认 all=L1/L2/MNE）",
+    )
+    parser.add_argument(
+        "--methods",
+        nargs="+",
+        default=None,
+        help="多方法列表（覆盖 --method），如：mne_l2 weight_decay no_regularization",
     )
     parser.add_argument(
         "--seeds",
@@ -678,9 +689,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--legend-font-size", type=float, default=18.0)
     parser.add_argument(
         "--first-layer-noise-position",
-        choices=["post_input_if", "pre_input_if", "input_image"],
+        choices=["post_input_if", "pre_input_if", "pre_first_conv", "input_image"],
         default="post_input_if",
-        help="噪声注入位置：post_input_if(默认) / pre_input_if / input_image",
+        help=(
+            "噪声注入位置：post_input_if(默认) / pre_input_if / "
+            "pre_first_conv(入口展开T后、首个Conv/BN前) / input_image"
+        ),
     )
     parser.add_argument(
         "--l1-rc",
@@ -710,13 +724,16 @@ def main() -> None:
         return
 
     seeds = [args.seed] if args.seed is not None else args.seeds
-    if args.method.strip().lower() == "all":
+    if args.methods:
+        method_keys = [resolve_method(m) for m in args.methods]
+    elif args.method.strip().lower() == "all":
         method_keys = list(METHOD_KEYS)
     else:
         method_keys = [resolve_method(args.method)]
 
     print(
-        f"\n=== {dataset.upper()} VGG16 strict-seed three-regs (L1 / L2 / MNE-L2) ===",
+        f"\n=== {dataset.upper()} VGG16 strict-seed regs "
+        f"(noise_pos={args.first_layer_noise_position}) ===",
         flush=True,
     )
     print(
