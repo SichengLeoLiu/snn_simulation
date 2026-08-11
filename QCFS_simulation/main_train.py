@@ -18,6 +18,8 @@ from utils import (
     compute_mne_l2_all_regularization,
     compute_stable_mne_l2_regularization,
     compute_hinge_mne_regularization,
+    compute_pc_mne_regularization,
+    compute_margin_mne_regularization,
     compute_conv_mne_l2_regularization,
     compute_l1_regularization,
     compute_l1_all_regularization,
@@ -98,6 +100,8 @@ parser.add_argument(
         "mne_l2_all",
         "stable_mne_l2",
         "hinge_mne",
+        "pc_mne",
+        "margin_mne",
         "spectral_mne",
         "conv_mne_l2",
         "l1",
@@ -119,7 +123,7 @@ parser.add_argument(
         "threshold_l2",
         "l2_sp",
     ],
-    help="正则方式：weight_decay（默认）| weight_decay_weights_only | resolution_aware | mne_l2 | mne_l2_all | stable_mne_l2 | hinge_mne | spectral_mne | conv_mne_l2 | l1 | l1_all | manual_l2 | manual_l2_all | manual_l2_w_bn | manual_l2_w_bn_gamma | manual_l2_w_bn_beta | manual_l2_w_if | manual_l2_w_bn_if | elastic_net_all | scale_l2 | group_lasso | spectral_norm | orthogonal | effective_l2 | threshold_l2 | l2_sp",
+    help="正则方式：... | hinge_mne | pc_mne | margin_mne | spectral_mne | ...",
 )
 parser.add_argument(
     "--reg_coeff",
@@ -255,6 +259,48 @@ parser.add_argument(
     "--hinge_mne_no_detach_bn_affine",
     action="store_true",
     help="--regularizer=hinge_mne 时不 detach BN affine gamma",
+)
+parser.add_argument(
+    "--pc_mne_sigma",
+    type=float,
+    default=1.0,
+    help="--regularizer=pc_mne/margin_mne 时理论噪声强度 σ（默认 1.0）",
+)
+parser.add_argument(
+    "--pc_mne_protocol",
+    type=str,
+    default="snn_indep",
+    choices=["snn_indep", "ann_qcfs", "snn_shared", "pre_first_conv"],
+    help="噪声尺度 a：snn_indep/pre_first_conv→√T；ann_qcfs→L；snn_shared→T",
+)
+parser.add_argument(
+    "--pc_mne_eval_T",
+    type=int,
+    default=16,
+    help="PC/Margin-MNE 预测 SNN 测试时间步 T（默认 16）",
+)
+parser.add_argument(
+    "--pc_mne_detach_lambda",
+    action="store_true",
+    help="PC/Margin-MNE 对 IF λ 使用 stop-gradient（默认允许回传到 λ）",
+)
+parser.add_argument(
+    "--pc_mne_lambda_log_coeff",
+    type=float,
+    default=0.0,
+    help="可选 (logλ-logλ_ref)^2 系数，默认 0",
+)
+parser.add_argument(
+    "--pc_mne_lambda_ref",
+    type=float,
+    default=1.0,
+    help="λ log-penalty 参考值",
+)
+parser.add_argument(
+    "--margin_mne_tau",
+    type=float,
+    default=2.0,
+    help="--regularizer=margin_mne 的最小 ρ=d/s 目标（默认 2）",
 )
 parser.add_argument(
     "--conv_mne_no_detach_lambda",
@@ -451,6 +497,33 @@ def main():
             normalize_by_fan_in=args.hinge_mne_normalize_by_fan_in,
             layer_reduction=args.hinge_mne_layer_reduce,
         )
+    elif args.regularizer == "pc_mne":
+        reg_loss_fn = lambda m, t, q: compute_pc_mne_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            noise_sigma=args.pc_mne_sigma,
+            protocol=args.pc_mne_protocol,
+            eval_T=args.pc_mne_eval_T,
+            eps=args.mne_eps,
+            detach_lambda=args.pc_mne_detach_lambda,
+            lambda_log_coeff=args.pc_mne_lambda_log_coeff,
+            lambda_ref=args.pc_mne_lambda_ref,
+            first_layer_only=True,
+        )
+    elif args.regularizer == "margin_mne":
+        reg_loss_fn = lambda m, t, q: compute_margin_mne_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            noise_sigma=args.pc_mne_sigma,
+            protocol=args.pc_mne_protocol,
+            eval_T=args.pc_mne_eval_T,
+            tau=args.margin_mne_tau,
+            eps=args.mne_eps,
+            detach_lambda=args.pc_mne_detach_lambda,
+            lambda_log_coeff=args.pc_mne_lambda_log_coeff,
+            lambda_ref=args.pc_mne_lambda_ref,
+            first_layer_only=True,
+        )
     elif args.regularizer == "spectral_mne":
         reg_loss_fn = lambda m, t, q: compute_spectral_mne_regularization(
             m,
@@ -635,6 +708,23 @@ def main():
                 args.hinge_mne_layer_reduce,
             )
         )
+    if args.regularizer in ("pc_mne", "margin_mne"):
+        logger.info(
+            "%s: first_layer_only=True, sigma=%.6g, protocol=%s, eval_T=%d, "
+            "detach_lambda=%s, lambda_log_coeff=%.3g, lambda_ref=%.3g, "
+            "warmup=%d, margin_tau=%.3g, optimizer_wd=0 (no BN/IF L2)"
+            % (
+                args.regularizer,
+                args.pc_mne_sigma,
+                args.pc_mne_protocol,
+                args.pc_mne_eval_T,
+                str(bool(args.pc_mne_detach_lambda)),
+                args.pc_mne_lambda_log_coeff,
+                args.pc_mne_lambda_ref,
+                args.reg_warmup_epochs,
+                args.margin_mne_tau,
+            )
+        )
     if args.regularizer == "spectral_mne":
         logger.info(
             "spectral_mne: L=%d, eps=%.3e, power_iters=%d, detach_lambda=%s, detach_bn_stats=%s, detach_bn_affine=%s, layer_reduce=%s"
@@ -792,6 +882,19 @@ def main():
                     epoch, args.epochs, loss, acc
                 )
             )
+            if args.regularizer in ("pc_mne", "margin_mne") and hasattr(model, "_pc_mne_stats"):
+                st = model._pc_mne_stats
+                logger.info(
+                    "  pc_mne_stats: zero_rate={:.4f} sat_rate={:.4f} mean_s={:.4g} "
+                    "mean_d={:.4g} mean_rho={} lambda={:.4g}".format(
+                        float(st.get("zero_rate", float("nan"))),
+                        float(st.get("sat_rate", float("nan"))),
+                        float(st.get("mean_s", float("nan"))),
+                        float(st.get("mean_d", float("nan"))),
+                        ("%.4g" % st["mean_rho"]) if "mean_rho" in st else "n/a",
+                        float(st.get("lambda", float("nan"))),
+                    )
+                )
             scheduler.step()
             tmp = val(model, test_loader, T=args.time, device=device)
             logger.info(

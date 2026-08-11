@@ -118,6 +118,9 @@ class IF(nn.Module):
         self.scaling_factor = scaling_factor
         self.mode = 'normal'
         self.pattern_table = None
+        # Populated during T=0 QCFS forward for PC-MNE / Margin-MNE.
+        self.last_pre_quant = None
+        self.last_quant_stats = None
 
     def forward(self, x, return_mem=False):
         """
@@ -177,9 +180,18 @@ class IF(nn.Module):
             # T=0：thresh 可学习，除法前 clamp 正下界，避免 lr 大时 thresh→0 出现 NaN
             eps = 1e-3
             th = self.thresh.clamp(min=eps)
-            x = x / th
-            x = torch.clamp(x, 0, 1)
-            x = myfloor(x * self.L + 0.5) / self.L
+            # Keep gradient for margin-based regs; store physical pre-quant activation.
+            self.last_pre_quant = x
+            x_over_th = x / th
+            x_clamped = torch.clamp(x_over_th, 0, 1)
+            with torch.no_grad():
+                zero_rate = float((x_over_th <= 0).float().mean().item())
+                sat_rate = float((x_over_th >= 1).float().mean().item())
+                self.last_quant_stats = {
+                    "zero_rate": zero_rate,
+                    "sat_rate": sat_rate,
+                }
+            x = myfloor(x_clamped * self.L + 0.5) / self.L
             x = x * th
             if return_mem:
                 # T=0 模式下，膜电位就是输入本身

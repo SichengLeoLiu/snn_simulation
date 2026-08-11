@@ -1,4 +1,5 @@
 import time
+import math
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -1004,6 +1005,280 @@ def compute_hinge_mne_regularization(
         return torch.zeros((), device=p.device, dtype=p.dtype)
     stacked = torch.stack([term.reshape(()) for term in terms])
     return stacked.mean() if layer_reduction == "mean" else stacked.sum()
+
+
+def _standard_normal_cdf(x: torch.Tensor) -> torch.Tensor:
+    return 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
+
+
+def _first_matched_conv_bn_if(model):
+    """Return (weight_name, conv/linear, bn_or_None, if_mod) for the first matched layer."""
+    module_map = dict(model.named_modules())
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        if getattr(layer, "weight", None) is None:
+            continue
+        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        if if_mod is None:
+            continue
+        return lname, layer, bn_mod, if_mod
+    return None, None, None, None
+
+
+def _bn_fold_per_out_l2(weight: torch.Tensor, bn_mod, eps: float = 1e-6) -> torch.Tensor:
+    """Per-output-channel ||γ W / sqrt(v)||_2 for Conv/Linear weights."""
+    w_eff = weight
+    if bn_mod is not None:
+        bn_eps = float(getattr(bn_mod, "eps", eps))
+        gamma = bn_mod.weight.to(device=weight.device, dtype=weight.dtype)
+        var = bn_mod.running_var.detach().to(device=weight.device, dtype=weight.dtype).clamp(min=bn_eps)
+        scale = gamma / torch.sqrt(var + bn_eps)
+        view_shape = [scale.shape[0]] + [1] * (weight.dim() - 1)
+        w_eff = weight * scale.view(*view_shape)
+    w_flat = w_eff.reshape(w_eff.shape[0], -1)
+    return torch.linalg.vector_norm(w_flat, ord=2, dim=1)
+
+
+def _noise_scale_factor(protocol: str, quant_level: int, eval_T: int) -> float:
+    """
+    Scale a in s = a * σ / λ * ||W̃||:
+      ann_qcfs: a = L
+      snn_indep: a = sqrt(T)   (independent noise each timestep, then accumulate)
+      snn_shared: a = T       (same noise shared across timesteps)
+    """
+    p = str(protocol).strip().lower()
+    if p in ("ann", "ann_qcfs", "l"):
+        return float(quant_level)
+    if p in ("snn_indep", "indep", "sqrt_t", "pre_first_conv"):
+        return math.sqrt(max(float(eval_T), 1.0))
+    if p in ("snn_shared", "shared", "t"):
+        return float(max(eval_T, 1))
+    raise ValueError(f"Unknown pc_mne noise protocol={protocol!r}")
+
+
+def _pc_mne_channel_noise_std(
+    model,
+    quant_level: int,
+    noise_sigma: float,
+    protocol: str = "snn_indep",
+    eval_T: int = 16,
+    eps: float = 1e-6,
+    detach_lambda: bool = False,
+):
+    """
+    First-layer per-channel theoretical noise std on QCFS-normalized scale r=Lz/λ:
+      s_c = (a σ / λ) * ||W̃_c||_2
+    Returns (s_per_channel [C], if_mod, lam, stats_dict) or (None, ...).
+    """
+    _, layer, bn_mod, if_mod = _first_matched_conv_bn_if(model)
+    if layer is None or if_mod is None:
+        return None, None, None, {}
+    if getattr(if_mod, "last_pre_quant", None) is None:
+        return None, if_mod, None, {"warn": "missing_last_pre_quant"}
+
+    per_out = _bn_fold_per_out_l2(layer.weight, bn_mod, eps=eps)
+    lam_min = max(eps, 1e-3)
+    lam = if_mod.thresh.to(device=per_out.device, dtype=per_out.dtype).clamp(min=lam_min).view(-1)[0]
+    if detach_lambda:
+        lam = lam.detach()
+    a = _noise_scale_factor(protocol, quant_level, eval_T)
+    # On r-scale: r = L z / λ, so noise on r has std (L/λ)*σ_z with σ_z = σ*||W̃||
+    # User writes s = a σ / λ * ||W̃|| with a=L for ANN, so s is already on the r = Lz/λ scale
+    # when a=L: s = L σ /λ ||W|| = std of (L/λ * δz). Good.
+    s = (float(a) * float(noise_sigma) / (lam + eps)) * per_out
+    stats = {
+        "lambda": float(lam.detach().item()),
+        "a": float(a),
+        "noise_sigma": float(noise_sigma),
+        "mean_s": float(s.detach().mean().item()),
+    }
+    quant_stats = getattr(if_mod, "last_quant_stats", None)
+    if isinstance(quant_stats, dict):
+        stats.update(quant_stats)
+    return s, if_mod, lam, stats
+
+
+def _activation_boundary_distances(r: torch.Tensor, quant_level: int, eps: float = 1e-6):
+    """
+    For normalized activation r = L z / λ:
+      boundaries b_k = k + 1/2, k = 0..L-1
+    Returns (d_left, d_right, mask_left, mask_right) with detached boundary indices.
+    """
+    L = float(quant_level)
+    # Interior left/right half-integer boundaries around r.
+    b_left = torch.floor(r + 0.5) - 0.5
+    b_right = b_left + 1.0
+    b_left = b_left.detach()
+    b_right = b_right.detach()
+
+    d_left = (r - b_left).clamp(min=0.0)
+    d_right = (b_right - r).clamp(min=0.0)
+
+    # Zero / below: only upward crossing at 0.5 can change clamp(round,0,L).
+    # Saturate / above L: only downward crossing at L-0.5.
+    below = r <= 0.0
+    above = r >= L
+    interior = ~(below | above)
+
+    d_left_eff = torch.where(below, torch.zeros_like(d_left), d_left)
+    d_right_eff = torch.where(above, torch.zeros_like(d_right), d_right)
+    # For below: distance to +0.5
+    d_right_eff = torch.where(below, (0.5 - r).clamp(min=0.0), d_right_eff)
+    # For above: distance to L-0.5
+    d_left_eff = torch.where(above, (r - (L - 0.5)).clamp(min=0.0), d_left_eff)
+
+    use_left = interior | above
+    use_right = interior | below
+    return d_left_eff, d_right_eff, use_left, use_right
+
+
+def compute_pc_mne_regularization(
+    model,
+    quant_level: int,
+    noise_sigma: float = 1.0,
+    protocol: str = "snn_indep",
+    eval_T: int = 16,
+    eps: float = 1e-6,
+    detach_lambda: bool = False,
+    lambda_log_coeff: float = 0.0,
+    lambda_ref: float = 1.0,
+    first_layer_only: bool = True,
+):
+    """
+    PC-MNE: mean Gaussian crossing probability on first-layer QCFS activations.
+
+      R = mean_i [ Φ(-d_i^- / s_i) + Φ(-d_i^+ / s_i) ]
+
+    Uses IF.last_pre_quant from the just-finished forward. Boundary indices are
+    detached; distances and weights keep gradients. BN γ keeps grad via BN-fold;
+    BN running_var is detached. No ordinary L2 on BN β / IF λ.
+    """
+    if not first_layer_only:
+        raise NotImplementedError("PC-MNE v1 only supports first_layer_only=True")
+    s_c, if_mod, lam, stats = _pc_mne_channel_noise_std(
+        model,
+        quant_level=quant_level,
+        noise_sigma=noise_sigma,
+        protocol=protocol,
+        eval_T=eval_T,
+        eps=eps,
+        detach_lambda=detach_lambda,
+    )
+    if s_c is None or if_mod is None or getattr(if_mod, "last_pre_quant", None) is None:
+        p = next(model.parameters(), None)
+        return torch.zeros((), device=p.device if p is not None else "cpu")
+
+    z = if_mod.last_pre_quant
+    # r = L z / λ  (QCFS-normalized)
+    r = float(quant_level) * z / (lam + eps)
+    d_left, d_right, use_left, use_right = _activation_boundary_distances(r, quant_level, eps=eps)
+
+    # Broadcast per-channel s to activation shape.
+    if z.dim() == 4:
+        # [B,C,H,W]
+        s = s_c.view(1, -1, 1, 1).to(device=z.device, dtype=z.dtype)
+    elif z.dim() == 2:
+        s = s_c.view(1, -1).to(device=z.device, dtype=z.dtype)
+    else:
+        # Fallback: scalar mean s
+        s = s_c.mean().to(device=z.device, dtype=z.dtype)
+
+    s_safe = s + eps
+    term = torch.zeros_like(r)
+    term = term + torch.where(
+        use_left,
+        _standard_normal_cdf(-(d_left) / s_safe),
+        torch.zeros_like(r),
+    )
+    term = term + torch.where(
+        use_right,
+        _standard_normal_cdf(-(d_right) / s_safe),
+        torch.zeros_like(r),
+    )
+    loss = term.mean()
+
+    if lambda_log_coeff > 0:
+        lam_ref = max(float(lambda_ref), eps)
+        loss = loss + float(lambda_log_coeff) * (torch.log(lam + eps) - math.log(lam_ref)).pow(2)
+
+    model._pc_mne_stats = {
+        **stats,
+        "pc_mne": float(loss.detach().item()),
+        "mean_d": float(torch.minimum(d_left, d_right).detach().mean().item()),
+    }
+    return loss
+
+
+def compute_margin_mne_regularization(
+    model,
+    quant_level: int,
+    noise_sigma: float = 1.0,
+    protocol: str = "snn_indep",
+    eval_T: int = 16,
+    tau: float = 2.0,
+    eps: float = 1e-6,
+    detach_lambda: bool = False,
+    lambda_log_coeff: float = 0.0,
+    lambda_ref: float = 1.0,
+    first_layer_only: bool = True,
+):
+    """
+    Margin-MNE hinge on per-activation ρ = d / s:
+
+      R = mean_i relu(τ - d_i / (s_i+eps))^2
+
+    where d_i is distance to the nearest effective QCFS boundary.
+    """
+    if tau <= 0:
+        raise ValueError(f"tau must be positive, got {tau}")
+    if not first_layer_only:
+        raise NotImplementedError("Margin-MNE v1 only supports first_layer_only=True")
+    s_c, if_mod, lam, stats = _pc_mne_channel_noise_std(
+        model,
+        quant_level=quant_level,
+        noise_sigma=noise_sigma,
+        protocol=protocol,
+        eval_T=eval_T,
+        eps=eps,
+        detach_lambda=detach_lambda,
+    )
+    if s_c is None or if_mod is None or getattr(if_mod, "last_pre_quant", None) is None:
+        p = next(model.parameters(), None)
+        return torch.zeros((), device=p.device if p is not None else "cpu")
+
+    z = if_mod.last_pre_quant
+    r = float(quant_level) * z / (lam + eps)
+    d_left, d_right, use_left, use_right = _activation_boundary_distances(r, quant_level, eps=eps)
+    # Nearest effective boundary distance.
+    d_near = torch.where(
+        use_left & use_right,
+        torch.minimum(d_left, d_right),
+        torch.where(use_left, d_left, d_right),
+    )
+
+    if z.dim() == 4:
+        s = s_c.view(1, -1, 1, 1).to(device=z.device, dtype=z.dtype)
+    elif z.dim() == 2:
+        s = s_c.view(1, -1).to(device=z.device, dtype=z.dtype)
+    else:
+        s = s_c.mean().to(device=z.device, dtype=z.dtype)
+
+    rho = d_near / (s + eps)
+    loss = F.relu(float(tau) - rho).pow(2).mean()
+
+    if lambda_log_coeff > 0:
+        lam_ref = max(float(lambda_ref), eps)
+        loss = loss + float(lambda_log_coeff) * (torch.log(lam + eps) - math.log(lam_ref)).pow(2)
+
+    model._pc_mne_stats = {
+        **stats,
+        "margin_mne": float(loss.detach().item()),
+        "mean_rho": float(rho.detach().mean().item()),
+        "mean_d": float(d_near.detach().mean().item()),
+        "tau": float(tau),
+    }
+    return loss
 
 
 def compute_conv_mne_l2_regularization(
