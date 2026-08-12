@@ -30,7 +30,7 @@ module purge
 module use /g/data/dk92/apps/Modules/modulefiles
 module load NCI-ai-ml/24.11
 
-export CIFAR_ROOT="${CIFAR_ROOT:-/scratch/gs14/sl9144/datasets}"
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
 export CIFAR_BATCH="${CIFAR_BATCH:-128}"
 export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
 export OMP_NUM_THREADS=1
