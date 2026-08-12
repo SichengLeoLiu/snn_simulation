@@ -6,6 +6,13 @@ import torch.optim
 from Models import modelpool
 from Models.spike_temporal_adjust import SPIKE_SCHEDULE_MODES
 from Preprocess import datapool
+from grad_probe import (
+    append_probe_csv,
+    parse_probe_epochs,
+    probe_ce_vs_reg_grads,
+    stage_name_for_epoch,
+    summarize_probe_rows,
+)
 from utils import (
     train,
     val,
@@ -328,6 +335,27 @@ parser.add_argument(
     type=str,
     choices=["best", "last"],
     help="checkpoint 保存策略：best=验证集最优（默认），last=仅保存最后一个 epoch",
+)
+parser.add_argument(
+    "--grad_probe",
+    action="store_true",
+    help=(
+        "在指定 epoch 结束后，用 1 个 train batch 分解 CE vs 显式正则对 "
+        "IF.lambda / BN.gamma 的梯度（方向 cosine + L2 范数）；"
+        "需要显式正则（如 manual_l2 / mne_l2），不适用于纯 optimizer weight_decay"
+    ),
+)
+parser.add_argument(
+    "--grad_probe_epochs",
+    default="auto",
+    type=str,
+    help="grad probe 的 0-based epoch 列表，逗号分隔；auto=初期/中期/末期各一次",
+)
+parser.add_argument(
+    "--grad_probe_csv",
+    default="",
+    type=str,
+    help="grad probe CSV 路径；默认写到 checkpoint 目录 <identifier>_grad_probe.csv",
 )
 
 args = parser.parse_args()
@@ -826,6 +854,52 @@ def main():
         warmup_scale = min(1.0, float(epoch + 1) / float(args.reg_warmup_epochs))
         return args.reg_coeff * warmup_scale
 
+    probe_epochs = set()
+    probe_csv_path = None
+    probe_batch = None
+    if args.grad_probe:
+        if reg_loss_fn is None:
+            raise ValueError(
+                "--grad_probe 需要显式正则（例如 --regularizer manual_l2 或 mne_l2）；"
+                "weight_decay / weight_decay_weights_only 没有可分解的 reg loss"
+            )
+        probe_epochs = set(parse_probe_epochs(args.grad_probe_epochs, args.epochs))
+        probe_csv_path = (
+            args.grad_probe_csv
+            if args.grad_probe_csv
+            else os.path.join(log_dir, "%s_grad_probe.csv" % (identifier,))
+        )
+        probe_images, probe_labels = next(iter(train_loader))
+        probe_batch = (probe_images, probe_labels)
+        logger.info(
+            "grad_probe enabled: epochs=%s csv=%s"
+            % (sorted(probe_epochs), probe_csv_path)
+        )
+
+    def _maybe_run_grad_probe(epoch: int, epoch_reg_coeff: float) -> None:
+        if epoch not in probe_epochs or probe_batch is None:
+            return
+        stage = stage_name_for_epoch(epoch, sorted(probe_epochs))
+        images, labels = probe_batch
+        rows = probe_ce_vs_reg_grads(
+            model,
+            images,
+            labels,
+            criterion,
+            reg_loss_fn=reg_loss_fn,
+            reg_coeff=epoch_reg_coeff,
+            T=args.time,
+            quant_level=args.L,
+            stage=stage,
+            epoch=epoch,
+            epochs=args.epochs,
+            regularizer=args.regularizer,
+        )
+        append_probe_csv(probe_csv_path, rows)
+        logger.info("grad_probe stage=%s epoch=%d" % (stage, epoch))
+        for line in summarize_probe_rows(rows):
+            logger.info(line)
+
     for epoch in range(args.epochs):
         epoch_reg_coeff = _epoch_reg_coeff(epoch)
         if is_diff1d:
@@ -845,6 +919,7 @@ def main():
                     epoch, args.epochs, loss, mae
                 )
             )
+            _maybe_run_grad_probe(epoch, epoch_reg_coeff)
             scheduler.step()
             tmp = val_reg(
                 model, test_loader, T=args.time, device=device
@@ -882,6 +957,7 @@ def main():
                     epoch, args.epochs, loss, acc
                 )
             )
+            _maybe_run_grad_probe(epoch, epoch_reg_coeff)
             if args.regularizer in ("pc_mne", "margin_mne") and hasattr(model, "_pc_mne_stats"):
                 st = model._pc_mne_stats
                 logger.info(
