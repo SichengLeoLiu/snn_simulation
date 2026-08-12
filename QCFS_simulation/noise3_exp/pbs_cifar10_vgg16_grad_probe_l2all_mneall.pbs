@@ -55,6 +55,24 @@ echo "ROOT=${ROOT}"
 echo "OUT_DIR=${OUT_DIR}"
 echo "CIFAR_ROOT=${CIFAR_ROOT}"
 echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}"
+if [[ ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+  echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  echo "Compute nodes cannot download. On LOGIN node first run:"
+  echo "  module purge"
+  echo "  module use /g/data/dk92/apps/Modules/modulefiles"
+  echo "  module load NCI-ai-ml/24.11"
+  echo "  export CIFAR_ROOT=${CIFAR_ROOT}"
+  echo "  export CIFAR_ALLOW_DOWNLOAD=1"
+  echo "  python - <<'PY'"
+  echo "from torchvision.datasets import CIFAR10"
+  echo "import os"
+  echo "root=os.environ['CIFAR_ROOT']"
+  echo "CIFAR10(root, train=True, download=True)"
+  echo "CIFAR10(root, train=False, download=True)"
+  echo "print('ok', root)"
+  echo "PY"
+  exit 1
+fi
 # Use heredoc: PBS/shell quoting often breaks python -c one-liners.
 python - <<'PY'
 import torch

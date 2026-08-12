@@ -36,6 +36,46 @@ def _mnist_available(root: str) -> bool:
     return _mnist_raw_available(root)
 
 
+def _cifar10_available(root: str) -> bool:
+    base = os.path.join(os.path.expanduser(root), "cifar-10-batches-py")
+    return os.path.isfile(os.path.join(base, "batches.meta"))
+
+
+def _cifar100_available(root: str) -> bool:
+    base = os.path.join(os.path.expanduser(root), "cifar-100-python")
+    return os.path.isfile(os.path.join(base, "meta"))
+
+
+def _require_or_download_cifar(root: str, available: bool, name: str) -> bool:
+    """
+    Return download flag for torchvision CIFAR loaders.
+
+    On Gadi compute nodes there is typically no outbound network. Prefer a
+    clear local-data error unless CIFAR_ALLOW_DOWNLOAD=1.
+    """
+    if available:
+        return False
+    allow = os.environ.get("CIFAR_ALLOW_DOWNLOAD", "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if allow:
+        os.makedirs(root, exist_ok=True)
+        return True
+    raise FileNotFoundError(
+        "%s not found under CIFAR_ROOT=%s. "
+        "Compute nodes usually cannot download. On a Gadi login node run:\n"
+        "  export CIFAR_ROOT=%s\n"
+        "  export CIFAR_ALLOW_DOWNLOAD=1\n"
+        "  python -c \"from torchvision.datasets import %s as D; "
+        "D(root='%s', train=True, download=True); "
+        "D(root='%s', train=False, download=True)\"\n"
+        "Or set CIFAR_ROOT to an existing extracted dataset directory."
+        % (name, root, root, name, root, root)
+    )
+
+
 def _cifar_pil_autoaugment():
     try:
         from torchvision.transforms import AutoAugment, AutoAugmentPolicy
@@ -135,11 +175,12 @@ def GetCifar10(batchsize, num_workers=8, pin_memory=True, attack=False):
             ]
         )
     root = os.path.expanduser(CIFAR_ROOT)
+    download = _require_or_download_cifar(root, _cifar10_available(root), "CIFAR10")
     train_data = datasets.CIFAR10(
-        root, train=True, transform=trans_t, download=True
+        root, train=True, transform=trans_t, download=download
     )
     test_data = datasets.CIFAR10(
-        root, train=False, transform=trans, download=True
+        root, train=False, transform=trans, download=download
     )
     train_dataloader = DataLoader(
         train_data,
@@ -183,11 +224,14 @@ def GetCifar100(batchsize, num_workers=8, pin_memory=True):
         ]
     )
     root = os.path.expanduser(CIFAR_ROOT)
+    download = _require_or_download_cifar(
+        root, _cifar100_available(root), "CIFAR100"
+    )
     train_data = datasets.CIFAR100(
-        root, train=True, transform=trans_t, download=True
+        root, train=True, transform=trans_t, download=download
     )
     test_data = datasets.CIFAR100(
-        root, train=False, transform=trans, download=True
+        root, train=False, transform=trans, download=download
     )
     train_dataloader = DataLoader(
         train_data,
