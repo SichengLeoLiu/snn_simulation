@@ -9,22 +9,28 @@
 #PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
 #PBS -l wd
 #PBS -j oe
-#PBS -o /home/595/sl9144/logs/grad_probe_l2all_mneall.out
+# Do not pin a fixed -o file: Gadi often buffers that until job end, and
+# reusing one path confuses failed/successful runs. Live log is tee'd below.
 
 # CIFAR-10 VGG16：显式 L2-all + MNE-all，训练中 early/mid/late 分解 CE vs reg 对 λ / BN-γ 的梯度
 #
 # Login 节点提交：
 #   mkdir -p ~/logs
 #   cd /home/595/sl9144/codes/snn_simulation && git pull
-#   qsub QCFS_simulation/noise3_exp/pbs_cifar10_vgg16_grad_probe_l2all_mneall.pbs
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   qsub -v CIFAR_ROOT QCFS_simulation/noise3_exp/pbs_cifar10_vgg16_grad_probe_l2all_mneall.pbs
 #   qstat -u $USER
 #
-# 看日志：
-#   tail -f ~/logs/grad_probe_l2all_mneall.out
+# 实时日志（提交后）：
+#   tail -f ~/logs/grad_probe_l2all_mneall.${PBS_JOBID}.out
+#   # 或：ls -lt ~/logs/grad_probe_l2all_mneall.*.out | head
 
 set -euo pipefail
 
 mkdir -p /home/595/sl9144/logs
+LIVE_LOG="/home/595/sl9144/logs/grad_probe_l2all_mneall.${PBS_JOBID:-manual}.out"
+exec > >(tee -a "${LIVE_LOG}") 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
 
 module purge
 module use /g/data/dk92/apps/Modules/modulefiles
