@@ -159,7 +159,7 @@ def probe_ce_vs_reg_grads(
     model.train()
     targets = _collect_scale_params(model)
     params = [p for _, _, p in targets]
-    device = images.device
+    device = next(model.parameters()).device
 
     labels = labels.to(device)
     images = images.to(device)
