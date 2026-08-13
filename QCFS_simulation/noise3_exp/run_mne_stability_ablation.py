@@ -52,6 +52,11 @@ def _variant_specs(l_ref: float) -> dict:
             "label": "mne_raw_weight_lambda_trainable",
             "train_args": ["--mne_no_bn_fold"],
         },
+        "folded_w_lambda": {
+            "regularizer": "mne_l2",
+            "label": "mne_bn_folded_weight_lambda_trainable",
+            "train_args": [],
+        },
         "old_detach": {
             "regularizer": "mne_l2",
             "label": "old_mne_detach_lambda",

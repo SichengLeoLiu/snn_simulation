@@ -13,6 +13,7 @@ ORDER = [
     "weight_decay",
     "old_detach",
     "raw_w_lambda",
+    "folded_w_lambda",
     "fanin_mean",
     "full_bn",
     "lref_only",
@@ -32,6 +33,11 @@ STYLES = {
     "raw_w_lambda": {
         "label": r"MNE raw $W$ ($\lambda$ trainable)",
         "color": "#000000",
+        "linestyle": "-",
+    },
+    "folded_w_lambda": {
+        "label": r"MNE folded $\widetilde{W}$ ($\lambda$ trainable)",
+        "color": "#56B4E9",
         "linestyle": "-",
     },
     "fanin_mean": {
