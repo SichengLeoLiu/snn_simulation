@@ -760,15 +760,16 @@ def compute_mne_l2_regularization(
     normalize_by_fan_in: bool = False,
     layer_reduction: str = "sum",
     l_ref=None,
+    fold_bn: bool = True,
 ):
     """
     Margin-Normalized Effective L2 (MNE-L2):
 
       R_rho = sum_l  (L^2 * M_eff,l) / (lambda_l^2 + eps)
 
-    其中 BN-folded effective weight:
+    默认 BN-folded effective weight:
       W_tilde = gamma / sqrt(var + eps) * W
-    若无 BN，则 W_tilde = W。
+    若无 BN，或 fold_bn=False，则 W_tilde = W（γ 不进入正则）。
 
     M_eff,l:
       - mean 版本: mean_o ||W_tilde_{l,o}||_F^2
@@ -798,7 +799,7 @@ def compute_mne_l2_regularization(
         # 方案 C：无匹配 IF 的层（如 VGG classifier.7 输出头）不参与 MNE-L2。
         if if_mod is None:
             continue
-        if bn_mod is not None:
+        if fold_bn and bn_mod is not None:
             bn_eps = float(getattr(bn_mod, "eps", eps))
             gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
             var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)
@@ -861,6 +862,7 @@ def compute_mne_l2_all_regularization(
     normalize_by_fan_in: bool = False,
     layer_reduction: str = "sum",
     l_ref=None,
+    fold_bn: bool = True,
 ):
     """
     All-parameter coverage built on MNE-L2:
@@ -883,6 +885,7 @@ def compute_mne_l2_all_regularization(
         normalize_by_fan_in=normalize_by_fan_in,
         layer_reduction=layer_reduction,
         l_ref=l_ref,
+        fold_bn=fold_bn,
     )
     covered = _mne_covered_weight_ids(model)
     residual = None

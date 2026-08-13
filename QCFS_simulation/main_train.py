@@ -207,6 +207,11 @@ parser.add_argument(
     help="--regularizer=mne_l2 时允许正则梯度回传到 BN running_var/gamma",
 )
 parser.add_argument(
+    "--mne_no_bn_fold",
+    action="store_true",
+    help="--regularizer=mne_l2 时分子只用生权重 W，不把 BN γ/var fold 进去",
+)
+parser.add_argument(
     "--stable_mne_l_ref",
     default=16.0,
     type=float,
@@ -488,6 +493,7 @@ def main():
             use_max=args.mne_use_max,
             detach_lambda=args.mne_detach_lambda,
             detach_bn_stats=(not args.mne_no_detach_bn_stats),
+            fold_bn=(not args.mne_no_bn_fold),
         )
     elif args.regularizer == "mne_l2_all":
         reg_loss_fn = lambda m, t, q: compute_mne_l2_all_regularization(
@@ -497,6 +503,7 @@ def main():
             use_max=args.mne_use_max,
             detach_lambda=args.mne_detach_lambda,
             detach_bn_stats=(not args.mne_no_detach_bn_stats),
+            fold_bn=(not args.mne_no_bn_fold),
         )
     elif args.regularizer == "stable_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
@@ -684,25 +691,27 @@ def main():
     logger.info("ckpt_save_mode=%s", args.ckpt_save_mode)
     if args.regularizer == "mne_l2":
         logger.info(
-            "mne_l2: L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s"
+            "mne_l2: L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s, fold_bn=%s"
             % (
                 args.L,
                 args.mne_eps,
                 str(bool(args.mne_use_max)),
                 str(bool(args.mne_detach_lambda)),
                 str(bool(not args.mne_no_detach_bn_stats)),
+                str(bool(not args.mne_no_bn_fold)),
             )
         )
     if args.regularizer == "mne_l2_all":
         logger.info(
             "mne_l2_all: MNE on matched Conv/Linear weights + L2 on remaining trainable params; "
-            "L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s, optimizer_wd=0"
+            "L=%d, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_stats=%s, fold_bn=%s, optimizer_wd=0"
             % (
                 args.L,
                 args.mne_eps,
                 str(bool(args.mne_use_max)),
                 str(bool(args.mne_detach_lambda)),
                 str(bool(not args.mne_no_detach_bn_stats)),
+                str(bool(not args.mne_no_bn_fold)),
             )
         )
     if args.regularizer == "stable_mne_l2":
