@@ -749,6 +749,145 @@ def compute_spectral_mne_regularization(
     return stacked.mean() if layer_reduction == "mean" else stacked.sum()
 
 
+def compute_l2_calibrated_mne_regularization(
+    model,
+    quant_level: int,
+    alpha: float = 0.25,
+    eps: float = 1e-6,
+    risk_min: float = 0.5,
+    risk_max: float = 2.0,
+    fold_bn: bool = True,
+):
+    """Weights-only L2 with a detached, mean-one MNE risk reweighting.
+
+    The function returns half of the weighted squared norm, so using
+    ``reg_coeff=weight_decay`` matches coupled optimizer weight decay when
+    ``alpha=0``. Conv/Linear weights without a matched IF (for example the
+    classifier head) retain a plain L2 coefficient of one.
+    """
+    if not 0.0 <= float(alpha) <= 1.0:
+        raise ValueError(f"alpha must be in [0, 1], got {alpha}.")
+    if risk_min <= 0 or risk_max < risk_min:
+        raise ValueError(
+            f"Expected 0 < risk_min <= risk_max, got {risk_min}, {risk_max}."
+        )
+
+    weighted_layers = []
+    plain_weights = []
+    module_map = dict(model.named_modules())
+
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        weight = getattr(layer, "weight", None)
+        if weight is None or not weight.requires_grad:
+            continue
+
+        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        if if_mod is None:
+            plain_weights.append(weight)
+            continue
+
+        with torch.no_grad():
+            lam_min = max(float(eps), 1e-3)
+            lam = if_mod.thresh.detach().to(
+                device=weight.device, dtype=weight.dtype
+            ).clamp(min=lam_min).view(-1)[0]
+            base_risk = float(quant_level) ** 2 / (lam.pow(2) + eps)
+            risk = torch.ones(
+                (weight.shape[0],), device=weight.device, dtype=weight.dtype
+            ) * base_risk
+
+            if fold_bn and bn_mod is not None:
+                bn_eps = float(getattr(bn_mod, "eps", eps))
+                gamma = bn_mod.weight.detach().to(
+                    device=weight.device, dtype=weight.dtype
+                )
+                var = bn_mod.running_var.detach().to(
+                    device=weight.device, dtype=weight.dtype
+                ).clamp(min=bn_eps)
+                risk = risk * gamma.pow(2) / (var + bn_eps)
+
+        n_per_output = weight[0].numel()
+        weighted_layers.append((weight, risk, n_per_output))
+
+    all_weights = [entry[0] for entry in weighted_layers] + plain_weights
+    if not all_weights:
+        parameter = next(model.parameters(), None)
+        if parameter is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=parameter.device, dtype=parameter.dtype)
+
+    # This branch is deliberately independent of lambda/BN values. It is the
+    # exact explicit-loss counterpart of weights-only optimizer weight decay.
+    if float(alpha) == 0.0 or not weighted_layers:
+        penalty = sum(weight.pow(2).sum() for weight in all_weights)
+        model._calibrated_mne_stats = {
+            "alpha": float(alpha),
+            "risk_mean": 1.0,
+            "risk_min": 1.0,
+            "risk_max": 1.0,
+            "q_mean": 1.0,
+            "q_min": 1.0,
+            "q_max": 1.0,
+        }
+        return 0.5 * penalty
+
+    with torch.no_grad():
+        total_covered_params = sum(
+            n_per_output * risk.numel()
+            for _, risk, n_per_output in weighted_layers
+        )
+        risk_mean = sum(
+            n_per_output * risk.sum()
+            for _, risk, n_per_output in weighted_layers
+        ) / float(total_covered_params)
+        risk_mean = risk_mean.clamp(min=eps)
+
+        clipped_risks = [
+            (risk / risk_mean).clamp(min=risk_min, max=risk_max)
+            for _, risk, _ in weighted_layers
+        ]
+        clipped_mean = sum(
+            n_per_output * clipped.sum()
+            for clipped, (_, _, n_per_output) in zip(
+                clipped_risks, weighted_layers
+            )
+        ) / float(total_covered_params)
+        clipped_mean = clipped_mean.clamp(min=eps)
+        normalized_risks = [clipped / clipped_mean for clipped in clipped_risks]
+        q_values = [
+            (1.0 - float(alpha)) + float(alpha) * normalized
+            for normalized in normalized_risks
+        ]
+
+        q_mean = sum(
+            n_per_output * q.sum()
+            for q, (_, _, n_per_output) in zip(q_values, weighted_layers)
+        ) / float(total_covered_params)
+        all_normalized = torch.cat(normalized_risks)
+        all_q = torch.cat(q_values)
+        model._calibrated_mne_stats = {
+            "alpha": float(alpha),
+            "risk_mean": risk_mean.detach(),
+            "risk_min": all_normalized.min().detach(),
+            "risk_max": all_normalized.max().detach(),
+            "q_mean": q_mean.detach(),
+            "q_min": all_q.min().detach(),
+            "q_max": all_q.max().detach(),
+        }
+
+    penalty = None
+    for q, (weight, _, _) in zip(q_values, weighted_layers):
+        flat = weight.reshape(weight.shape[0], -1)
+        term = (q.view(-1, 1) * flat.pow(2)).sum()
+        penalty = term if penalty is None else penalty + term
+    for weight in plain_weights:
+        term = weight.pow(2).sum()
+        penalty = term if penalty is None else penalty + term
+    return 0.5 * penalty
+
+
 def compute_mne_l2_regularization(
     model,
     quant_level: int,

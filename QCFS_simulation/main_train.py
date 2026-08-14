@@ -23,6 +23,7 @@ from utils import (
     get_torch_device,
     compute_mne_l2_regularization,
     compute_mne_l2_all_regularization,
+    compute_l2_calibrated_mne_regularization,
     compute_stable_mne_l2_regularization,
     compute_hinge_mne_regularization,
     compute_pc_mne_regularization,
@@ -105,6 +106,7 @@ parser.add_argument(
         "resolution_aware",
         "mne_l2",
         "mne_l2_all",
+        "calibrated_mne_l2",
         "stable_mne_l2",
         "hinge_mne",
         "pc_mne",
@@ -215,6 +217,41 @@ parser.add_argument(
     "--mne_frobenius",
     action="store_true",
     help="--regularizer=mne_l2 时 M_eff=||W||_F^2（逐层完整平方和，对齐 weights-only L2）；默认是按输出通道取均值",
+)
+parser.add_argument(
+    "--calibrated_mne_alpha",
+    default=0.25,
+    type=float,
+    help="--regularizer=calibrated_mne_l2 时 MNE 风险重加权比例；0 严格退化为 weights-only L2",
+)
+parser.add_argument(
+    "--calibrated_mne_risk_min",
+    default=0.5,
+    type=float,
+    help="calibrated MNE 的归一化风险下界",
+)
+parser.add_argument(
+    "--calibrated_mne_risk_max",
+    default=2.0,
+    type=float,
+    help="calibrated MNE 的归一化风险上界",
+)
+parser.add_argument(
+    "--calibrated_mne_alpha_start_epoch",
+    default=0,
+    type=int,
+    help="开始从 alpha=0 向目标 calibrated MNE alpha 过渡的 epoch",
+)
+parser.add_argument(
+    "--calibrated_mne_alpha_warmup_epochs",
+    default=0,
+    type=int,
+    help="calibrated MNE alpha 的线性 warmup 长度；基础 L2 始终开启",
+)
+parser.add_argument(
+    "--calibrated_mne_no_bn_fold",
+    action="store_true",
+    help="calibrated MNE 风险系数仅使用 L^2/lambda^2，不使用 BN gamma^2/var",
 )
 parser.add_argument(
     "--stable_mne_l_ref",
@@ -420,6 +457,7 @@ def main():
     model.to(device)
 
     reg_loss_fn = None
+    calibrated_mne_state = {"alpha": float(args.calibrated_mne_alpha)}
     l2_sp_reference = None
     if args.regularizer == "l2_sp":
         l2_sp_reference = {
@@ -511,6 +549,16 @@ def main():
             detach_bn_stats=(not args.mne_no_detach_bn_stats),
             fold_bn=(not args.mne_no_bn_fold),
             full_frobenius=args.mne_frobenius,
+        )
+    elif args.regularizer == "calibrated_mne_l2":
+        reg_loss_fn = lambda m, t, q: compute_l2_calibrated_mne_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            alpha=calibrated_mne_state["alpha"],
+            eps=args.mne_eps,
+            risk_min=args.calibrated_mne_risk_min,
+            risk_max=args.calibrated_mne_risk_max,
+            fold_bn=(not args.calibrated_mne_no_bn_fold),
         )
     elif args.regularizer == "stable_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
@@ -722,6 +770,20 @@ def main():
                 str(bool(not args.mne_no_bn_fold)),
             )
         )
+    if args.regularizer == "calibrated_mne_l2":
+        logger.info(
+            "calibrated_mne_l2: base=0.5*sum(q*W^2), target_alpha=%.4g, "
+            "alpha_start=%d, alpha_warmup=%d, risk_clip=[%.4g, %.4g], "
+            "fold_bn=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
+            % (
+                args.calibrated_mne_alpha,
+                args.calibrated_mne_alpha_start_epoch,
+                args.calibrated_mne_alpha_warmup_epochs,
+                args.calibrated_mne_risk_min,
+                args.calibrated_mne_risk_max,
+                str(bool(not args.calibrated_mne_no_bn_fold)),
+            )
+        )
     if args.regularizer == "stable_mne_l2":
         logger.info(
             "stable_mne_l2: L=%d, L_ref=%.6g, eps=%.3e, use_max=%s, detach_lambda=%s, detach_bn_running_stats=%s, detach_bn_affine=%s, fan_in_norm=%s, layer_reduce=%s"
@@ -871,6 +933,17 @@ def main():
         warmup_scale = min(1.0, float(epoch + 1) / float(args.reg_warmup_epochs))
         return args.reg_coeff * warmup_scale
 
+    def _epoch_calibrated_mne_alpha(epoch: int) -> float:
+        target = float(args.calibrated_mne_alpha)
+        start = int(args.calibrated_mne_alpha_start_epoch)
+        warmup = int(args.calibrated_mne_alpha_warmup_epochs)
+        if epoch < start:
+            return 0.0
+        if warmup <= 0:
+            return target
+        progress = min(1.0, float(epoch - start + 1) / float(warmup))
+        return target * progress
+
     probe_epochs = set()
     probe_csv_path = None
     probe_batch = None
@@ -918,6 +991,8 @@ def main():
             logger.info(line)
 
     for epoch in range(args.epochs):
+        if args.regularizer == "calibrated_mne_l2":
+            calibrated_mne_state["alpha"] = _epoch_calibrated_mne_alpha(epoch)
         epoch_reg_coeff = _epoch_reg_coeff(epoch)
         if is_diff1d:
             loss, mae = train_reg(
@@ -974,6 +1049,23 @@ def main():
                     epoch, args.epochs, loss, acc
                 )
             )
+            if args.regularizer == "calibrated_mne_l2" and hasattr(
+                model, "_calibrated_mne_stats"
+            ):
+                stats = model._calibrated_mne_stats
+                logger.info(
+                    "  calibrated_mne: alpha=%.4f risk_mean=%.4g "
+                    "risk_range=[%.4g, %.4g] q_mean=%.6f q_range=[%.4g, %.4g]"
+                    % (
+                        stats["alpha"],
+                        float(stats["risk_mean"]),
+                        float(stats["risk_min"]),
+                        float(stats["risk_max"]),
+                        float(stats["q_mean"]),
+                        float(stats["q_min"]),
+                        float(stats["q_max"]),
+                    )
+                )
             _maybe_run_grad_probe(epoch, epoch_reg_coeff)
             if args.regularizer in ("pc_mne", "margin_mne") and hasattr(model, "_pc_mne_stats"):
                 st = model._pc_mne_stats
