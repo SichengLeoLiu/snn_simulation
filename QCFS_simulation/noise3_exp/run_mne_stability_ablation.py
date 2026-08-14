@@ -62,6 +62,11 @@ def _variant_specs(l_ref: float) -> dict:
             "label": "mne_l2_numerator_lambda_trainable",
             "train_args": ["--mne_no_bn_fold", "--mne_frobenius"],
         },
+        "l2_numerator_detach": {
+            "regularizer": "mne_l2",
+            "label": "mne_l2_numerator_detach_lambda",
+            "train_args": ["--mne_no_bn_fold", "--mne_frobenius", "--mne_detach_lambda"],
+        },
         "old_detach": {
             "regularizer": "mne_l2",
             "label": "old_mne_detach_lambda",
