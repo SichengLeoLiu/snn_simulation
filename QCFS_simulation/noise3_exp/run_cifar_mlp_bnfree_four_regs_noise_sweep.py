@@ -56,6 +56,13 @@ METHOD_SPECS = {
         "weight_decay": 0.0,
         "train_args": ["--mne_detach_lambda"],
     },
+    "old_no_detach": {
+        "regularizer": "mne_l2",
+        "label": "MNE-standard (lambda trainable)",
+        "reg_coeff": 1e-4,
+        "weight_decay": 0.0,
+        "train_args": [],
+    },
 }
 
 
@@ -114,6 +121,7 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     # Apply coefficient overrides into local copies used by jobs.
     METHOD_SPECS["old_detach"]["reg_coeff"] = float(args.mne_rc)
+    METHOD_SPECS["old_no_detach"]["reg_coeff"] = float(args.mne_rc)
     METHOD_SPECS["manual_l2_all"]["reg_coeff"] = float(args.l2_all_rc)
     METHOD_SPECS["weight_decay_weights_only"]["weight_decay"] = float(args.l2_wd)
     return args
@@ -337,12 +345,13 @@ def _plot(mean_rows: list[dict], out_root: Path) -> None:
         print("[WARN] matplotlib unavailable; skip plots", flush=True)
         return
 
-    order = ["no_reg", "weight_decay_weights_only", "manual_l2_all", "old_detach"]
+    order = ["no_reg", "weight_decay_weights_only", "manual_l2_all", "old_detach", "old_no_detach"]
     colors = {
         "no_reg": "#7f7f7f",
         "weight_decay_weights_only": "#2ca02c",
         "manual_l2_all": "#d62728",
         "old_detach": "#1f77b4",
+        "old_no_detach": "#9467bd",
     }
     by_dataset = defaultdict(list)
     for row in mean_rows:
