@@ -761,6 +761,7 @@ def compute_mne_l2_regularization(
     layer_reduction: str = "sum",
     l_ref=None,
     fold_bn: bool = True,
+    full_frobenius: bool = False,
 ):
     """
     Margin-Normalized Effective L2 (MNE-L2):
@@ -774,9 +775,12 @@ def compute_mne_l2_regularization(
     M_eff,l:
       - mean 版本: mean_o ||W_tilde_{l,o}||_F^2
       - max  版本: max_o  ||W_tilde_{l,o}||_F^2
+      - frobenius 版本: ||W_tilde_l||_F^2，与 weights-only L2 的逐层项相同
     """
     if layer_reduction not in ("sum", "mean"):
         raise ValueError(f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'.")
+    if full_frobenius and use_max:
+        raise ValueError("full_frobenius and use_max cannot be set together.")
     if detach_bn_affine is None:
         detach_bn_affine = detach_bn_stats
     if l_ref is not None and l_ref <= 0:
@@ -814,8 +818,13 @@ def compute_mne_l2_regularization(
 
         w_flat = w_eff.view(w_eff.shape[0], -1)
         per_out_norm_sq = (w_flat * w_flat).sum(dim=1)
-        m_eff = per_out_norm_sq.max() if use_max else per_out_norm_sq.mean()
-        if normalize_by_fan_in:
+        if full_frobenius:
+            m_eff = per_out_norm_sq.sum()
+        elif use_max:
+            m_eff = per_out_norm_sq.max()
+        else:
+            m_eff = per_out_norm_sq.mean()
+        if normalize_by_fan_in and not full_frobenius:
             m_eff = m_eff / max(1, w_flat.shape[1])
 
         lam_min = max(eps, 1e-3)
@@ -863,6 +872,7 @@ def compute_mne_l2_all_regularization(
     layer_reduction: str = "sum",
     l_ref=None,
     fold_bn: bool = True,
+    full_frobenius: bool = False,
 ):
     """
     All-parameter coverage built on MNE-L2:
@@ -886,6 +896,7 @@ def compute_mne_l2_all_regularization(
         layer_reduction=layer_reduction,
         l_ref=l_ref,
         fold_bn=fold_bn,
+        full_frobenius=full_frobenius,
     )
     covered = _mne_covered_weight_ids(model)
     residual = None

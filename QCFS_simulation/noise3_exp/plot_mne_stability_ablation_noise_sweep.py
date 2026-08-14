@@ -14,6 +14,7 @@ ORDER = [
     "old_detach",
     "raw_w_lambda",
     "folded_w_lambda",
+    "l2_numerator",
     "fanin_mean",
     "full_bn",
     "lref_only",
@@ -38,6 +39,11 @@ STYLES = {
     "folded_w_lambda": {
         "label": r"MNE folded $\widetilde{W}$ ($\lambda$ trainable)",
         "color": "#56B4E9",
+        "linestyle": "-",
+    },
+    "l2_numerator": {
+        "label": r"MNE $M_{\mathrm{eff}}=\|W\|_F^2$ ($\lambda$ trainable)",
+        "color": "#882255",
         "linestyle": "-",
     },
     "fanin_mean": {
