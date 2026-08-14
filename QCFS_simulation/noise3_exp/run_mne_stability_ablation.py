@@ -281,6 +281,23 @@ def _checkpoint_path(dataset: str, suffix: str, args) -> Path:
     return ckpt_dir / name
 
 
+def _legacy_suffix(suffix: str) -> str:
+    return "_".join(part for part in suffix.split("_") if not part.startswith("trainT"))
+
+
+def _resolve_checkpoint(dataset: str, variant_key: str, rc, seed: int, hinge_tau, args) -> Path:
+    suffix = _suffix(dataset, variant_key, rc, seed, args, hinge_tau=hinge_tau)
+    ckpt = _checkpoint_path(dataset, suffix, args)
+    if ckpt.exists():
+        return ckpt
+    if int(args.train_T) == 0:
+        legacy = _checkpoint_path(dataset, _legacy_suffix(suffix), args)
+        if legacy.exists():
+            print(f"[CKPT FALLBACK] {legacy}", flush=True)
+            return legacy
+    return ckpt
+
+
 def _run(cmd, *, dry_run: bool):
     print(" ".join(str(x) for x in cmd), flush=True)
     if dry_run:
@@ -290,10 +307,15 @@ def _run(cmd, *, dry_run: bool):
 
 def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, hinge_tau, args) -> Path:
     suffix = _suffix(dataset, variant_key, rc, seed, args, hinge_tau=hinge_tau)
-    ckpt = _checkpoint_path(dataset, suffix, args)
+    ckpt = _resolve_checkpoint(dataset, variant_key, rc, seed, hinge_tau, args)
     if ckpt.exists() and not args.retrain:
         print(f"[SKIP TRAIN] {ckpt}", flush=True)
         return ckpt
+    if args.test_only:
+        if args.dry_run:
+            print(f"[DRY RUN] would require checkpoint {ckpt}", flush=True)
+            return ckpt
+        raise FileNotFoundError(f"--test-only but checkpoint is missing: {ckpt}")
 
     cmd = [
         sys.executable,
@@ -687,6 +709,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--retrain", action="store_true")
     parser.add_argument("--retest", action="store_true")
+    parser.add_argument(
+        "--test-only",
+        action="store_true",
+        help="Skip training and fail if the checkpoint is missing.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if not args.out_root.is_absolute():

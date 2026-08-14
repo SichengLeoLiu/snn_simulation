@@ -18,6 +18,8 @@ ORDER = [
     "folded_w_lambda",
     "l2_numerator",
     "l2_numerator_detach",
+    "l2_numerator_rc1em7",
+    "l2_numerator_detach_rc1em7",
     "fanin_mean",
     "full_bn",
     "lref_only",
@@ -55,13 +57,23 @@ STYLES = {
         "linestyle": "-",
     },
     "l2_numerator": {
-        "label": r"MNE $M_{\mathrm{eff}}=\|W\|_F^2$ ($\lambda$ trainable)",
+        "label": r"MNE $\|W\|_F^2$ ($\lambda$ on, rc=$10^{-4}$)",
         "color": "#882255",
         "linestyle": "-",
     },
     "l2_numerator_detach": {
-        "label": r"MNE $M_{\mathrm{eff}}=\|W\|_F^2$ (detach $\lambda$)",
+        "label": r"MNE $\|W\|_F^2$ (detach $\lambda$, rc=$10^{-4}$)",
         "color": "#CC6677",
+        "linestyle": "--",
+    },
+    "l2_numerator_rc1em7": {
+        "label": r"MNE $\|W\|_F^2$ ($\lambda$ on, rc=$10^{-7}$)",
+        "color": "#332288",
+        "linestyle": "-",
+    },
+    "l2_numerator_detach_rc1em7": {
+        "label": r"MNE $\|W\|_F^2$ (detach $\lambda$, rc=$10^{-7}$)",
+        "color": "#DDCC77",
         "linestyle": "--",
     },
     "fanin_mean": {
@@ -105,6 +117,18 @@ def load_grouped(csv_path: Path) -> dict[str, list[dict]]:
             if row["variant"] in STYLES:
                 grouped[row["variant"]].append(row)
     return grouped
+
+
+def _set_sigma_axis(ax, grouped: dict, present: list[str]) -> None:
+    sigmas = [float(row["sigma"]) for variant in present for row in grouped[variant]]
+    xmax = max(sigmas) if sigmas else 1.0
+    ax.set_xlim(-0.05, xmax + 0.08)
+    if xmax <= 1.01:
+        ax.set_xticks([index / 10 for index in range(11)])
+        return
+    step = 0.5 if xmax <= 3.5 else 1.0
+    n_ticks = int(round(xmax / step))
+    ax.set_xticks([index * step for index in range(n_ticks + 1)])
 
 
 def plot_curve(ax, variant: str, rows: list[dict], *, relative: bool) -> None:
@@ -155,7 +179,7 @@ def main() -> None:
             "axes.labelsize": 16,
             "xtick.labelsize": 13,
             "ytick.labelsize": 13,
-            "legend.fontsize": 11,
+            "legend.fontsize": 9,
         }
     )
 
@@ -166,8 +190,7 @@ def main() -> None:
         plot_curve(ax, variant, grouped[variant], relative=False)
     ax.set_xlabel(r"Gaussian noise $\sigma$")
     ax.set_ylabel("Accuracy (%)")
-    ax.set_xlim(-0.02, 1.02)
-    ax.set_xticks([index / 10 for index in range(11)])
+    _set_sigma_axis(ax, grouped, present)
     ax.set_ylim(abs_ymin, abs_ymax)
     ax.grid(alpha=0.3)
     ax.legend(loc="lower left", frameon=True)
@@ -178,9 +201,14 @@ def main() -> None:
         plot_curve(ax, variant, grouped[variant], relative=True)
     ax.set_xlabel(r"Gaussian noise $\sigma$")
     ax.set_ylabel("Retention (% of clean)")
-    ax.set_xlim(-0.02, 1.02)
-    ax.set_xticks([index / 10 for index in range(11)])
-    ax.set_ylim(30, 103)
+    _set_sigma_axis(ax, grouped, present)
+    rel_vals = []
+    for variant in present:
+        rows = sorted(grouped[variant], key=lambda row: float(row["sigma"]))
+        clean = float(rows[0]["acc_mean"]) if rows else 0.0
+        if clean > 0:
+            rel_vals.extend(float(row["acc_mean"]) / clean * 100.0 for row in rows)
+    ax.set_ylim(max(0.0, min(rel_vals) - 8.0) if rel_vals else 30.0, 103)
     ax.grid(alpha=0.3)
     ax.legend(loc="lower left", frameon=True)
     ax.set_title("Relative retention")
@@ -194,24 +222,26 @@ def main() -> None:
     plt.close(fig)
     print(f"[PLOT] {out}")
 
+    zoom_variants = [
+        variant
+        for variant in present
+        if variant != "weight_decay"
+        and min(float(row["acc_mean"]) for row in grouped[variant]) >= 80.0
+    ]
     zoom_vals = [
         float(row["acc_mean"])
-        for variant in present
-        if variant not in ("weight_decay",)
+        for variant in zoom_variants
         for row in grouped[variant]
     ]
-    if zoom_vals and min(zoom_vals) >= 80.0:
+    if zoom_vals:
         zoom_out = out.with_name(out.stem + "_mne_zoom.png")
         fig, ax = plt.subplots(figsize=(9.5, 6.2), dpi=220)
-        for variant in present:
-            if variant == "weight_decay":
-                continue
+        for variant in zoom_variants:
             plot_curve(ax, variant, grouped[variant], relative=False)
         ax.set_xlabel(r"Gaussian noise $\sigma$")
         ax.set_ylabel("Accuracy (%)")
-        ax.set_xlim(-0.02, 1.02)
-        ax.set_xticks([index / 10 for index in range(11)])
-        ax.set_ylim(85.4, 91.0)
+        _set_sigma_axis(ax, grouped, zoom_variants)
+        ax.set_ylim(max(0.0, min(zoom_vals) - 1.2), min(100.0, max(zoom_vals) + 0.8))
         ax.grid(alpha=0.3)
         ax.legend(loc="lower left", frameon=True)
         if args.title:
