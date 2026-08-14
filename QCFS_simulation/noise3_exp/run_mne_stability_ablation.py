@@ -42,6 +42,23 @@ def _rel_path(path: Path) -> str:
 
 def _variant_specs(l_ref: float) -> dict:
     return {
+        "calibrated_mne_a0p1": {
+            "regularizer": "calibrated_mne_l2",
+            "label": "l2_calibrated_mne_alpha_0p1",
+            "weight_decay": 0.0,
+            "train_args": [
+                "--calibrated_mne_alpha",
+                "0.1",
+                "--calibrated_mne_risk_min",
+                "0.5",
+                "--calibrated_mne_risk_max",
+                "2.0",
+                "--calibrated_mne_alpha_start_epoch",
+                "30",
+                "--calibrated_mne_alpha_warmup_epochs",
+                "50",
+            ],
+        },
         "old_no_detach": {
             "regularizer": "mne_l2",
             "label": "old_mne_no_detach_lambda",
@@ -66,22 +83,6 @@ def _variant_specs(l_ref: float) -> dict:
             "regularizer": "mne_l2",
             "label": "mne_l2_numerator_detach_lambda",
             "train_args": ["--mne_no_bn_fold", "--mne_frobenius", "--mne_detach_lambda"],
-        },
-        "calibrated_mne_a0p1": {
-            "regularizer": "calibrated_mne_l2",
-            "label": "l2_calibrated_mne_alpha_0p1",
-            "train_args": [
-                "--calibrated_mne_alpha",
-                "0.1",
-                "--calibrated_mne_risk_min",
-                "0.5",
-                "--calibrated_mne_risk_max",
-                "2.0",
-                "--calibrated_mne_alpha_start_epoch",
-                "30",
-                "--calibrated_mne_alpha_warmup_epochs",
-                "50",
-            ],
         },
         "old_detach": {
             "regularizer": "mne_l2",

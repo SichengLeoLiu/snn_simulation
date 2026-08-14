@@ -12,12 +12,12 @@ import matplotlib.pyplot as plt
 ORDER = [
     "weight_decay",
     "weight_decay_weights_only",
+    "calibrated_mne_a0p1",
     "old_detach",
     "raw_w_lambda",
     "folded_w_lambda",
     "l2_numerator",
     "l2_numerator_detach",
-    "calibrated_mne_a0p1",
     "fanin_mean",
     "full_bn",
     "lref_only",
@@ -33,6 +33,11 @@ STYLES = {
         "label": "L2-wo (weights only)",
         "color": "#009E73",
         "linestyle": "--",
+    },
+    "calibrated_mne_a0p1": {
+        "label": r"Calibrated MNE ($\alpha=0.1$)",
+        "color": "#6A3D9A",
+        "linestyle": "-",
     },
     "old_detach": {
         "label": r"Old MNE (detach $\lambda$)",
@@ -58,11 +63,6 @@ STYLES = {
         "label": r"MNE $M_{\mathrm{eff}}=\|W\|_F^2$ (detach $\lambda$)",
         "color": "#CC6677",
         "linestyle": "--",
-    },
-    "calibrated_mne_a0p1": {
-        "label": r"Calibrated MNE ($\alpha=0.1$)",
-        "color": "#332288",
-        "linestyle": "-",
     },
     "fanin_mean": {
         "label": "Stable MNE (BN detached)",
