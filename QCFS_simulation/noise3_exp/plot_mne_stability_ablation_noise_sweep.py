@@ -11,11 +11,13 @@ import matplotlib.pyplot as plt
 
 ORDER = [
     "weight_decay",
+    "weight_decay_weights_only",
     "old_detach",
     "raw_w_lambda",
     "folded_w_lambda",
     "l2_numerator",
     "l2_numerator_detach",
+    "calibrated_mne_a0p1",
     "fanin_mean",
     "full_bn",
     "lref_only",
@@ -25,6 +27,11 @@ STYLES = {
     "weight_decay": {
         "label": "Weight decay",
         "color": "#0072B2",
+        "linestyle": "--",
+    },
+    "weight_decay_weights_only": {
+        "label": "L2-wo (weights only)",
+        "color": "#009E73",
         "linestyle": "--",
     },
     "old_detach": {
@@ -52,6 +59,11 @@ STYLES = {
         "color": "#CC6677",
         "linestyle": "--",
     },
+    "calibrated_mne_a0p1": {
+        "label": r"Calibrated MNE ($\alpha=0.1$)",
+        "color": "#332288",
+        "linestyle": "-",
+    },
     "fanin_mean": {
         "label": "Stable MNE (BN detached)",
         "color": "#009E73",
@@ -77,6 +89,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--csv", required=True, type=Path)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--title", default="")
+    parser.add_argument(
+        "--variants",
+        nargs="+",
+        default=None,
+        help="If set, plot only these variant keys (in this order).",
+    )
     return parser.parse_args()
 
 
@@ -112,9 +130,22 @@ def main() -> None:
     args = parse_args()
     out = args.out or args.csv.with_name("mne_stability_ablation_noise_sweep.png")
     grouped = load_grouped(args.csv)
-    present = [variant for variant in ORDER if grouped[variant]]
+    if args.variants:
+        present = [variant for variant in args.variants if grouped[variant]]
+        missing = [variant for variant in args.variants if variant not in grouped]
+        if missing:
+            raise ValueError(f"Missing variants in {args.csv}: {missing}")
+    else:
+        present = [variant for variant in ORDER if grouped[variant]]
     if not present:
         raise ValueError(f"No known variants in {args.csv}")
+    abs_vals = [
+        float(row["acc_mean"])
+        for variant in present
+        for row in grouped[variant]
+    ]
+    abs_ymin = max(0.0, min(abs_vals) - 5.0)
+    abs_ymax = min(100.0, max(abs_vals) + 3.0)
 
     plt.style.use("seaborn-v0_8-whitegrid")
     plt.rcParams.update(
@@ -137,7 +168,7 @@ def main() -> None:
     ax.set_ylabel("Accuracy (%)")
     ax.set_xlim(-0.02, 1.02)
     ax.set_xticks([index / 10 for index in range(11)])
-    ax.set_ylim(30, 93)
+    ax.set_ylim(abs_ymin, abs_ymax)
     ax.grid(alpha=0.3)
     ax.legend(loc="lower left", frameon=True)
     ax.set_title("Absolute accuracy")
@@ -163,25 +194,32 @@ def main() -> None:
     plt.close(fig)
     print(f"[PLOT] {out}")
 
-    zoom_out = out.with_name(out.stem + "_mne_zoom.png")
-    fig, ax = plt.subplots(figsize=(9.5, 6.2), dpi=220)
-    for variant in present:
-        if variant == "weight_decay":
-            continue
-        plot_curve(ax, variant, grouped[variant], relative=False)
-    ax.set_xlabel(r"Gaussian noise $\sigma$")
-    ax.set_ylabel("Accuracy (%)")
-    ax.set_xlim(-0.02, 1.02)
-    ax.set_xticks([index / 10 for index in range(11)])
-    ax.set_ylim(85.4, 91.0)
-    ax.grid(alpha=0.3)
-    ax.legend(loc="lower left", frameon=True)
-    if args.title:
-        ax.set_title(args.title + " (MNE zoom)")
-    fig.tight_layout()
-    fig.savefig(zoom_out, bbox_inches="tight")
-    plt.close(fig)
-    print(f"[PLOT] {zoom_out}")
+    zoom_vals = [
+        float(row["acc_mean"])
+        for variant in present
+        if variant not in ("weight_decay",)
+        for row in grouped[variant]
+    ]
+    if zoom_vals and min(zoom_vals) >= 80.0:
+        zoom_out = out.with_name(out.stem + "_mne_zoom.png")
+        fig, ax = plt.subplots(figsize=(9.5, 6.2), dpi=220)
+        for variant in present:
+            if variant == "weight_decay":
+                continue
+            plot_curve(ax, variant, grouped[variant], relative=False)
+        ax.set_xlabel(r"Gaussian noise $\sigma$")
+        ax.set_ylabel("Accuracy (%)")
+        ax.set_xlim(-0.02, 1.02)
+        ax.set_xticks([index / 10 for index in range(11)])
+        ax.set_ylim(85.4, 91.0)
+        ax.grid(alpha=0.3)
+        ax.legend(loc="lower left", frameon=True)
+        if args.title:
+            ax.set_title(args.title + " (MNE zoom)")
+        fig.tight_layout()
+        fig.savefig(zoom_out, bbox_inches="tight")
+        plt.close(fig)
+        print(f"[PLOT] {zoom_out}")
 
 
 if __name__ == "__main__":

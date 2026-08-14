@@ -67,6 +67,22 @@ def _variant_specs(l_ref: float) -> dict:
             "label": "mne_l2_numerator_detach_lambda",
             "train_args": ["--mne_no_bn_fold", "--mne_frobenius", "--mne_detach_lambda"],
         },
+        "calibrated_mne_a0p1": {
+            "regularizer": "calibrated_mne_l2",
+            "label": "l2_calibrated_mne_alpha_0p1",
+            "train_args": [
+                "--calibrated_mne_alpha",
+                "0.1",
+                "--calibrated_mne_risk_min",
+                "0.5",
+                "--calibrated_mne_risk_max",
+                "2.0",
+                "--calibrated_mne_alpha_start_epoch",
+                "30",
+                "--calibrated_mne_alpha_warmup_epochs",
+                "50",
+            ],
+        },
         "old_detach": {
             "regularizer": "mne_l2",
             "label": "old_mne_detach_lambda",
@@ -539,6 +555,8 @@ def _expand_jobs(args) -> list[dict]:
             rc_values = args.manual_l2_rcs
         elif spec["regularizer"] == "l1_all":
             rc_values = args.l1_all_rcs
+        elif spec["regularizer"] == "calibrated_mne_l2":
+            rc_values = args.calibrated_mne_rcs
         else:
             rc_values = args.rcs
         for dataset in args.datasets:
@@ -632,6 +650,13 @@ def parse_args() -> argparse.Namespace:
         default=[1e-5],
         type=float,
         help="Coefficient grid used only by the l1_all variant.",
+    )
+    parser.add_argument(
+        "--calibrated-mne-rcs",
+        nargs="+",
+        default=[5e-4],
+        type=float,
+        help="reg_coeff for calibrated_mne_l2; 5e-4 matches weights-only WD when alpha=0.",
     )
     parser.add_argument("--group-lasso-eps", default=1e-12, type=float)
     parser.add_argument("--spectral-power-iters", default=3, type=int)
