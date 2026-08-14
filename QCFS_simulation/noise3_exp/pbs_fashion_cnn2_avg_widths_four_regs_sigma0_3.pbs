@@ -1,0 +1,89 @@
+#!/bin/bash
+#PBS -N fm_avg
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=12:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=40GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# Fashion-MNIST cnn2 AvgPool widths seed42：与 MaxPool 四宫格同一协议
+#   模型: cnn2_avg_c2_c4 / c4_c8 / c8_c16 / c16_c32
+#   结构: Conv → BN → IF → AvgPool × 2 → Linear
+#   方法: L2-all / L2-wo / Old MNE detach λ / Calibrated MNE α=0.1
+#   post-IF Gaussian sigma = 0, 0.25, ..., 3.0
+#   新 arch 名，不会复用 MaxPool checkpoint。
+#
+# Login 节点提交：
+#   mkdir -p ~/logs
+#   cd /home/595/sl9144/codes/snn_simulation && git pull
+#   export MNIST_ROOT=/home/595/sl9144/datasets
+#   qsub -v MNIST_ROOT QCFS_simulation/noise3_exp/pbs_fashion_cnn2_avg_widths_four_regs_sigma0_3.pbs
+#   qstat -u $USER
+
+set -euo pipefail
+
+mkdir -p /home/595/sl9144/logs
+LIVE_LOG="/home/595/sl9144/logs/fm_avg.${PBS_JOBID:-manual}.out"
+exec > >(tee -a "${LIVE_LOG}") 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export MNIST_ROOT="${MNIST_ROOT:-/home/595/sl9144/datasets}"
+export FASHION_BATCH="${FASHION_BATCH:-128}"
+export FASHION_NUM_WORKERS="${FASHION_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-${ROOT}/../important_results/fashion_cnn2_avg_widths_four_regs_sigma0_3_seed42}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "MNIST_ROOT=${MNIST_ROOT}"
+if [[ ! -d "${MNIST_ROOT}/FashionMNIST" ]]; then
+  echo "WARNING: ${MNIST_ROOT}/FashionMNIST missing; dataloader may download."
+fi
+
+python - <<'PY'
+import torch
+print("torch", torch.__version__, "cuda", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("device", torch.cuda.get_device_name(0))
+else:
+    print("WARNING: CUDA not available")
+PY
+
+python -u noise3_exp/run_fashion_four_regs_sigma1_3.py \
+  --models cnn2_avg_c2_c4 cnn2_avg_c4_c8 cnn2_avg_c8_c16 cnn2_avg_c16_c32 \
+  --seeds 42 \
+  --epochs 30 \
+  --batch-size "${FASHION_BATCH}" \
+  --workers "${FASHION_NUM_WORKERS}" \
+  --device cuda \
+  --first-layer-noise-position post_input_if \
+  --noise-sigma-start 0.0 \
+  --noise-sigma-end 3.0 \
+  --noise-sigma-step 0.25 \
+  --out-root "${OUT_DIR}"
+
+echo "=== ALL DONE $(date) ==="
+ls -la "${OUT_DIR}"/fashion_four_regs_*.csv
+ls -la "${OUT_DIR}"/*.png || true

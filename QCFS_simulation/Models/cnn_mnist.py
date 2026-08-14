@@ -16,7 +16,7 @@ class CNN2MNIST(nn.Module):
     weight_sign_pos_front / weight_sign_neg_front。
     """
 
-    def __init__(self, num_classes=10, c1=2, c2=4):
+    def __init__(self, num_classes=10, c1=2, c2=4, pool="max"):
         super().__init__()
         self.T = 0
         self.merge = MergeTemporalDim(0)
@@ -27,16 +27,24 @@ class CNN2MNIST(nn.Module):
         self.first_layer_input_noise_position = "post_input_if"
         self.c1 = int(c1)
         self.c2 = int(c2)
+        pool_name = str(pool).strip().lower()
+        if pool_name in ("avg", "avgpool", "average"):
+            pool_cls = nn.AvgPool2d
+        elif pool_name in ("max", "maxpool"):
+            pool_cls = nn.MaxPool2d
+        else:
+            raise ValueError("pool must be 'max' or 'avg', got %r" % (pool,))
+        self.pool_type = "avg" if pool_cls is nn.AvgPool2d else "max"
 
         self.input_if = IF()
         self.conv1 = nn.Conv2d(1, self.c1, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(self.c1)
         self.if1 = IF()
-        self.pool1 = nn.MaxPool2d(2)
+        self.pool1 = pool_cls(kernel_size=2, stride=2)
         self.conv2 = nn.Conv2d(self.c1, self.c2, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(self.c2)
         self.if2 = IF()
-        self.pool2 = nn.MaxPool2d(2)
+        self.pool2 = pool_cls(kernel_size=2, stride=2)
         self.classifier = nn.Linear(self.c2 * 7 * 7, num_classes)
 
         for m in self.modules():
@@ -382,8 +390,8 @@ class CNNDeepMNIST(CNN2MNIST):
         return x
 
 
-def cnn2_mnist(num_classes=10, c1=2, c2=4):
-    return CNN2MNIST(num_classes=num_classes, c1=c1, c2=c2)
+def cnn2_mnist(num_classes=10, c1=2, c2=4, pool="max"):
+    return CNN2MNIST(num_classes=num_classes, c1=c1, c2=c2, pool=pool)
 
 
 def cnn4_mnist(num_classes=10, channels=(2, 4, 4, 4)):

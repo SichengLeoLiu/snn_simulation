@@ -21,10 +21,15 @@ from .ResNet import resnet18, resnet18_imagenet, resnet34, resnet34_imagenet
 def _parse_mnist_cnn2_variant(model_name: str):
     m = model_name.lower()
     if m in ("cnn2", "cnn2_mnist"):
-        return 2, 4
+        return 2, 4, "max"
+    if m in ("cnn2_avg", "cnn2_avgpool", "cnn2_mnist_avg", "cnn2_mnist_avgpool"):
+        return 2, 4, "avg"
+    match = re.fullmatch(r"cnn2(?:_mnist)?_avg(?:pool)?_c(\d+)_c(\d+)", m)
+    if match:
+        return int(match.group(1)), int(match.group(2)), "avg"
     match = re.fullmatch(r"cnn2(?:_mnist)?_c(\d+)_c(\d+)", m)
     if match:
-        return int(match.group(1)), int(match.group(2))
+        return int(match.group(1)), int(match.group(2)), "max"
     return None
 
 
@@ -118,8 +123,8 @@ def modelpool(model_name, dataset_name="mnist"):
     if d in ("mnist", "fashionmnist"):
         channels = _parse_mnist_cnn2_variant(model_name)
         if channels is not None:
-            c1, c2 = channels
-            return cnn2_mnist(num_classes=10, c1=c1, c2=c2)
+            c1, c2, pool = channels
+            return cnn2_mnist(num_classes=10, c1=c1, c2=c2, pool=pool)
         if m in ("cnn6_vgg", "cnn6_vgg_mnist"):
             return cnn6_vgg_mnist(num_classes=10)
         if m in ("cnn6_narrow_staged", "cnn6_narrow_staged_mnist"):
@@ -146,7 +151,7 @@ def modelpool(model_name, dataset_name="mnist"):
         if hidden_dim is not None:
             return fc2_mnist(num_classes=10, hidden_dim=hidden_dim)
         raise ValueError(
-            "MNIST 当前仅支持模型: cnn2/cnn4/cnn6/cnn6_vgg/cnn6_narrow_staged/cnn6_wide_early/cnn8/cnn10（可用 _c{n} 指定每层通道）/fc2/fc3/fc3rev"
+            "MNIST 当前仅支持模型: cnn2/cnn2_avg/cnn4/cnn6/cnn6_vgg/cnn6_narrow_staged/cnn6_wide_early/cnn8/cnn10（可用 _c{n} 指定每层通道）/fc2/fc3/fc3rev"
         )
 
     if d in ("cifar10", "cifa10"):

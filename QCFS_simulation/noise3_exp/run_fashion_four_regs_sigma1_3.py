@@ -531,7 +531,18 @@ def main() -> None:
     if len(args.models) > 1 and all_rows:
         _write_csv(args.out_root / "fashion_four_regs_raw.csv", all_rows, RAW_FIELDS)
         plot_script = Path(__file__).with_name("plot_fashion_four_regs_noise_sweep.py")
-        panel_out = args.out_root / "fashion_cnn2_widths_four_regs_sigma0_3_seed42.png"
+        avg_models = all("_avg" in name for name in args.models)
+        panel_name = (
+            "fashion_cnn2_avg_widths_four_regs_sigma0_3_seed42.png"
+            if avg_models
+            else "fashion_cnn2_widths_four_regs_sigma0_3_seed42.png"
+        )
+        panel_title = (
+            r"Fashion-MNIST cnn2 AvgPool widths seed42 · post-IF $\sigma \in [0, 3]$"
+            if avg_models
+            else r"Fashion-MNIST cnn2 widths seed42 · post-IF $\sigma \in [0, 3]$"
+        )
+        panel_out = args.out_root / panel_name
         if plot_script.exists():
             _run(
                 [
@@ -543,7 +554,7 @@ def main() -> None:
                     str(panel_out),
                     "--panel-by-arch",
                     "--title",
-                    r"Fashion-MNIST cnn2 widths seed42 · post-IF $\sigma \in [0, 3]$",
+                    panel_title,
                 ],
                 dry_run=False,
             )
