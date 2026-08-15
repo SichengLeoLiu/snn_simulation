@@ -80,6 +80,12 @@ def _plot_axes(ax, grouped: dict[str, list[dict]], present: list[str], acc_key: 
         acc = [float(row[acc_key]) for row in rows]
         xmax = max(xmax, max(sigma) if sigma else 0.0)
         style = STYLES[method]
+        if acc_key == "acc_mean" and rows and "acc_std" in rows[0]:
+            std = [float(row["acc_std"]) for row in rows]
+            if any(value > 0 for value in std):
+                lo = [a - s for a, s in zip(acc, std)]
+                hi = [a + s for a, s in zip(acc, std)]
+                ax.fill_between(sigma, lo, hi, color=style["color"], alpha=0.18, linewidth=0)
         ax.plot(
             sigma,
             acc,
