@@ -1,0 +1,80 @@
+#!/bin/bash
+#PBS -N c10_l1
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR-10：在已有 5-seed 四方法结果上补 L1-wo (rc=1e-5)
+#   已有 L2/MNE ckpt 与 noise matrix 会跳过；优先复用
+#   vgg16_L[16]_strict_seed*_schemeC_noout_l1_l16_vgg16_rc1em05.pth
+#   写出完整 5 方法 CSV 到同一 5seed 目录。
+#
+# Login 节点：
+#   cd /home/595/sl9144/codes/snn_simulation && git pull
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   qsub -v CIFAR_ROOT QCFS_simulation/noise3_exp/pbs_cifar10_vgg16_l1_into_5seed.pbs
+
+set -euo pipefail
+
+mkdir -p /home/595/sl9144/logs
+LIVE_LOG="/home/595/sl9144/logs/c10_l1.${PBS_JOBID:-manual}.out"
+exec > >(tee -a "${LIVE_LOG}") 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export CIFAR_EPOCHS="${CIFAR_EPOCHS:-300}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-${ROOT}/../important_results/cifar10_vgg16_four_regs_sigma0_3_5seed}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "CIFAR_ROOT=${CIFAR_ROOT}"
+if [[ ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+  echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+
+python -u noise3_exp/run_mne_stability_ablation.py \
+  --datasets cifar10 \
+  --variants old_detach calibrated_mne_a0p1 \
+  --baselines weight_decay weight_decay_weights_only l1 \
+  --rcs 1e-4 \
+  --calibrated-mne-rcs 5e-4 \
+  --seeds 40 41 42 43 44 \
+  --epochs "${CIFAR_EPOCHS}" \
+  --batch-size "${CIFAR_BATCH}" \
+  --workers "${CIFAR_NUM_WORKERS}" \
+  --first-layer-noise-position post_input_if \
+  --noise-sigma-start 0.0 \
+  --noise-sigma-end 3.0 \
+  --noise-sigma-step 0.25 \
+  --out-root "${OUT_DIR}"
+
+echo "=== ALL DONE $(date) ==="
+ls -la "${OUT_DIR}"/mne_stability_ablation_*.csv

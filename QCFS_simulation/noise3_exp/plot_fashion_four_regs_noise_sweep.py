@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 ORDER = [
     "weight_decay",
     "weight_decay_weights_only",
+    "l1",
     "old_detach",
     "calibrated_mne_a0p1",
 ]
@@ -27,6 +28,11 @@ STYLES = {
     "weight_decay_weights_only": {
         "label": "L2-wo (weights only)",
         "color": "#009E73",
+        "linestyle": "-",
+    },
+    "l1": {
+        "label": r"L1-wo (weights only, $10^{-5}$)",
+        "color": "#D55E00",
         "linestyle": "-",
     },
     "old_detach": {

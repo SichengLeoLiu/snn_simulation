@@ -295,6 +295,15 @@ def _resolve_checkpoint(dataset: str, variant_key: str, rc, seed: int, hinge_tau
         if legacy.exists():
             print(f"[CKPT FALLBACK] {legacy}", flush=True)
             return legacy
+    if variant_key == "l1":
+        alt = (
+            f"strict_seed{seed}_schemeC_noout_l1_l{args.L}_{args.arch}"
+            f"_rc{_fmt_float(1e-5)}"
+        )
+        alt_ckpt = _checkpoint_path(dataset, alt, args)
+        if alt_ckpt.exists():
+            print(f"[CKPT FALLBACK] {alt_ckpt}", flush=True)
+            return alt_ckpt
     return ckpt
 
 
