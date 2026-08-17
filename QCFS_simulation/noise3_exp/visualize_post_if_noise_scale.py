@@ -48,6 +48,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--max-batches", type=int, default=20)
     parser.add_argument("--image-index", type=int, default=0)
+    parser.add_argument(
+        "--channel",
+        type=int,
+        default=0,
+        help="Fixed post-IF channel to visualize (default 0). Use -1 to pick max-energy.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--tag", default="", help="Optional suffix for output filenames.")
     parser.add_argument(
@@ -185,7 +191,10 @@ def main() -> None:
     rng.manual_seed(args.seed)
 
     channel_energy = sample.mean(dim=0).pow(2).mean(dim=(1, 2))
-    channel = int(torch.argmax(channel_energy).item())
+    if int(args.channel) < 0:
+        channel = int(torch.argmax(channel_energy).item())
+    else:
+        channel = int(args.channel) % int(channels)
 
     sigmas = [float(value) for value in args.sigmas]
     noisy_rate_maps = []
@@ -275,7 +284,7 @@ def main() -> None:
     )
     print(
         f"shape captured as time-averaged maps: "
-        f"T={time_steps} B={batch} C={channels} {height}x{width}"
+        f"T={time_steps} B={batch} C={channels} {height}x{width}  viz_channel={channel}"
     )
     for row in rows:
         if row["sigma"] <= 0:

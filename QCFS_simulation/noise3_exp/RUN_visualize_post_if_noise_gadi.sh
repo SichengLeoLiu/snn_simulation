@@ -62,12 +62,15 @@ run_one() {
     --mode rate_uniform \
     --batch-size 16 \
     --max-batches 8 \
+    --image-index 0 \
+    --channel "${CHANNEL:-0}" \
     --sigmas 0 1 2 3 5 \
     --out-dir "${OUT_DIR}"
 }
 
 echo "ROOT=${ROOT}"
 echo "OUT_DIR=${OUT_DIR}"
+echo "CHANNEL=${CHANNEL:-0}"
 echo "CIFAR_ROOT=${CIFAR_ROOT}"
 echo "python=$(command -v python)"
 
