@@ -166,7 +166,7 @@ cfg = {
 
 
 class VGG(nn.Module):
-    def __init__(self, vgg_name, num_classes, dropout):
+    def __init__(self, vgg_name, num_classes, dropout, input_if_before_conv=False):
         super(VGG, self).__init__()
         self.init_channels = 3
         self.T = 0
@@ -176,8 +176,12 @@ class VGG(nn.Module):
         self.first_layer_input_noise_sigma = 0.0
         self.first_layer_input_noise_type = "gaussian"
         self.first_layer_input_noise_position = "post_input_if"
+        self.input_if_before_conv = bool(input_if_before_conv)
         self.loss = 0
         self.layer1 = self._make_layers(cfg[vgg_name][0], dropout)
+        if self.input_if_before_conv:
+            # Pixel-side IF, then Conv1. post_input_if noise then lands before Conv1.
+            self.layer1 = nn.Sequential(IF(), *list(self.layer1.children()))
         self.layer2 = self._make_layers(cfg[vgg_name][1], dropout)
         self.layer3 = self._make_layers(cfg[vgg_name][2], dropout)
         self.layer4 = self._make_layers(cfg[vgg_name][3], dropout)
@@ -495,6 +499,10 @@ class VGG_woBN(nn.Module):
 
 def vgg16(num_classes, dropout=0.0):
     return VGG("VGG16", num_classes, dropout)
+
+
+def vgg16_inputif(num_classes, dropout=0.0):
+    return VGG("VGG16", num_classes, dropout, input_if_before_conv=True)
 
 
 def remap_legacy_vgg_state_dict(state_dict):
