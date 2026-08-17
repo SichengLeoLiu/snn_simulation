@@ -52,7 +52,19 @@ def parse_args() -> argparse.Namespace:
         "--channel",
         type=int,
         default=0,
-        help="Fixed post-IF channel to visualize (default 0). Use -1 to pick max-energy.",
+        help="Feature-map channel to visualize. Same index is used for every checkpoint.",
+    )
+    parser.add_argument(
+        "--vmin",
+        type=float,
+        default=0.0,
+        help="Shared color-scale lower bound for all heatmaps.",
+    )
+    parser.add_argument(
+        "--vmax",
+        type=float,
+        default=2.5,
+        help="Shared color-scale upper bound for all heatmaps (covers observed λ≈1–2.2).",
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--tag", default="", help="Optional suffix for output filenames.")
@@ -190,11 +202,9 @@ def main() -> None:
     rng = torch.Generator(device="cpu")
     rng.manual_seed(args.seed)
 
-    channel_energy = sample.mean(dim=0).pow(2).mean(dim=(1, 2))
-    if int(args.channel) < 0:
-        channel = int(torch.argmax(channel_energy).item())
-    else:
-        channel = int(args.channel) % int(channels)
+    channel = int(args.channel)
+    if channel < 0 or channel >= channels:
+        raise ValueError(f"--channel {channel} is out of range for C={channels}")
 
     sigmas = [float(value) for value in args.sigmas]
     noisy_rate_maps = []
@@ -208,14 +218,10 @@ def main() -> None:
         noisy_rate_maps.append(noisy.mean(dim=0).mean(dim=0).cpu().numpy())
         noisy_channel_maps.append(noisy.mean(dim=0)[channel].cpu().numpy())
 
-    vmin = float(np.percentile(noisy_rate_maps[0], 1))
-    vmax = float(np.percentile(noisy_rate_maps[0], 99))
+    vmin = float(args.vmin)
+    vmax = float(args.vmax)
     if vmax <= vmin:
-        vmax = vmin + 1e-6
-    ch_vmin = float(np.percentile(noisy_channel_maps[0], 1))
-    ch_vmax = float(np.percentile(noisy_channel_maps[0], 99))
-    if ch_vmax <= ch_vmin:
-        ch_vmax = ch_vmin + 1e-6
+        raise ValueError(f"Need --vmax > --vmin, got {vmin}, {vmax}")
 
     n_sigma = len(sigmas)
     fig, axes = plt.subplots(2, n_sigma + 1, figsize=(2.8 * (n_sigma + 1), 5.6), dpi=180)
@@ -224,27 +230,28 @@ def main() -> None:
     axes[0][0].set_title("input image", fontsize=10)
     axes[0][0].axis("off")
     axes[1][0].axis("off")
+    last_im = None
     for index, sigma in enumerate(sigmas):
         ax_mean = axes[0][index + 1]
         ax_ch = axes[1][index + 1]
-        im0 = ax_mean.imshow(noisy_rate_maps[index], cmap="viridis", vmin=vmin, vmax=vmax)
+        ax_mean.imshow(noisy_rate_maps[index], cmap="viridis", vmin=vmin, vmax=vmax)
         ax_mean.set_title(rf"mean ch  $\sigma={sigma:g}$", fontsize=10)
         ax_mean.axis("off")
-        ax_ch.imshow(noisy_channel_maps[index], cmap="viridis", vmin=ch_vmin, vmax=ch_vmax)
+        last_im = ax_ch.imshow(
+            noisy_channel_maps[index], cmap="viridis", vmin=vmin, vmax=vmax
+        )
         ax_ch.set_title(rf"ch {channel}  $\sigma={sigma:g}$", fontsize=10)
         ax_ch.axis("off")
-        if index == n_sigma - 1:
-            fig.colorbar(im0, ax=ax_mean, fraction=0.046, pad=0.04)
+    fig.colorbar(last_im, ax=axes[:, 1:].ravel().tolist(), fraction=0.02, pad=0.02)
     fig.suptitle(
         f"{args.dataset} {args.arch} T={args.T} {args.mode}  |  "
+        f"ch={channel}, scale=[{vmin:g}, {vmax:g}]  |  "
         f"clean mean={stats['mean']:.3f}, rms={stats['rms']:.3f}, λ={lam:.3f}",
-        fontsize=12,
+        fontsize=11,
     )
     tag = str(args.tag).strip()
     suffix = f"_{tag}" if tag else ""
-    fig.tight_layout()
-    png = out_dir / f"{args.dataset}_{args.arch}_post_if_noise_sigma0_5{suffix}.png"
-    fig.savefig(png, bbox_inches="tight")
+    fig.savefig(png := out_dir / f"{args.dataset}_{args.arch}_post_if_noise_sigma0_5{suffix}.png", bbox_inches="tight")
     plt.close(fig)
 
     rows = []
@@ -284,7 +291,7 @@ def main() -> None:
     )
     print(
         f"shape captured as time-averaged maps: "
-        f"T={time_steps} B={batch} C={channels} {height}x{width}  viz_channel={channel}"
+        f"T={time_steps} B={batch} C={channels} {height}x{width}"
     )
     for row in rows:
         if row["sigma"] <= 0:
