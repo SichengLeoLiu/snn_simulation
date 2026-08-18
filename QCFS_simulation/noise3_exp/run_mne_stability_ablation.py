@@ -704,7 +704,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--first-layer-noise-position",
         default="post_input_if",
-        choices=["post_input_if", "pre_input_if", "input_image"],
+        choices=["post_input_if", "pre_input_if", "pre_first_conv", "input_image"],
+        help=(
+            "post_input_if=首个 IF 后；pre_input_if=Conv/BN 后、首个 IF 前；"
+            "pre_first_conv=展开时间维后、首个 Conv/BN 前；input_image=直接加到输入图像"
+        ),
     )
     parser.add_argument("--first-layer-noise-type", default="gaussian", choices=["gaussian", "pink"])
     parser.add_argument("--noise-sigma-start", default=0.0, type=float)
