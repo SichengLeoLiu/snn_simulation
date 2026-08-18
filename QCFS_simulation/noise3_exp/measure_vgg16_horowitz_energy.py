@@ -101,7 +101,12 @@ def parse_args() -> argparse.Namespace:
 
 def resolve_checkpoint(dataset: str, method: str, seed: int, args) -> Path:
     spec = METHODS[method]
-    ckpt_args = SimpleNamespace(arch=args.arch, L=args.L, train_T=0)
+    ckpt_args = SimpleNamespace(
+        arch=args.arch,
+        L=args.L,
+        train_T=0,
+        reg_warmup_epochs=0,
+    )
     ckpt = ablation._resolve_checkpoint(
         dataset, spec["variant"], spec["rc"], seed, None, ckpt_args
     )

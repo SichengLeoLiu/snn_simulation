@@ -267,7 +267,7 @@ def _suffix(dataset, variant_key, rc, seed, args, hinge_tau=None) -> str:
     ]
     if hinge_tau is not None:
         parts.append(f"tau{_fmt_float(hinge_tau)}")
-    if args.reg_warmup_epochs > 0:
+    if getattr(args, "reg_warmup_epochs", 0) > 0:
         parts.append(f"warm{args.reg_warmup_epochs}")
     return "_".join(parts)
 
