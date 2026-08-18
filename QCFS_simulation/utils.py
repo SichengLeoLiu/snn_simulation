@@ -44,6 +44,30 @@ def get_torch_device(device_str: str = "auto") -> torch.device:
     return torch.device(device_str)
 
 
+def configure_cuda_fast(device: torch.device) -> None:
+    """H200/A100 吞吐：TF32 + cuDNN benchmark。由环境变量 QCFS_CUDA_FAST=1 打开。"""
+    enabled = os.environ.get("QCFS_CUDA_FAST", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not enabled or device.type != "cuda":
+        return
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    if hasattr(torch, "set_float32_matmul_precision"):
+        torch.set_float32_matmul_precision("high")
+    cap = torch.cuda.get_device_capability(device)
+    print(
+        "QCFS_CUDA_FAST: name=%s capability=%s cuda=%s tf32=1 cudnn.benchmark=1"
+        % (torch.cuda.get_device_name(device), cap, torch.version.cuda),
+        flush=True,
+    )
+
+
 def seed_all(seed=1029):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)

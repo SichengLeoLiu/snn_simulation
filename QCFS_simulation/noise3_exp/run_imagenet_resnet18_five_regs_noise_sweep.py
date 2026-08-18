@@ -8,7 +8,8 @@ Methods:
   old_detach                Old MNE (detach λ, rc=1e-4)
   calibrated_mne_a0p1       Calibrated MNE (α=0.1, rc=1e-4)
 
-Train: ANN T=0, 90 epochs, lr=0.05. Test: T=16, rate_uniform, σ=0…5 step 0.25.
+Train: ANN T=0, 90 epochs. H200 defaults: batch=256, lr=0.1 (linear-scaled from V100 128/0.05).
+Test: T=16, rate_uniform, σ=0…5 step 0.25.
 One --method per PBS job so five GPUs can run in parallel.
 """
 
@@ -465,14 +466,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--arch", default=ARCH)
     parser.add_argument("--L", default=LVAL, type=int)
     parser.add_argument("--epochs", default=int(os.environ.get("IMAGENET_EPOCHS", "90")), type=int)
-    parser.add_argument("--lr", default=0.05, type=float)
+    parser.add_argument("--lr", default=float(os.environ.get("IMAGENET_LR", "0.1")), type=float)
     parser.add_argument("--weight-decay", default=1e-4, type=float)
     parser.add_argument("--mne-rc", default=1e-4, type=float)
     parser.add_argument("--calibrated-mne-rc", default=1e-4, type=float)
     parser.add_argument("--l1-rc", default=1e-5, type=float)
     parser.add_argument("--alpha-start-epoch", default=9, type=int)
     parser.add_argument("--alpha-warmup-epochs", default=15, type=int)
-    parser.add_argument("--batch-size", default=int(os.environ.get("IMAGENET_BATCH", "128")), type=int)
+    parser.add_argument("--batch-size", default=int(os.environ.get("IMAGENET_BATCH", "256")), type=int)
     parser.add_argument("--workers", default=int(os.environ.get("IMAGENET_NUM_WORKERS", "8")), type=int)
     parser.add_argument("--test-T", dest="test_T", default=TEST_T, type=int)
     parser.add_argument("--if-mode", default=IF_MODE)

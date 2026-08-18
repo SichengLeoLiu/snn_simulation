@@ -21,6 +21,7 @@ from utils import (
     seed_all,
     get_logger,
     get_torch_device,
+    configure_cuda_fast,
     compute_mne_l2_regularization,
     compute_mne_l2_all_regularization,
     compute_l2_calibrated_mne_regularization,
@@ -432,6 +433,7 @@ def main():
     device = get_torch_device(args.device)
     print("device: %s" % (device,))
     seed_all(args.seed)
+    configure_cuda_fast(device)
 
     ds = args.dataset.lower()
     train_loader, test_loader = datapool(

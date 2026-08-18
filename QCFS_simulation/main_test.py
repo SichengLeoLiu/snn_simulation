@@ -9,7 +9,15 @@ from Models.cnn_mnist import remap_legacy_cnn2_state_dict
 from Models.VGG import remap_legacy_vgg_state_dict
 from Models.spike_temporal_adjust import SPIKE_SCHEDULE_MODES
 from Preprocess import datapool
-from utils import val, val_reg, seed_all, get_logger, calibrate_thresholds, get_torch_device
+from utils import (
+    val,
+    val_reg,
+    seed_all,
+    get_logger,
+    calibrate_thresholds,
+    get_torch_device,
+    configure_cuda_fast,
+)
 
 SPIKE_SCHEDULE_CHOICES = sorted(SPIKE_SCHEDULE_MODES) + ["all"]
 DATASET_CHOICES = ["mnist", "fashion_mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
@@ -475,6 +483,7 @@ def main():
     device = get_torch_device(args.device)
     print("device: %s" % (device,))
     seed_all(args.seed)
+    configure_cuda_fast(device)
 
     train_loader, test_loader = datapool(
         args.dataset,

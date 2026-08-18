@@ -367,6 +367,10 @@ def GetImageNet(
         )
     else:
         train_sampler = val_sampler = None
+    loader_extra = {}
+    if workers > 0:
+        loader_extra["persistent_workers"] = True
+        loader_extra["prefetch_factor"] = 4
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=train_batch_size,
@@ -374,6 +378,7 @@ def GetImageNet(
         num_workers=workers,
         pin_memory=True,
         sampler=train_sampler,
+        **loader_extra,
     )
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
@@ -382,5 +387,6 @@ def GetImageNet(
         num_workers=workers,
         pin_memory=True,
         sampler=val_sampler,
+        **loader_extra,
     )
     return train_loader, val_loader
