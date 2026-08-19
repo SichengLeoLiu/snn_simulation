@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ImageNet ResNet-18 seed42：CIFAR 五方法噪声扫描。
+"""ImageNet ResNet-18 / ResNet-34 seed42：CIFAR 五方法噪声扫描。
 
 Methods:
   weight_decay              L2-all (optimizer WD=1e-4, ImageNet default)
@@ -74,7 +74,7 @@ def _method_specs(args) -> dict:
             "reg_coeff": None,
             "train_args": [],
             "legacy_names": [
-                f"{ARCH}_L[{LVAL}]_seed{SEED}_schemeC_noout_wd_l{LVAL}_{ARCH}.pth",
+                f"{args.arch}_L[{LVAL}]_seed{SEED}_schemeC_noout_wd_l{LVAL}_{args.arch}.pth",
             ],
         },
         "weight_decay_weights_only": {
@@ -100,9 +100,9 @@ def _method_specs(args) -> dict:
             "reg_coeff": args.mne_rc,
             "train_args": ["--mne_detach_lambda"],
             "legacy_names": [
-                f"{ARCH}_L[{LVAL}]_seed{SEED}_schemeC_noout_mne_l2_l{LVAL}_{ARCH}"
+                f"{args.arch}_L[{LVAL}]_seed{SEED}_schemeC_noout_mne_l2_l{LVAL}_{args.arch}"
                 f"_rc{_fmt_float(args.mne_rc).replace('0p0001', '1em04')}.pth",
-                f"{ARCH}_L[{LVAL}]_seed{SEED}_schemeC_noout_mne_l2_l{LVAL}_{ARCH}_rc1em04.pth",
+                f"{args.arch}_L[{LVAL}]_seed{SEED}_schemeC_noout_mne_l2_l{LVAL}_{args.arch}_rc1em04.pth",
             ],
         },
         "calibrated_mne_a0p1": {
@@ -455,9 +455,10 @@ def _plot(mean_rows: list[dict], args) -> None:
         "pre_first_conv": r"pre-conv1",
         "input_image": r"input-image",
     }.get(pos, pos)
-    ax.set_title(rf"ImageNet ResNet-18 seed42 · five regs · {pos_title} $\sigma \in [0, 5]$")
+    arch_title = {"resnet18": "ResNet-18", "resnet34": "ResNet-34"}.get(args.arch, args.arch)
+    ax.set_title(rf"ImageNet {arch_title} seed42 · five regs · {pos_title} $\sigma \in [0, 5]$")
     fig.tight_layout()
-    out = args.out_root / f"imagenet_resnet18_five_regs_{pos}_sigma0_5_seed42.png"
+    out = args.out_root / f"imagenet_{args.arch}_five_regs_{pos}_sigma0_5_seed42.png"
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
     print(f"[PLOT] {out}", flush=True)
@@ -472,7 +473,7 @@ def parse_args() -> argparse.Namespace:
         help="Run one method, or all sequentially.",
     )
     parser.add_argument("--aggregate", action="store_true")
-    parser.add_argument("--arch", default=ARCH)
+    parser.add_argument("--arch", default=ARCH, choices=["resnet18", "resnet34"])
     parser.add_argument("--L", default=LVAL, type=int)
     parser.add_argument("--epochs", default=int(os.environ.get("IMAGENET_EPOCHS", "90")), type=int)
     parser.add_argument("--lr", default=float(os.environ.get("IMAGENET_LR", "0.1")), type=float)
@@ -505,12 +506,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--retest", action="store_true")
     parser.add_argument("--test-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument(
-        "--out-root",
-        type=Path,
-        default=ROOT.parent / "important_results" / "imagenet_resnet18_five_regs_sigma0_5_seed42",
-    )
+    parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args()
+    if args.out_root is None:
+        args.out_root = (
+            ROOT.parent
+            / "important_results"
+            / f"imagenet_{args.arch}_five_regs_sigma0_5_seed42"
+        )
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
     if not args.aggregate and not args.method:
