@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ImageNet ResNet-18 seed42：CIFAR 五方法 post-IF 噪声扫描。
+"""ImageNet ResNet-18 seed42：CIFAR 五方法噪声扫描。
 
 Methods:
   weight_decay              L2-all (optimizer WD=1e-4, ImageNet default)
@@ -10,7 +10,9 @@ Methods:
 
 Train: ANN T=0, 90 epochs. H200 defaults: batch=256, lr=0.1 (linear-scaled from V100 128/0.05).
 Test: T=16, rate_uniform, σ=0…5 step 0.25.
+Noise: post_input_if (conv1 IF 后) or pre_input_if / pre_first_conv (conv1 前，像素).
 One --method per PBS job so five GPUs can run in parallel.
+Reuse checkpoints with --test-only and a new --out-root.
 """
 
 from __future__ import annotations
@@ -446,9 +448,16 @@ def _plot(mean_rows: list[dict], args) -> None:
     ax.set_xlim(-0.1, 5.1)
     ax.set_xticks(list(range(6)))
     ax.legend(loc="best", frameon=True)
-    ax.set_title(r"ImageNet ResNet-18 seed42 · five regs · post-IF $\sigma \in [0, 5]$")
+    pos = str(args.first_layer_noise_position)
+    pos_title = {
+        "post_input_if": r"post-IF",
+        "pre_input_if": r"pre-conv1",
+        "pre_first_conv": r"pre-conv1",
+        "input_image": r"input-image",
+    }.get(pos, pos)
+    ax.set_title(rf"ImageNet ResNet-18 seed42 · five regs · {pos_title} $\sigma \in [0, 5]$")
     fig.tight_layout()
-    out = args.out_root / "imagenet_resnet18_five_regs_sigma0_5_seed42.png"
+    out = args.out_root / f"imagenet_resnet18_five_regs_{pos}_sigma0_5_seed42.png"
     fig.savefig(out, bbox_inches="tight")
     plt.close(fig)
     print(f"[PLOT] {out}", flush=True)
@@ -481,7 +490,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--first-layer-noise-position",
         default="post_input_if",
-        choices=["post_input_if", "pre_input_if", "input_image"],
+        choices=["post_input_if", "pre_input_if", "pre_first_conv", "input_image"],
+        help=(
+            "post_input_if=conv1(含IF)后、maxpool前；"
+            "pre_input_if/pre_first_conv=展开T后、conv1前（像素）；"
+            "input_image=原始图像上加噪后再展开T"
+        ),
     )
     parser.add_argument("--noise-sigma-start", default=0.0, type=float)
     parser.add_argument("--noise-sigma-end", default=5.0, type=float)

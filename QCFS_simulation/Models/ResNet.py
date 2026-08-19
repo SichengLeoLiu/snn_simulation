@@ -119,9 +119,15 @@ class ResNet(nn.Module):
 
     def set_first_layer_input_noise_position(self, position="post_input_if"):
         pos = str(position).strip().lower()
+        # VGG pre_first_conv = after T-expand, before first Conv.
+        # ResNet has no Conv-then-IF split at the stem entry, so that site
+        # is the same as pre_input_if (pixel tensor, before conv1).
+        if pos == "pre_first_conv":
+            pos = "pre_input_if"
         if pos not in ("post_input_if", "pre_input_if"):
             raise ValueError(
-                "first_layer_input_noise_position 必须为 post_input_if 或 pre_input_if，收到: %s"
+                "first_layer_input_noise_position 必须为 post_input_if、"
+                "pre_input_if 或 pre_first_conv，收到: %s"
                 % (position,)
             )
         self.first_layer_input_noise_position = pos
