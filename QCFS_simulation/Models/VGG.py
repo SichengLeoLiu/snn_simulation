@@ -497,6 +497,14 @@ class VGG_woBN(nn.Module):
             out = self.expand(out)
         return out
 
+def vgg11(num_classes, dropout=0.0):
+    return VGG("VGG11", num_classes, dropout)
+
+
+def vgg13(num_classes, dropout=0.0):
+    return VGG("VGG13", num_classes, dropout)
+
+
 def vgg16(num_classes, dropout=0.0):
     return VGG("VGG16", num_classes, dropout)
 

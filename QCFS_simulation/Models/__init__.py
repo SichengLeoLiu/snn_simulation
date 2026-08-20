@@ -14,7 +14,7 @@ from .cnn_mnist import (
 from .fc_mnist import fc2_mnist, fc3_mnist, fc3rev_mnist
 from .fc_cifar import fc2_cifar, fc3_cifar, fc5_cifar
 from .toy_diff1d import toy_diff1d
-from .VGG import vgg16, vgg19, vgg16_wobn, vgg16_inputif
+from .VGG import vgg11, vgg13, vgg16, vgg19, vgg16_wobn, vgg16_inputif
 from .ResNet import resnet18, resnet18_imagenet, resnet34, resnet34_imagenet
 
 
@@ -189,6 +189,10 @@ def modelpool(model_name, dataset_name="mnist"):
         if d in ("imagenet", "imagenet1k"):
             return resnet34_imagenet(num_classes=num_classes)
         return resnet34(num_classes=num_classes)
+    if m == "vgg11":
+        return vgg11(num_classes=num_classes, dropout=dropout)
+    if m == "vgg13":
+        return vgg13(num_classes=num_classes, dropout=dropout)
     if m == "vgg16":
         return vgg16(num_classes=num_classes, dropout=dropout)
     if m in ("vgg16_inputif", "vgg16_preconv_if"):
@@ -198,7 +202,7 @@ def modelpool(model_name, dataset_name="mnist"):
     if m == "vgg19":
         return vgg19(num_classes=num_classes, dropout=dropout)
     raise ValueError(
-        "数据集 %s 下支持的模型: vgg16 | vgg16_inputif | vgg16_wobn | vgg19 | resnet18 | resnet34 | "
+        "数据集 %s 下支持的模型: vgg11 | vgg13 | vgg16 | vgg16_inputif | vgg16_wobn | vgg19 | resnet18 | resnet34 | "
         "fc5_cifar[_wMULT] | fc3_cifar[_hN] | fc2_cifar[_hN]，收到: %s"
         % (dataset_name, model_name)
     )
