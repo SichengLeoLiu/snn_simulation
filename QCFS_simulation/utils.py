@@ -781,6 +781,9 @@ def compute_l2_calibrated_mne_regularization(
     risk_min: float = 0.5,
     risk_max: float = 2.0,
     fold_bn: bool = True,
+    normalization: str = "global",
+    onesided: bool = False,
+    tau: float = 1.0,
 ):
     """Weights-only L2 with a detached, mean-one MNE risk reweighting.
 
@@ -789,11 +792,19 @@ def compute_l2_calibrated_mne_regularization(
     ``alpha=0``. Conv/Linear weights without a matched IF (for example the
     classifier head) retain a plain L2 coefficient of one.
     """
-    if not 0.0 <= float(alpha) <= 1.0:
-        raise ValueError(f"alpha must be in [0, 1], got {alpha}.")
+    if float(alpha) < 0.0:
+        raise ValueError(f"alpha must be >= 0, got {alpha}.")
+    if (not onesided) and float(alpha) > 1.0:
+        raise ValueError(f"alpha must be in [0, 1] unless onesided, got {alpha}.")
     if risk_min <= 0 or risk_max < risk_min:
         raise ValueError(
             f"Expected 0 < risk_min <= risk_max, got {risk_min}, {risk_max}."
+        )
+    normalization = str(normalization).strip().lower()
+    if normalization not in ("global", "layerwise"):
+        raise ValueError(
+            "normalization must be 'global' or 'layerwise', "
+            f"got {normalization!r}."
         )
 
     weighted_layers = []
@@ -848,12 +859,17 @@ def compute_l2_calibrated_mne_regularization(
         penalty = sum(weight.pow(2).sum() for weight in all_weights)
         model._calibrated_mne_stats = {
             "alpha": float(alpha),
+            "normalization": normalization,
+            "onesided": bool(onesided),
+            "tau": float(tau),
             "risk_mean": 1.0,
             "risk_min": 1.0,
             "risk_max": 1.0,
             "q_mean": 1.0,
             "q_min": 1.0,
             "q_max": 1.0,
+            "layer_q_mean_min": 1.0,
+            "layer_q_mean_max": 1.0,
         }
         return 0.5 * penalty
 
@@ -862,28 +878,49 @@ def compute_l2_calibrated_mne_regularization(
             n_per_output * risk.numel()
             for _, risk, n_per_output in weighted_layers
         )
-        risk_mean = sum(
+        global_risk_mean = sum(
             n_per_output * risk.sum()
             for _, risk, n_per_output in weighted_layers
         ) / float(total_covered_params)
-        risk_mean = risk_mean.clamp(min=eps)
+        global_risk_mean = global_risk_mean.clamp(min=eps)
 
-        clipped_risks = [
-            (risk / risk_mean).clamp(min=risk_min, max=risk_max)
-            for _, risk, _ in weighted_layers
-        ]
-        clipped_mean = sum(
-            n_per_output * clipped.sum()
-            for clipped, (_, _, n_per_output) in zip(
-                clipped_risks, weighted_layers
-            )
-        ) / float(total_covered_params)
-        clipped_mean = clipped_mean.clamp(min=eps)
-        normalized_risks = [clipped / clipped_mean for clipped in clipped_risks]
-        q_values = [
-            (1.0 - float(alpha)) + float(alpha) * normalized
-            for normalized in normalized_risks
-        ]
+        if normalization == "global":
+            clipped_risks = [
+                (risk / global_risk_mean).clamp(min=risk_min, max=risk_max)
+                for _, risk, _ in weighted_layers
+            ]
+            clipped_mean = sum(
+                n_per_output * clipped.sum()
+                for clipped, (_, _, n_per_output) in zip(
+                    clipped_risks, weighted_layers
+                )
+            ) / float(total_covered_params)
+            clipped_mean = clipped_mean.clamp(min=eps)
+            normalized_risks = [
+                clipped / clipped_mean for clipped in clipped_risks
+            ]
+        else:
+            normalized_risks = []
+            for _, risk, _ in weighted_layers:
+                layer_mean = risk.mean().clamp(min=eps)
+                clipped = (risk / layer_mean).clamp(
+                    min=risk_min, max=risk_max
+                )
+                normalized_risks.append(
+                    clipped / clipped.mean().clamp(min=eps)
+                )
+
+        if onesided:
+            # q = 1 + α max(r̂ − τ, 0): strengthen high-risk channels only.
+            q_values = [
+                1.0 + float(alpha) * torch.relu(normalized - float(tau))
+                for normalized in normalized_risks
+            ]
+        else:
+            q_values = [
+                (1.0 - float(alpha)) + float(alpha) * normalized
+                for normalized in normalized_risks
+            ]
 
         q_mean = sum(
             n_per_output * q.sum()
@@ -891,14 +928,20 @@ def compute_l2_calibrated_mne_regularization(
         ) / float(total_covered_params)
         all_normalized = torch.cat(normalized_risks)
         all_q = torch.cat(q_values)
+        layer_q_means = torch.stack([q.mean() for q in q_values])
         model._calibrated_mne_stats = {
             "alpha": float(alpha),
-            "risk_mean": risk_mean.detach(),
+            "normalization": normalization,
+            "onesided": bool(onesided),
+            "tau": float(tau),
+            "risk_mean": global_risk_mean.detach(),
             "risk_min": all_normalized.min().detach(),
             "risk_max": all_normalized.max().detach(),
             "q_mean": q_mean.detach(),
             "q_min": all_q.min().detach(),
             "q_max": all_q.max().detach(),
+            "layer_q_mean_min": layer_q_means.min().detach(),
+            "layer_q_mean_max": layer_q_means.max().detach(),
         }
 
     penalty = None

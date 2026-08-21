@@ -1,0 +1,79 @@
+#!/bin/bash
+#PBS -N hybenv
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR-100 VGG16 seed 42: approach the noise-sweep upper envelope with one checkpoint.
+#   hybrid: optimizer L2-all β0 + Old MNE (detach λ) β1
+#   onesided: q=1+α max(r̂-τ,0) weights-only L2
+#   Selection = 5k train-holdout val sweep. Test is recorded, not used to pick.
+#
+# Login:
+#   cd /home/595/sl9144/codes/snn_simulation && git pull
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   for b0 in 3e-5 1e-4 3e-4; do
+#     for b1 in 3e-5 1e-4; do
+#       qsub -v CIFAR_ROOT,FAMILY=hybrid,BETA0=$b0,BETA1=$b1 \
+#         QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_hybrid_envelope_screen_seed42.pbs
+#     done
+#   done
+#   qsub -v CIFAR_ROOT,FAMILY=onesided,ALPHA=0.1,TAU=1.0,BETA=5e-4 \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_hybrid_envelope_screen_seed42.pbs
+#   qsub -v CIFAR_ROOT,FAMILY=onesided,ALPHA=0.25,TAU=1.0,BETA=5e-4 \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_hybrid_envelope_screen_seed42.pbs
+
+set -euo pipefail
+
+FAMILY="${FAMILY:?set FAMILY=hybrid or onesided}"
+
+mkdir -p /home/595/sl9144/logs
+LIVE_LOG="/home/595/sl9144/logs/hybenv_${FAMILY}_${BETA0:-}_${BETA1:-}_${ALPHA:-}.${PBS_JOBID:-manual}.out"
+exec > >(tee -a "${LIVE_LOG}") 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "FAMILY=${FAMILY} BETA0=${BETA0:-} BETA1=${BETA1:-} ALPHA=${ALPHA:-} TAU=${TAU:-} BETA=${BETA:-}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-${ROOT}/../important_results/cifar100_vgg16_hybrid_envelope_screen_seed42}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+
+ARGS=(--family "${FAMILY}" --out-root "${OUT_DIR}" --batch-size "${CIFAR_BATCH}" --workers "${CIFAR_NUM_WORKERS}")
+if [[ "${FAMILY}" == "hybrid" ]]; then
+  ARGS+=(--beta0 "${BETA0:?}" --beta1 "${BETA1:?}")
+else
+  ARGS+=(--alpha "${ALPHA:-0.1}" --tau "${TAU:-1.0}" --beta "${BETA:-5e-4}")
+fi
+
+python -u noise3_exp/run_cifar_vgg16_hybrid_envelope_screen.py "${ARGS[@]}"
+
+echo "=== ALL DONE $(date) FAMILY=${FAMILY} ==="
+ls -la "${OUT_DIR}"

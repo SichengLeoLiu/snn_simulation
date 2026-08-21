@@ -255,6 +255,23 @@ parser.add_argument(
     help="calibrated MNE 风险系数仅使用 L^2/lambda^2，不使用 BN gamma^2/var",
 )
 parser.add_argument(
+    "--calibrated_mne_normalization",
+    default="global",
+    choices=("global", "layerwise"),
+    help="calibrated MNE 风险系数使用全模型或逐层 mean-one 归一化",
+)
+parser.add_argument(
+    "--calibrated_mne_onesided",
+    action="store_true",
+    help="calibrated MNE 只加强高风险通道: q=1+α max(r̂-τ,0)，不减弱低风险通道",
+)
+parser.add_argument(
+    "--calibrated_mne_tau",
+    default=1.0,
+    type=float,
+    help="--calibrated_mne_onesided 时的风险阈值 τ（mean-one 风险，默认 1）",
+)
+parser.add_argument(
     "--stable_mne_l_ref",
     default=16.0,
     type=float,
@@ -561,6 +578,9 @@ def main():
             risk_min=args.calibrated_mne_risk_min,
             risk_max=args.calibrated_mne_risk_max,
             fold_bn=(not args.calibrated_mne_no_bn_fold),
+            normalization=args.calibrated_mne_normalization,
+            onesided=args.calibrated_mne_onesided,
+            tau=args.calibrated_mne_tau,
         )
     elif args.regularizer == "stable_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
@@ -776,7 +796,8 @@ def main():
         logger.info(
             "calibrated_mne_l2: base=0.5*sum(q*W^2), target_alpha=%.4g, "
             "alpha_start=%d, alpha_warmup=%d, risk_clip=[%.4g, %.4g], "
-            "fold_bn=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
+            "fold_bn=%s, normalization=%s, onesided=%s, tau=%.4g, "
+            "risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
             % (
                 args.calibrated_mne_alpha,
                 args.calibrated_mne_alpha_start_epoch,
@@ -784,6 +805,9 @@ def main():
                 args.calibrated_mne_risk_min,
                 args.calibrated_mne_risk_max,
                 str(bool(not args.calibrated_mne_no_bn_fold)),
+                args.calibrated_mne_normalization,
+                str(bool(args.calibrated_mne_onesided)),
+                args.calibrated_mne_tau,
             )
         )
     if args.regularizer == "stable_mne_l2":
