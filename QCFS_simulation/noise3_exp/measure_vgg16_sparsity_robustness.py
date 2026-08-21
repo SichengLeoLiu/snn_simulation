@@ -85,8 +85,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--noise-sigma",
         type=float,
-        default=1.0,
-        help="Post-IF robustness sigma. Clean energy always uses sigma=0.",
+        default=None,
+        help="Single post-IF robustness sigma. Ignored if --noise-sigmas is set.",
+    )
+    parser.add_argument(
+        "--noise-sigmas",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Post-IF robustness sigmas. Clean energy always uses sigma=0.",
     )
     parser.add_argument(
         "--noise-position",
@@ -366,12 +373,18 @@ def _fmt(mean: float, std: float, digits: int = 4) -> str:
 
 def print_tables(rows: list[dict]) -> None:
     by_key = {
-        (row["dataset"], row["method"], int(row["T"]), row["condition"]): row
+        (
+            row["dataset"],
+            row["method"],
+            int(row["T"]),
+            row["condition"],
+            f"{float(row['sigma']):.6g}",
+        ): row
         for row in rows
     }
 
-    def grab(dataset, method, time_steps, condition):
-        return by_key[(dataset, method, time_steps, condition)]
+    def grab(dataset, method, time_steps, condition, sigma="0"):
+        return by_key[(dataset, method, time_steps, condition, f"{float(sigma):.6g}")]
 
     print("\n=== Clean sparsity / energy (σ=0 only; unit = training seed) ===")
     print(
@@ -383,7 +396,7 @@ def print_tables(rows: list[dict]) -> None:
         for method in ("l2", "mne_l2", "l2_wo", "l1"):
             for time_steps in (4, 8, 16):
                 try:
-                    row = grab(dataset, method, time_steps, "clean")
+                    row = grab(dataset, method, time_steps, "clean", 0)
                 except KeyError:
                     continue
                 print(
@@ -395,20 +408,38 @@ def print_tables(rows: list[dict]) -> None:
                     f"{_fmt(row['energy_mJ_mean_mean'], row['energy_mJ_mean_std'], 4):>16}"
                 )
 
-    print("\n=== Robustness post-IF σ=1 (accuracy only; do not use noisy firing as energy) ===")
-    print(f"{'Dataset':<10} {'Method':<8} {'T':>3} {'Acc σ=1':>14} {'Fire mean (diag)':>20}")
+    noise_sigmas = sorted(
+        {
+            float(row["sigma"])
+            for row in rows
+            if row["condition"] == "noise"
+        }
+    )
+    print(
+        "\n=== Robustness post-IF (accuracy only; do not use noisy firing as energy) ==="
+    )
+    header = f"{'Dataset':<10} {'Method':<8} {'T':>3}" + "".join(
+        f"{'Acc σ=' + str(int(s) if s == int(s) else s):>14}" for s in noise_sigmas
+    )
+    print(header)
     for dataset in ("cifar10", "cifar100"):
         for method in ("l2", "mne_l2", "l2_wo", "l1"):
             for time_steps in (4, 8, 16):
-                try:
-                    row = grab(dataset, method, time_steps, "noise")
-                except KeyError:
+                cells = []
+                missing = False
+                for sigma in noise_sigmas:
+                    try:
+                        row = grab(dataset, method, time_steps, "noise", sigma)
+                    except KeyError:
+                        missing = True
+                        break
+                    cells.append(_fmt(row["accuracy_mean"], row["accuracy_std"], 2))
+                if missing:
                     continue
-                print(
-                    f"{dataset:<10} {row['method_label']:<8} {time_steps:>3} "
-                    f"{_fmt(row['accuracy_mean'], row['accuracy_std'], 2):>14} "
-                    f"{_fmt(row['firing_density_mean_mean'], row['firing_density_mean_std'], 4):>20}"
-                )
+                label = grab(dataset, method, time_steps, "noise", noise_sigmas[0])[
+                    "method_label"
+                ]
+                print(f"{dataset:<10} {label:<8} {time_steps:>3}" + "".join(f"{c:>14}" for c in cells))
 
 
 def main() -> None:
@@ -417,10 +448,19 @@ def main() -> None:
         args.out_dir = (ROOT / args.out_dir).resolve()
     device = get_torch_device(args.device)
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    if args.noise_sigmas:
+        noise_sigmas = [float(s) for s in args.noise_sigmas]
+    elif args.noise_sigma is not None:
+        noise_sigmas = [float(args.noise_sigma)]
+    else:
+        noise_sigmas = [1.0]
+    eval_plan = [(0.0, "clean", "yes")] + [
+        (sigma, "noise", "no") for sigma in noise_sigmas
+    ]
     raw_rows = []
     print(
         "[INFO] clean σ=0 → sparsity/energy; "
-        f"σ={args.noise_sigma:g} {args.noise_position} → robustness only",
+        f"σ={noise_sigmas} {args.noise_position} → robustness only",
         flush=True,
     )
     print(
@@ -442,10 +482,7 @@ def main() -> None:
                 model = load_model(dataset, ckpt, device, args)
                 model.set_L(args.L)
                 for time_steps in args.time_steps:
-                    for sigma, condition, use_energy in (
-                        (0.0, "clean", "yes"),
-                        (args.noise_sigma, "noise", "no"),
-                    ):
+                    for sigma, condition, use_energy in eval_plan:
                         seed_all(seed)
                         result = evaluate(
                             model,

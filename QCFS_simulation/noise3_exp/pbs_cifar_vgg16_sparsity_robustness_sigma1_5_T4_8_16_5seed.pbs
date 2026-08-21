@@ -1,0 +1,70 @@
+#!/bin/bash
+#PBS -N vgg_sr5
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR-10/100 VGG16：复用五方法 checkpoint，只测不训
+#   Seeds 40–44；T=4,8,16；完整 10,000 test set
+#   稀疏度/能耗：clean σ=0
+#   鲁棒性：post-IF σ=1,2,3,4,5；噪声 firing 不当部署能耗
+#
+# Login:
+#   cd /home/595/sl9144/codes/snn_simulation && git pull
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   qsub -v CIFAR_ROOT QCFS_simulation/noise3_exp/pbs_cifar_vgg16_sparsity_robustness_sigma1_5_T4_8_16_5seed.pbs
+
+set -euo pipefail
+
+mkdir -p /home/595/sl9144/logs
+LIVE_LOG="/home/595/sl9144/logs/vgg_sr5.${PBS_JOBID:-manual}.out"
+exec > >(tee -a "${LIVE_LOG}") 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-${ROOT}/../important_results/cifar_vgg16_sparsity_robustness_sigma1_5_T4_8_16_5seed}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "CIFAR_ROOT=${CIFAR_ROOT}"
+
+python -u noise3_exp/measure_vgg16_sparsity_robustness.py \
+  --datasets cifar10 cifar100 \
+  --methods l2 l2_wo l1 mne_l2 \
+  --seeds 40 41 42 43 44 \
+  --time-steps 4 8 16 \
+  --noise-sigmas 1 2 3 4 5 \
+  --noise-position post_input_if \
+  --batch-size "${CIFAR_BATCH}" \
+  --workers "${CIFAR_NUM_WORKERS}" \
+  --out-dir "${OUT_DIR}"
+
+echo "=== ALL DONE $(date) ==="
+ls -la "${OUT_DIR}"
