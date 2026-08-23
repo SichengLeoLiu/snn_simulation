@@ -1,0 +1,79 @@
+#!/bin/bash
+#PBS -N envmer
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR-100 VGG16 seed 42 merge probes.
+#   METHOD=interp_dual | twostage | distill | gradnorm
+#   STAGE1=l2_wo | calibrated   (only for twostage)
+#
+# Login:
+#   cd /home/595/sl9144/codes/snn_simulation && git pull
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   qsub -v CIFAR_ROOT,METHOD=interp_dual \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_envelope_merge_seed42.pbs
+#   qsub -v CIFAR_ROOT,METHOD=twostage,STAGE1=l2_wo \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_envelope_merge_seed42.pbs
+#   qsub -v CIFAR_ROOT,METHOD=twostage,STAGE1=calibrated \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_envelope_merge_seed42.pbs
+#   qsub -v CIFAR_ROOT,METHOD=distill \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_envelope_merge_seed42.pbs
+#   qsub -v CIFAR_ROOT,METHOD=gradnorm \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_envelope_merge_seed42.pbs
+
+set -euo pipefail
+
+METHOD="${METHOD:?set METHOD=interp_dual|twostage|distill|gradnorm}"
+STAGE1="${STAGE1:-calibrated}"
+
+mkdir -p /home/595/sl9144/logs
+LIVE_LOG="/home/595/sl9144/logs/envmer_${METHOD}_${STAGE1}.${PBS_JOBID:-manual}.out"
+exec > >(tee -a "${LIVE_LOG}") 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "METHOD=${METHOD} STAGE1=${STAGE1}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-${ROOT}/../important_results/cifar100_vgg16_envelope_merge_seed42}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+
+ARGS=(
+  --method "${METHOD}"
+  --stage1 "${STAGE1}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${CIFAR_BATCH}"
+  --workers "${CIFAR_NUM_WORKERS}"
+)
+python -u noise3_exp/run_cifar_vgg16_envelope_merge_seed42.py "${ARGS[@]}"
+
+echo "=== ALL DONE $(date) METHOD=${METHOD} STAGE1=${STAGE1} ==="
+ls -la "${OUT_DIR}"

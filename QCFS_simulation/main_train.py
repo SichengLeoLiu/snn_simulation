@@ -1,9 +1,11 @@
 import argparse
+import math
 import os
 import torch
 import torch.nn as nn
 import torch.optim
 from Models import modelpool
+from Models.VGG import remap_legacy_vgg_state_dict
 from Models.spike_temporal_adjust import SPIKE_SCHEDULE_MODES
 from Preprocess import datapool
 from grad_probe import (
@@ -145,7 +147,37 @@ parser.add_argument(
     "--reg_warmup_epochs",
     default=0,
     type=int,
-    help="正则系数线性 warmup 轮数；0 表示不 warmup",
+    help="正则系数 warmup 轮数；0 表示不 warmup",
+)
+parser.add_argument(
+    "--reg_warmup_schedule",
+    default="linear",
+    choices=["linear", "cosine"],
+    help="--reg_warmup_epochs>0 时 β1 从 0 升到目标值的形状",
+)
+parser.add_argument(
+    "--init-from",
+    default="",
+    type=str,
+    help="用已有 checkpoint 初始化后再训练（两阶段 / 续训）",
+)
+parser.add_argument(
+    "--save-epochs",
+    default="",
+    type=str,
+    help="额外保存的 0-based epoch，逗号分隔，例如 29,59",
+)
+parser.add_argument(
+    "--lr-cosine-t-max",
+    default=None,
+    type=int,
+    help="覆盖 CosineAnnealingLR 的 T_max；默认等于 --epochs",
+)
+parser.add_argument(
+    "--lr-cosine-last-epoch",
+    default=-1,
+    type=int,
+    help="CosineAnnealingLR last_epoch，用于续上一段 300-epoch 余弦",
 )
 parser.add_argument(
     "--elastic_l1_ratio",
@@ -474,6 +506,15 @@ def main():
     os.makedirs(log_dir, exist_ok=True)
 
     model.to(device)
+    if args.init_from:
+        init_path = os.path.abspath(args.init_from)
+        if not os.path.isfile(init_path):
+            raise FileNotFoundError("--init-from missing: %s" % (init_path,))
+        state = torch.load(init_path, map_location="cpu")
+        if isinstance(state, dict) and "state_dict" in state:
+            state = state["state_dict"]
+        model.load_state_dict(remap_legacy_vgg_state_dict(state), strict=True)
+        print("init-from: %s" % (init_path,))
 
     reg_loss_fn = None
     calibrated_mne_state = {"alpha": float(args.calibrated_mne_alpha)}
@@ -743,7 +784,9 @@ def main():
             quant_level=q,
         )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=args.epochs
+        optimizer,
+        T_max=int(args.lr_cosine_t_max if args.lr_cosine_t_max else args.epochs),
+        last_epoch=int(args.lr_cosine_last_epoch),
     )
     best_acc = 0.0
     best_rmse = float("inf")
@@ -764,7 +807,13 @@ def main():
         % (args.regularizer, args.weight_decay, args.reg_coeff)
     )
     if args.reg_warmup_epochs > 0:
-        logger.info("reg_warmup_epochs=%d", args.reg_warmup_epochs)
+        logger.info(
+            "reg_warmup_epochs=%d schedule=%s",
+            args.reg_warmup_epochs,
+            args.reg_warmup_schedule,
+        )
+    if args.init_from:
+        logger.info("init_from=%s", args.init_from)
     logger.info("ckpt_save_mode=%s", args.ckpt_save_mode)
     if args.regularizer == "mne_l2":
         logger.info(
@@ -953,10 +1002,18 @@ def main():
             "diff1d：回归 y=x1-x2（数据上 x1>=x2）；Linear 无 bias、写死差分；指标为 RMSE"
         )
 
+    extra_save = set()
+    if args.save_epochs.strip():
+        extra_save = {int(x) for x in args.save_epochs.split(",") if x.strip()}
+
     def _epoch_reg_coeff(epoch: int) -> float:
         if reg_loss_fn is None or args.reg_warmup_epochs <= 0:
             return args.reg_coeff
-        warmup_scale = min(1.0, float(epoch + 1) / float(args.reg_warmup_epochs))
+        t = min(1.0, float(epoch + 1) / float(args.reg_warmup_epochs))
+        if args.reg_warmup_schedule == "cosine":
+            warmup_scale = 0.5 * (1.0 - math.cos(math.pi * t))
+        else:
+            warmup_scale = t
         return args.reg_coeff * warmup_scale
 
     def _epoch_calibrated_mne_alpha(epoch: int) -> float:
@@ -1125,6 +1182,10 @@ def main():
                 filename = os.path.join(log_dir, "%s.pth" % (identifier,))
                 print("Saving model to %s" % (filename,))
                 torch.save(model.state_dict(), filename)
+            if epoch in extra_save:
+                snap = os.path.join(log_dir, "%s_ep%d.pth" % (identifier, epoch))
+                print("Saving snapshot to %s" % (snap,))
+                torch.save(model.state_dict(), snap)
 
     if is_diff1d:
         logger.info("Best Test RMSE={:.6f}".format(best_rmse))
