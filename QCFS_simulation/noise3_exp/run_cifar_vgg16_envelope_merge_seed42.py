@@ -71,6 +71,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="ignore existing distill/gradnorm checkpoints and train again",
     )
+    parser.add_argument("--beta-ref", type=float, default=1e-4, help="gradnorm: β = clip(ref·||∇CE||/||∇MNE||)")
+    parser.add_argument("--beta-min", type=float, default=3e-5, help="gradnorm lower clip")
+    parser.add_argument("--beta-max", type=float, default=3e-4, help="gradnorm upper clip")
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=1e-4,
+        help="gradnorm optimizer L2-all (0 disables extra WD)",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--out-root",
@@ -81,7 +90,20 @@ def parse_args() -> argparse.Namespace:
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
     args.out_root.mkdir(parents=True, exist_ok=True)
+    if args.method == "gradnorm" and args.beta_min > args.beta_max:
+        parser.error("--beta-min must be <= --beta-max")
     return args
+
+
+def _fmt(v: float) -> str:
+    return f"{float(v):.6g}".replace("+", "").replace("-", "m")
+
+
+def gradnorm_tag(args) -> str:
+    return (
+        f"gradnorm_ref{_fmt(args.beta_ref)}_min{_fmt(args.beta_min)}"
+        f"_max{_fmt(args.beta_max)}_wd{_fmt(args.weight_decay)}"
+    )
 
 
 def five_reg_ckpt(variant: str, rc, seed: int) -> Path:
@@ -441,14 +463,20 @@ def run_distill(args, device) -> None:
 
 
 def run_gradnorm(args, device) -> None:
-    cfg_dir = args.out_root / "gradnorm"
+    tag = gradnorm_tag(args)
+    cfg_dir = args.out_root / tag
     cfg_dir.mkdir(parents=True, exist_ok=True)
-    suffix = f"envmerge_gradnorm_seed{args.seed}_L{LVAL}_trainT0"
+    suffix = f"envmerge_{tag}_seed{args.seed}_L{LVAL}_trainT0"
     ckpt = ROOT / f"{DATASET}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix}.pth"
+    print(
+        f"[GRADNORM] tag={tag} ref={args.beta_ref:g} "
+        f"clip=[{args.beta_min:g},{args.beta_max:g}] wd={args.weight_decay:g}",
+        flush=True,
+    )
     if ckpt.exists() and not args.retrain:
         print(f"[SKIP TRAIN] {ckpt}", flush=True)
         model = build_model(load_state(ckpt), device)
-        dump_sweep(model.eval(), args, cfg_dir, "gradnorm", device)
+        dump_sweep(model.eval(), args, cfg_dir, tag, device)
         return
     train_loader, test_loader = datapool(
         DATASET,
@@ -462,7 +490,10 @@ def run_gradnorm(args, device) -> None:
     model.set_spike_schedule("normal")
     model.to(device)
     optimizer = torch.optim.SGD(
-        model.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4
+        model.parameters(),
+        lr=0.1,
+        momentum=0.9,
+        weight_decay=float(args.weight_decay),
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     criterion = nn.CrossEntropyLoss()
@@ -489,8 +520,8 @@ def run_gradnorm(args, device) -> None:
             n_mne = math.sqrt(
                 sum(float(g.detach().pow(2).sum()) for g in grads_mne if g is not None)
             )
-            beta = 1e-4 * n_ce / (n_mne + 1e-12)
-            beta = min(3e-4, max(3e-5, beta))
+            beta = float(args.beta_ref) * n_ce / (n_mne + 1e-12)
+            beta = min(float(args.beta_max), max(float(args.beta_min), beta))
             betas.append(beta)
             loss = ce + beta * mne
             loss.backward()
@@ -515,7 +546,7 @@ def run_gradnorm(args, device) -> None:
     model.set_mode("rate_uniform")
     model.set_first_layer_input_noise_position("post_input_if")
     model.set_first_layer_input_noise_type("gaussian")
-    dump_sweep(model.eval(), args, cfg_dir, "gradnorm", device)
+    dump_sweep(model.eval(), args, cfg_dir, tag, device)
 
 
 def main() -> None:

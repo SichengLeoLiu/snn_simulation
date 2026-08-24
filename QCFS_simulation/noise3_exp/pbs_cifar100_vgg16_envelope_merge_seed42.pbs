@@ -13,10 +13,13 @@
 # CIFAR-100 VGG16 seed 42 merge probes.
 #   METHOD=interp_dual | twostage | distill | gradnorm
 #   STAGE1=l2_wo | calibrated   (only for twostage)
+#   gradnorm extras: BETA_REF BETA_MIN BETA_MAX WD
 #
 # Login:
 #   cd /home/595/sl9144/codes/snn_simulation && git pull
 #   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   qsub -v CIFAR_ROOT,METHOD=gradnorm,BETA_REF=1e-4,BETA_MIN=1e-4,BETA_MAX=1e-3,WD=1e-4 \
+#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_envelope_merge_seed42.pbs
 #   qsub -v CIFAR_ROOT,METHOD=interp_dual \
 #     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_envelope_merge_seed42.pbs
 #   qsub -v CIFAR_ROOT,METHOD=twostage,STAGE1=l2_wo \
@@ -32,12 +35,16 @@ set -euo pipefail
 
 METHOD="${METHOD:?set METHOD=interp_dual|twostage|distill|gradnorm}"
 STAGE1="${STAGE1:-calibrated}"
+BETA_REF="${BETA_REF:-1e-4}"
+BETA_MIN="${BETA_MIN:-3e-5}"
+BETA_MAX="${BETA_MAX:-3e-4}"
+WD="${WD:-1e-4}"
 
 mkdir -p /home/595/sl9144/logs
-LIVE_LOG="/home/595/sl9144/logs/envmer_${METHOD}_${STAGE1}.${PBS_JOBID:-manual}.out"
+LIVE_LOG="/home/595/sl9144/logs/envmer_${METHOD}_${STAGE1}_${BETA_REF}_${BETA_MIN}_${BETA_MAX}_${WD}.${PBS_JOBID:-manual}.out"
 exec > >(tee -a "${LIVE_LOG}") 2>&1
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "METHOD=${METHOD} STAGE1=${STAGE1}"
+echo "METHOD=${METHOD} STAGE1=${STAGE1} BETA_REF=${BETA_REF} BETA_MIN=${BETA_MIN} BETA_MAX=${BETA_MAX} WD=${WD}"
 
 module purge
 module use /g/data/dk92/apps/Modules/modulefiles
@@ -73,6 +80,9 @@ ARGS=(
   --batch-size "${CIFAR_BATCH}"
   --workers "${CIFAR_NUM_WORKERS}"
 )
+if [[ "${METHOD}" == "gradnorm" ]]; then
+  ARGS+=(--beta-ref "${BETA_REF}" --beta-min "${BETA_MIN}" --beta-max "${BETA_MAX}" --weight-decay "${WD}")
+fi
 python -u noise3_exp/run_cifar_vgg16_envelope_merge_seed42.py "${ARGS[@]}"
 
 echo "=== ALL DONE $(date) METHOD=${METHOD} STAGE1=${STAGE1} ==="
