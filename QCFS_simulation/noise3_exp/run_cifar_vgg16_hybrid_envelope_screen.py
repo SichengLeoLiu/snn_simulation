@@ -253,7 +253,7 @@ def sweep(model, loader, device, split: str) -> list[dict]:
         rows.append(row)
         extra = "" if use_energy == "yes" else " [diag energy]"
         print(
-            f"{split:5s} σ={sigma:g:<4} acc={result['accuracy']:.2f} "
+            f"{split:<5} sigma={sigma:g} acc={result['accuracy']:.2f} "
             f"fire={result['if_firing_density']:.4f} "
             f"E={result['energy_mJ']:.4f} mJ{extra}",
             flush=True,

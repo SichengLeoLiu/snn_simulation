@@ -66,6 +66,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=int(os.environ.get("CIFAR_BATCH", "128")))
     parser.add_argument("--workers", type=int, default=int(os.environ.get("CIFAR_NUM_WORKERS", "8")))
     parser.add_argument("--epochs", type=int, default=300)
+    parser.add_argument(
+        "--retrain",
+        action="store_true",
+        help="ignore existing distill/gradnorm checkpoints and train again",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--out-root",
@@ -349,6 +354,11 @@ def run_distill(args, device) -> None:
     cfg_dir.mkdir(parents=True, exist_ok=True)
     suffix = f"envmerge_distill_seed{args.seed}_L{LVAL}_trainT0"
     ckpt = ROOT / f"{DATASET}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix}.pth"
+    if ckpt.exists() and not args.retrain:
+        print(f"[SKIP TRAIN] {ckpt}", flush=True)
+        student = build_model(load_state(ckpt), device)
+        dump_sweep(student.eval(), args, cfg_dir, "distill", device)
+        return
     train_loader, test_loader = datapool(
         DATASET,
         args.batch_size,
@@ -435,6 +445,11 @@ def run_gradnorm(args, device) -> None:
     cfg_dir.mkdir(parents=True, exist_ok=True)
     suffix = f"envmerge_gradnorm_seed{args.seed}_L{LVAL}_trainT0"
     ckpt = ROOT / f"{DATASET}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix}.pth"
+    if ckpt.exists() and not args.retrain:
+        print(f"[SKIP TRAIN] {ckpt}", flush=True)
+        model = build_model(load_state(ckpt), device)
+        dump_sweep(model.eval(), args, cfg_dir, "gradnorm", device)
+        return
     train_loader, test_loader = datapool(
         DATASET,
         args.batch_size,
