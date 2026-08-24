@@ -107,11 +107,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def config_name(args) -> str:
-    if args.family == "hybrid":
+    family = getattr(args, "family", None)
+    if family == "hybrid":
         return f"hybrid_b0_{_fmt(args.beta0)}_b1_{_fmt(args.beta1)}"
-    return (
-        f"onesided_a{_fmt(args.alpha)}_tau{_fmt(args.tau)}_b{_fmt(args.beta)}"
-    )
+    if family == "onesided":
+        return (
+            f"onesided_a{_fmt(args.alpha)}_tau{_fmt(args.tau)}_b{_fmt(args.beta)}"
+        )
+    return str(family or "unknown")
 
 
 def suffix(args) -> str:
