@@ -37,7 +37,7 @@ mkdir -p /home/595/sl9144/logs
 LIVE_LOG="/home/595/sl9144/logs/hybenv_${FAMILY}_${BETA0:-}_${BETA1:-}_${ALPHA:-}.${PBS_JOBID:-manual}.out"
 exec > >(tee -a "${LIVE_LOG}") 2>&1
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "FAMILY=${FAMILY} BETA0=${BETA0:-} BETA1=${BETA1:-} ALPHA=${ALPHA:-} TAU=${TAU:-} BETA=${BETA:-}"
+echo "FAMILY=${FAMILY} BETA0=${BETA0:-} BETA1=${BETA1:-} ALPHA=${ALPHA:-} TAU=${TAU:-} BETA=${BETA:-} RMAX=${RMAX:-}"
 
 module purge
 module use /g/data/dk92/apps/Modules/modulefiles
@@ -70,7 +70,7 @@ ARGS=(--family "${FAMILY}" --out-root "${OUT_DIR}" --batch-size "${CIFAR_BATCH}"
 if [[ "${FAMILY}" == "hybrid" ]]; then
   ARGS+=(--beta0 "${BETA0:?}" --beta1 "${BETA1:?}")
 else
-  ARGS+=(--alpha "${ALPHA:-0.1}" --tau "${TAU:-1.0}" --beta "${BETA:-5e-4}")
+  ARGS+=(--alpha "${ALPHA:-0.1}" --tau "${TAU:-1.0}" --beta "${BETA:-5e-4}" --risk-max "${RMAX:-2}")
 fi
 
 python -u noise3_exp/run_cifar_vgg16_hybrid_envelope_screen.py "${ARGS[@]}"

@@ -81,6 +81,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--alpha", type=float, default=0.1)
     parser.add_argument("--tau", type=float, default=1.0)
     parser.add_argument("--beta", type=float, default=5e-4, help="onesided L2 coeff")
+    parser.add_argument(
+        "--risk-max",
+        type=float,
+        default=2.0,
+        help="onesided/calibrated mean-one risk clip upper bound",
+    )
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--batch-size", type=int, default=int(os.environ.get("CIFAR_BATCH", "128")))
@@ -111,9 +117,13 @@ def config_name(args) -> str:
     if family == "hybrid":
         return f"hybrid_b0_{_fmt(args.beta0)}_b1_{_fmt(args.beta1)}"
     if family == "onesided":
-        return (
+        name = (
             f"onesided_a{_fmt(args.alpha)}_tau{_fmt(args.tau)}_b{_fmt(args.beta)}"
         )
+        risk_max = float(getattr(args, "risk_max", 2.0))
+        if abs(risk_max - 2.0) > 1e-12:
+            name += f"_rmax{_fmt(risk_max)}"
+        return name
     return str(family or "unknown")
 
 
@@ -167,7 +177,7 @@ def train(args) -> Path:
             "--calibrated_mne_onesided",
             "--calibrated_mne_tau", str(args.tau),
             "--calibrated_mne_risk_min", "0.5",
-            "--calibrated_mne_risk_max", "2.0",
+            "--calibrated_mne_risk_max", str(getattr(args, "risk_max", 2.0)),
             "--calibrated_mne_alpha_start_epoch", "30",
             "--calibrated_mne_alpha_warmup_epochs", "50",
         ]
