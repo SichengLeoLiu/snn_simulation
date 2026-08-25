@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CIFAR-100 VGG16 seed-42 screen: approach the noise-sweep upper envelope.
+"""CIFAR VGG16 seed-42 screen: approach the noise-sweep upper envelope.
 
 Goal: a *single* checkpoint whose validation curve stays close to
 Calibrated MNE at low noise and Old MNE at high noise. Do not claim it
@@ -17,9 +17,11 @@ Selection uses a 5k train-holdout val sweep (not the test set).
 Test sweeps are recorded but must not pick the model.
 Clean Horowitz energy is the deployment number; noisy firing is diagnostic.
 
-Reference bars (CIFAR-100 VGG16 5-seed post-IF, T=16):
-  Calibrated clean = 63.91%   (need val clean ≥ 63.41)
-  Old MNE σ=5     = 41.14%   (need val σ=5 ≥ 39.14)
+Reference bars (VGG16 5-seed post-IF, T=16):
+  CIFAR-100 Calibrated clean = 63.91%  (need val clean ≥ 63.41)
+  CIFAR-100 Old MNE σ=5      = 41.14%  (need val σ=5 ≥ 39.14)
+  CIFAR-10  Calibrated clean = 91.13%  (need val clean ≥ 90.63)
+  CIFAR-10  Old MNE σ=5      = 72.06%  (need val σ=5 ≥ 70.06)
   Rank eligible configs by val AUC on σ∈[0,5].
 """
 from __future__ import annotations
@@ -49,7 +51,7 @@ from utils import get_torch_device, seed_all  # noqa: E402
 import measure_vgg16_horowitz_energy as energy  # noqa: E402
 
 
-DATASET = "cifar100"
+DEFAULT_DATASET = "cifar100"
 ARCH = "vgg16"
 SEED = 42
 LVAL = 16
@@ -60,11 +62,15 @@ VAL_SIZE = 5000
 VAL_SPLIT_SEED = 0
 SIGMAS = [i / 4 for i in range(0, 21)]  # 0, 0.25, ..., 5
 
-REF_CALIBRATED_CLEAN = 63.91
-REF_OLD_MNE_SIGMA5 = 41.14
 CLEAN_TOL = 0.5
 SIGMA5_TOL = 2.0
+REFS = {
+    "cifar100": {"calibrated_clean": 63.91, "old_mne_sigma5": 41.14},
+    "cifar10": {"calibrated_clean": 91.128, "old_mne_sigma5": 72.056},
+}
 
+CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
+CIFAR10_STD = (0.2023, 0.1994, 0.2010)
 CIFAR100_MEAN = [n / 255.0 for n in [129.3, 124.1, 112.4]]
 CIFAR100_STD = [n / 255.0 for n in [68.2, 65.4, 70.4]]
 
@@ -87,6 +93,7 @@ def parse_args() -> argparse.Namespace:
         default=2.0,
         help="onesided/calibrated mean-one risk clip upper bound",
     )
+    parser.add_argument("--dataset", choices=["cifar10", "cifar100"], default=DEFAULT_DATASET)
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--batch-size", type=int, default=int(os.environ.get("CIFAR_BATCH", "128")))
@@ -131,8 +138,12 @@ def suffix(args) -> str:
     return f"hybenv_{config_name(args)}_seed{args.seed}_L{LVAL}_trainT0"
 
 
+def dataset_refs(dataset: str) -> dict:
+    return REFS[dataset]
+
+
 def ckpt_path(args) -> Path:
-    return ROOT / f"{DATASET}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix(args)}.pth"
+    return ROOT / f"{args.dataset}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix(args)}.pth"
 
 
 def train(args) -> Path:
@@ -147,7 +158,7 @@ def train(args) -> Path:
     cmd = [
         sys.executable,
         str(ROOT / "main_train.py"),
-        "-data", DATASET,
+        "-data", args.dataset,
         "-arch", ARCH,
         "-L", str(LVAL),
         "-T", "0",
@@ -188,19 +199,23 @@ def train(args) -> Path:
     return ckpt
 
 
-def cifar100_eval_dataset(*, train: bool):
+def eval_dataset(dataset: str, *, train: bool):
     root = os.path.expanduser(os.environ.get("CIFAR_ROOT", "~/datasets"))
+    if dataset == "cifar10":
+        mean, std, cls = CIFAR10_MEAN, CIFAR10_STD, datasets.CIFAR10
+    else:
+        mean, std, cls = CIFAR100_MEAN, CIFAR100_STD, datasets.CIFAR100
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
+            transforms.Normalize(mean, std),
         ]
     )
-    return datasets.CIFAR100(root, train=train, transform=transform, download=False)
+    return cls(root, train=train, transform=transform, download=False)
 
 
 def val_loader(args, pin_memory: bool) -> DataLoader:
-    train_ds = cifar100_eval_dataset(train=True)
+    train_ds = eval_dataset(args.dataset, train=True)
     g = torch.Generator().manual_seed(VAL_SPLIT_SEED)
     perm = torch.randperm(len(train_ds), generator=g).tolist()
     subset = Subset(train_ds, perm[:VAL_SIZE])
@@ -215,7 +230,7 @@ def val_loader(args, pin_memory: bool) -> DataLoader:
 
 def test_loader(args, pin_memory: bool) -> DataLoader:
     return DataLoader(
-        cifar100_eval_dataset(train=False),
+        eval_dataset(args.dataset, train=False),
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.workers,
@@ -223,8 +238,8 @@ def test_loader(args, pin_memory: bool) -> DataLoader:
     )
 
 
-def load_model(ckpt: Path, device):
-    model = modelpool(ARCH, DATASET)
+def load_model(ckpt: Path, device, dataset: str):
+    model = modelpool(ARCH, dataset)
     state = torch.load(ckpt, map_location="cpu")
     if isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
@@ -295,10 +310,12 @@ def scorecard(val_rows: list[dict], test_rows: list[dict], args, ckpt: Path) -> 
     test_ys = [float(r["accuracy"]) for r in test_rows]
     val_clean = acc_at(val_rows, 0.0)
     val_s5 = acc_at(val_rows, 5.0)
-    clean_ok = val_clean >= REF_CALIBRATED_CLEAN - CLEAN_TOL
-    s5_ok = val_s5 >= REF_OLD_MNE_SIGMA5 - SIGMA5_TOL
+    refs = dataset_refs(args.dataset)
+    clean_ok = val_clean >= refs["calibrated_clean"] - CLEAN_TOL
+    s5_ok = val_s5 >= refs["old_mne_sigma5"] - SIGMA5_TOL
     card = {
         "config": config_name(args),
+        "dataset": args.dataset,
         "family": args.family,
         "beta0": args.beta0,
         "beta1": args.beta1,
@@ -316,8 +333,8 @@ def scorecard(val_rows: list[dict], test_rows: list[dict], args, ckpt: Path) -> 
         "clean_ok": clean_ok,
         "sigma5_ok": s5_ok,
         "eligible": bool(clean_ok and s5_ok),
-        "ref_calibrated_clean": REF_CALIBRATED_CLEAN,
-        "ref_old_mne_sigma5": REF_OLD_MNE_SIGMA5,
+        "ref_calibrated_clean": refs["calibrated_clean"],
+        "ref_old_mne_sigma5": refs["old_mne_sigma5"],
         "clean_energy_mJ": float(val_rows[0]["energy_mJ"]),
         "clean_fire": float(val_rows[0]["if_firing_density"]),
     }
@@ -332,10 +349,11 @@ def summarize(out_root: Path) -> None:
         print(f"No scorecards in {out_root}")
         return
     cards.sort(key=lambda c: (-int(c["eligible"]), -float(c["val_auc"])))
+    refs = dataset_refs(str(cards[0].get("dataset", DEFAULT_DATASET)))
     print(
         "\nSelection is VAL-only. Test numbers are logged, not used to pick.\n"
-        f"Need val clean ≥ {REF_CALIBRATED_CLEAN - CLEAN_TOL:.2f} "
-        f"and val σ=5 ≥ {REF_OLD_MNE_SIGMA5 - SIGMA5_TOL:.2f}.\n"
+        f"Need val clean ≥ {refs['calibrated_clean'] - CLEAN_TOL:.2f} "
+        f"and val σ=5 ≥ {refs['old_mne_sigma5'] - SIGMA5_TOL:.2f}.\n"
     )
     print(
         f"{'config':<36} {'elig':>4} {'val0':>7} {'val5':>7} {'valAUC':>8} "
@@ -368,14 +386,14 @@ def main() -> None:
     cfg_dir = args.out_root / name
     cfg_dir.mkdir(parents=True, exist_ok=True)
     print(
-        f"[INFO] {name}: val 5k holdout for selection; "
+        f"[INFO] {args.dataset} {name}: val 5k holdout for selection; "
         "test 10k recorded only; clean energy for deployment",
         flush=True,
     )
     ckpt = train(args)
     device = get_torch_device(args.device)
     pin = device.type == "cuda"
-    model = load_model(ckpt, device)
+    model = load_model(ckpt, device, args.dataset)
     val_rows = sweep(model, val_loader(args, pin), device, "val")
     test_rows = sweep(model, test_loader(args, pin), device, "test")
     write_csv(cfg_dir / "val_sweep.csv", val_rows)
