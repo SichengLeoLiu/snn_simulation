@@ -27,7 +27,7 @@
 
 set -euo pipefail
 
-FAMILY="${FAMILY:?set FAMILY=hybrid or onesided}"
+FAMILY="${FAMILY:?set FAMILY=hybrid, onesided, or calibrated}"
 DATASET="${DATASET:-cifar100}"
 SEED="${SEED:-42}"
 
@@ -84,6 +84,8 @@ ARGS=(
 )
 if [[ "${FAMILY}" == "hybrid" ]]; then
   ARGS+=(--beta0 "${BETA0:?}" --beta1 "${BETA1:?}")
+elif [[ "${FAMILY}" == "calibrated" ]]; then
+  ARGS+=(--alpha "${ALPHA:-0.1}" --beta "${BETA:-5e-4}" --risk-max "${RMAX:-2}")
 else
   ARGS+=(--alpha "${ALPHA:-0.1}" --tau "${TAU:-1.0}" --beta "${BETA:-5e-4}" --risk-max "${RMAX:-2}")
 fi

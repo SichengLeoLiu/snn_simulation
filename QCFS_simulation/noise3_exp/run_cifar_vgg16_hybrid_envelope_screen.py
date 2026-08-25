@@ -81,12 +81,12 @@ def _fmt(v: float) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--family", choices=["hybrid", "onesided"], default=None)
+    parser.add_argument("--family", choices=["hybrid", "onesided", "calibrated"], default=None)
     parser.add_argument("--beta0", type=float, default=None, help="hybrid optimizer WD")
     parser.add_argument("--beta1", type=float, default=None, help="hybrid Old MNE coeff")
     parser.add_argument("--alpha", type=float, default=0.1)
     parser.add_argument("--tau", type=float, default=1.0)
-    parser.add_argument("--beta", type=float, default=5e-4, help="onesided L2 coeff")
+    parser.add_argument("--beta", type=float, default=5e-4, help="onesided/calibrated L2 coeff")
     parser.add_argument(
         "--risk-max",
         type=float,
@@ -131,6 +131,8 @@ def config_name(args) -> str:
         if abs(risk_max - 2.0) > 1e-12:
             name += f"_rmax{_fmt(risk_max)}"
         return name
+    if family == "calibrated":
+        return f"calibrated_a{_fmt(args.alpha)}_b{_fmt(args.beta)}"
     return str(family or "unknown")
 
 
@@ -142,7 +144,29 @@ def dataset_refs(dataset: str) -> dict:
     return REFS[dataset]
 
 
+def _ablate_fmt(v: float) -> str:
+    return f"{float(v):.6g}".replace("+", "").replace("-", "m").replace(".", "p")
+
+
+def _calibrated_paper_ckpt(args) -> Path:
+    """Reuse five-reg Calibrated MNE checkpoints when present."""
+    suf = (
+        f"mneablate_{args.dataset}_calibrated_mne_a0p1_"
+        f"rc{_ablate_fmt(args.beta)}_seed{args.seed}_L{LVAL}_trainT0"
+    )
+    ckpt_dir = ROOT / f"{args.dataset}-checkpoints"
+    current = ckpt_dir / f"{ARCH}_L[{LVAL}]_{suf}.pth"
+    if current.exists():
+        return current
+    legacy = ckpt_dir / f"{ARCH}_L[{LVAL}]_{suf.replace('_trainT0', '')}.pth"
+    return legacy if legacy.exists() else current
+
+
 def ckpt_path(args) -> Path:
+    if args.family == "calibrated":
+        paper = _calibrated_paper_ckpt(args)
+        if paper.exists():
+            return paper
     return ROOT / f"{args.dataset}-checkpoints" / f"{ARCH}_L[{LVAL}]_{suffix(args)}.pth"
 
 
@@ -178,6 +202,17 @@ def train(args) -> Path:
             "--mne_detach_lambda",
             "--weight_decay", str(args.beta0),
             "--reg_coeff", str(args.beta1),
+        ]
+    elif args.family == "calibrated":
+        cmd += [
+            "--regularizer", "calibrated_mne_l2",
+            "--weight_decay", "0",
+            "--reg_coeff", str(args.beta),
+            "--calibrated_mne_alpha", str(args.alpha),
+            "--calibrated_mne_risk_min", "0.5",
+            "--calibrated_mne_risk_max", str(getattr(args, "risk_max", 2.0)),
+            "--calibrated_mne_alpha_start_epoch", "30",
+            "--calibrated_mne_alpha_warmup_epochs", "50",
         ]
     else:
         cmd += [
@@ -319,9 +354,9 @@ def scorecard(val_rows: list[dict], test_rows: list[dict], args, ckpt: Path) -> 
         "family": args.family,
         "beta0": args.beta0,
         "beta1": args.beta1,
-        "alpha": args.alpha if args.family == "onesided" else None,
+        "alpha": args.alpha if args.family in {"onesided", "calibrated"} else None,
         "tau": args.tau if args.family == "onesided" else None,
-        "beta": args.beta if args.family == "onesided" else None,
+        "beta": args.beta if args.family in {"onesided", "calibrated"} else None,
         "seed": args.seed,
         "checkpoint": str(ckpt),
         "val_clean": val_clean,
