@@ -112,6 +112,8 @@ def train(
     M = len(train_loader)
     total = 0
     correct = 0
+    epoch_acc = None
+    n_reg_stats = 0
     for i, (images, labels) in enumerate((train_loader)):
         optimizer.zero_grad()
         labels = labels.to(device)
@@ -124,12 +126,41 @@ def train(
         if reg_loss_fn is not None:
             reg = reg_loss_fn(model, T, quant_level)
             loss = loss + float(reg_coeff) * reg
+            stats = getattr(model, "_calibrated_mne_stats", None)
+            if stats is not None:
+                if epoch_acc is None:
+                    epoch_acc = {
+                        "q_mean": 0.0,
+                        "q_std": 0.0,
+                        "q_min": float("inf"),
+                        "q_max": float("-inf"),
+                        "q_os_mean": 0.0,
+                        "q_os_std": 0.0,
+                        "p_gt_tau": 0.0,
+                    }
+                n_reg_stats += 1
+                for key in ("q_mean", "q_std", "q_os_mean", "q_os_std", "p_gt_tau"):
+                    epoch_acc[key] += float(stats.get(key, 0.0))
+                epoch_acc["q_min"] = min(
+                    epoch_acc["q_min"], float(stats.get("q_min", 1.0))
+                )
+                epoch_acc["q_max"] = max(
+                    epoch_acc["q_max"], float(stats.get("q_max", 1.0))
+                )
         running_loss += loss.item()
         loss.backward()
         optimizer.step()
         total += float(labels.size(0))
         _, predicted = outputs.cpu().max(1)
         correct += float(predicted.eq(labels.cpu()).sum().item())
+    if epoch_acc is not None and n_reg_stats > 0:
+        averaged = {
+            key: epoch_acc[key] / float(n_reg_stats)
+            for key in ("q_mean", "q_std", "q_os_mean", "q_os_std", "p_gt_tau")
+        }
+        averaged["q_min"] = epoch_acc["q_min"]
+        averaged["q_max"] = epoch_acc["q_max"]
+        model._calibrated_mne_epoch_stats = averaged
     return running_loss, 100 * correct / total
 
 
@@ -784,6 +815,8 @@ def compute_l2_calibrated_mne_regularization(
     normalization: str = "global",
     onesided: bool = False,
     tau: float = 1.0,
+    q_assignment: str = "risk",
+    shuffle_seed: int = 0,
 ):
     """Weights-only L2 with a detached, mean-one MNE risk reweighting.
 
@@ -805,6 +838,12 @@ def compute_l2_calibrated_mne_regularization(
         raise ValueError(
             "normalization must be 'global' or 'layerwise', "
             f"got {normalization!r}."
+        )
+    q_assignment = str(q_assignment).strip().lower()
+    if q_assignment not in ("risk", "identity", "strength", "shuffle"):
+        raise ValueError(
+            "q_assignment must be risk, identity, strength, or shuffle, "
+            f"got {q_assignment!r}."
         )
 
     weighted_layers = []
@@ -853,9 +892,8 @@ def compute_l2_calibrated_mne_regularization(
             return torch.tensor(0.0)
         return torch.zeros((), device=parameter.device, dtype=parameter.dtype)
 
-    # This branch is deliberately independent of lambda/BN values. It is the
-    # exact explicit-loss counterpart of weights-only optimizer weight decay.
-    if float(alpha) == 0.0 or not weighted_layers:
+    # Unmatched-head-only models keep a plain L2 penalty.
+    if not weighted_layers:
         penalty = sum(weight.pow(2).sum() for weight in all_weights)
         model._calibrated_mne_stats = {
             "alpha": float(alpha),
@@ -865,9 +903,14 @@ def compute_l2_calibrated_mne_regularization(
             "risk_mean": 1.0,
             "risk_min": 1.0,
             "risk_max": 1.0,
+            "q_assignment": q_assignment,
             "q_mean": 1.0,
+            "q_std": 0.0,
             "q_min": 1.0,
             "q_max": 1.0,
+            "q_os_mean": 1.0,
+            "q_os_std": 0.0,
+            "p_gt_tau": 0.0,
             "layer_q_mean_min": 1.0,
             "layer_q_mean_max": 1.0,
         }
@@ -912,21 +955,46 @@ def compute_l2_calibrated_mne_regularization(
 
         if onesided:
             # q = 1 + α max(r̂ − τ, 0): strengthen high-risk channels only.
-            q_values = [
+            true_q = [
                 1.0 + float(alpha) * torch.relu(normalized - float(tau))
                 for normalized in normalized_risks
             ]
         else:
-            q_values = [
+            true_q = [
                 (1.0 - float(alpha)) + float(alpha) * normalized
                 for normalized in normalized_risks
             ]
+
+        q_os_mean = sum(
+            n_per_output * q.sum()
+            for q, (_, _, n_per_output) in zip(true_q, weighted_layers)
+        ) / float(total_covered_params)
+        all_true_q = torch.cat(true_q)
+        all_normalized = torch.cat(normalized_risks)
+        p_gt_tau = (all_normalized > float(tau)).to(all_normalized.dtype).mean()
+
+        if q_assignment == "identity":
+            q_values = [torch.ones_like(q) for q in true_q]
+        elif q_assignment == "strength":
+            q_bar = q_os_mean.detach()
+            q_values = [torch.full_like(q, float(q_bar)) for q in true_q]
+        elif q_assignment == "shuffle":
+            generator = torch.Generator()
+            generator.manual_seed(int(shuffle_seed) & 0x7FFFFFFF)
+            q_values = []
+            for q in true_q:
+                if q.numel() <= 1:
+                    q_values.append(q)
+                    continue
+                perm = torch.randperm(q.numel(), generator=generator)
+                q_values.append(q.reshape(-1)[perm.to(q.device)].reshape_as(q))
+        else:
+            q_values = true_q
 
         q_mean = sum(
             n_per_output * q.sum()
             for q, (_, _, n_per_output) in zip(q_values, weighted_layers)
         ) / float(total_covered_params)
-        all_normalized = torch.cat(normalized_risks)
         all_q = torch.cat(q_values)
         layer_q_means = torch.stack([q.mean() for q in q_values])
         model._calibrated_mne_stats = {
@@ -934,12 +1002,17 @@ def compute_l2_calibrated_mne_regularization(
             "normalization": normalization,
             "onesided": bool(onesided),
             "tau": float(tau),
+            "q_assignment": q_assignment,
             "risk_mean": global_risk_mean.detach(),
             "risk_min": all_normalized.min().detach(),
             "risk_max": all_normalized.max().detach(),
             "q_mean": q_mean.detach(),
+            "q_std": all_q.std(unbiased=False).detach(),
             "q_min": all_q.min().detach(),
             "q_max": all_q.max().detach(),
+            "q_os_mean": q_os_mean.detach(),
+            "q_os_std": all_true_q.std(unbiased=False).detach(),
+            "p_gt_tau": p_gt_tau.detach(),
             "layer_q_mean_min": layer_q_means.min().detach(),
             "layer_q_mean_max": layer_q_means.max().detach(),
         }

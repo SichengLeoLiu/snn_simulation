@@ -1,4 +1,5 @@
 import argparse
+import csv
 import math
 import os
 import torch
@@ -304,6 +305,19 @@ parser.add_argument(
     help="--calibrated_mne_onesided 时的风险阈值 τ（mean-one 风险，默认 1）",
 )
 parser.add_argument(
+    "--calibrated_mne_q_assignment",
+    default="risk",
+    choices=("risk", "identity", "strength", "shuffle"),
+    help="onesided q 如何接到通道: risk=真实风险, identity=q=1, "
+    "strength=全体用 onesided 的均值 q, shuffle=打乱通道对应",
+)
+parser.add_argument(
+    "--epoch_log_csv",
+    default="",
+    type=str,
+    help="每个 epoch 追加 q/P(r>τ)/正则梯度/ANN acc；空则写到 checkpoint 目录",
+)
+parser.add_argument(
     "--stable_mne_l_ref",
     default=16.0,
     type=float,
@@ -434,6 +448,12 @@ parser.add_argument(
     help="checkpoint 保存策略：best=验证集最优（默认），last=仅保存最后一个 epoch",
 )
 parser.add_argument(
+    "--ckpt-dir",
+    default="",
+    type=str,
+    help="checkpoint/日志目录；空则用 <dataset>-checkpoints。Gadi 请指到 scratch",
+)
+parser.add_argument(
     "--grad_probe",
     action="store_true",
     help=(
@@ -502,7 +522,7 @@ def main():
         model.set_spike_schedule(args.spike_schedule)
 
     log_ds = "diff1d" if ds.replace("_", "") in ("diff1d", "toydiff1d") else ds
-    log_dir = "%s-checkpoints" % log_ds
+    log_dir = args.ckpt_dir.strip() or ("%s-checkpoints" % log_ds)
     os.makedirs(log_dir, exist_ok=True)
 
     model.to(device)
@@ -517,7 +537,10 @@ def main():
         print("init-from: %s" % (init_path,))
 
     reg_loss_fn = None
-    calibrated_mne_state = {"alpha": float(args.calibrated_mne_alpha)}
+    calibrated_mne_state = {
+        "alpha": float(args.calibrated_mne_alpha),
+        "shuffle_counter": 0,
+    }
     l2_sp_reference = None
     if args.regularizer == "l2_sp":
         l2_sp_reference = {
@@ -611,18 +634,25 @@ def main():
             full_frobenius=args.mne_frobenius,
         )
     elif args.regularizer == "calibrated_mne_l2":
-        reg_loss_fn = lambda m, t, q: compute_l2_calibrated_mne_regularization(
-            m,
-            quant_level=(args.L if q is None else q),
-            alpha=calibrated_mne_state["alpha"],
-            eps=args.mne_eps,
-            risk_min=args.calibrated_mne_risk_min,
-            risk_max=args.calibrated_mne_risk_max,
-            fold_bn=(not args.calibrated_mne_no_bn_fold),
-            normalization=args.calibrated_mne_normalization,
-            onesided=args.calibrated_mne_onesided,
-            tau=args.calibrated_mne_tau,
-        )
+        def _calibrated_mne_reg(m, t, q):
+            calibrated_mne_state["shuffle_counter"] += 1
+            return compute_l2_calibrated_mne_regularization(
+                m,
+                quant_level=(args.L if q is None else q),
+                alpha=calibrated_mne_state["alpha"],
+                eps=args.mne_eps,
+                risk_min=args.calibrated_mne_risk_min,
+                risk_max=args.calibrated_mne_risk_max,
+                fold_bn=(not args.calibrated_mne_no_bn_fold),
+                normalization=args.calibrated_mne_normalization,
+                onesided=args.calibrated_mne_onesided,
+                tau=args.calibrated_mne_tau,
+                q_assignment=args.calibrated_mne_q_assignment,
+                shuffle_seed=int(args.seed) * 1_000_003
+                + int(calibrated_mne_state["shuffle_counter"]),
+            )
+
+        reg_loss_fn = _calibrated_mne_reg
     elif args.regularizer == "stable_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
             m,
@@ -799,6 +829,61 @@ def main():
         identifier += "_%s" % (args.suffix,)
 
     logger = get_logger(os.path.join(log_dir, "%s.log" % (identifier,)))
+    epoch_log_csv = args.epoch_log_csv.strip() or os.path.join(
+        log_dir, "%s_epoch_log.csv" % (identifier,)
+    )
+    os.makedirs(os.path.dirname(os.path.abspath(epoch_log_csv)) or ".", exist_ok=True)
+    epoch_log_fields = [
+        "epoch",
+        "alpha",
+        "q_assignment",
+        "q_mean",
+        "q_std",
+        "q_min",
+        "q_max",
+        "q_os_mean",
+        "q_os_std",
+        "p_gt_tau",
+        "reg_grad_norm",
+        "reg_coeff_grad_norm",
+        "ann_train_acc",
+        "ann_test_acc",
+        "train_loss",
+    ]
+
+    def _append_epoch_log(row: dict) -> None:
+        write_header = not os.path.exists(epoch_log_csv)
+        with open(epoch_log_csv, "a", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=epoch_log_fields)
+            if write_header:
+                writer.writeheader()
+            out = {}
+            for key in epoch_log_fields:
+                value = row.get(key, "")
+                if hasattr(value, "detach"):
+                    value = float(value.detach().cpu().item())
+                elif isinstance(value, (int, float)) and key != "q_assignment":
+                    value = float(value)
+                out[key] = value
+            writer.writerow(out)
+
+    def _reg_grad_norms(epoch_reg_coeff: float) -> tuple[float, float]:
+        if reg_loss_fn is None:
+            return 0.0, 0.0
+        model.zero_grad(set_to_none=True)
+        reg = reg_loss_fn(model, args.time, args.L)
+        if not torch.is_tensor(reg) or not bool(reg.requires_grad):
+            model.zero_grad(set_to_none=True)
+            return 0.0, 0.0
+        params = [p for p in model.parameters() if p.requires_grad]
+        grads = torch.autograd.grad(reg, params, allow_unused=True, retain_graph=False)
+        total = 0.0
+        for grad in grads:
+            if grad is not None:
+                total += float(grad.detach().pow(2).sum().item())
+        model.zero_grad(set_to_none=True)
+        raw = total ** 0.5
+        return raw, raw * float(epoch_reg_coeff)
     logger.info(
         "start training dataset=%s arch=%s T=%d" % (args.dataset, arch, args.time)
     )
@@ -846,7 +931,7 @@ def main():
             "calibrated_mne_l2: base=0.5*sum(q*W^2), target_alpha=%.4g, "
             "alpha_start=%d, alpha_warmup=%d, risk_clip=[%.4g, %.4g], "
             "fold_bn=%s, normalization=%s, onesided=%s, tau=%.4g, "
-            "risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
+            "q_assignment=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
             % (
                 args.calibrated_mne_alpha,
                 args.calibrated_mne_alpha_start_epoch,
@@ -857,6 +942,7 @@ def main():
                 args.calibrated_mne_normalization,
                 str(bool(args.calibrated_mne_onesided)),
                 args.calibrated_mne_tau,
+                args.calibrated_mne_q_assignment,
             )
         )
     if args.regularizer == "stable_mne_l2":
@@ -1135,18 +1221,18 @@ def main():
             if args.regularizer == "calibrated_mne_l2" and hasattr(
                 model, "_calibrated_mne_stats"
             ):
-                stats = model._calibrated_mne_stats
+                stats = getattr(model, "_calibrated_mne_epoch_stats", None) or model._calibrated_mne_stats
                 logger.info(
-                    "  calibrated_mne: alpha=%.4f risk_mean=%.4g "
-                    "risk_range=[%.4g, %.4g] q_mean=%.6f q_range=[%.4g, %.4g]"
+                    "  calibrated_mne: assign=%s alpha=%.4f q_mean=%.6f "
+                    "q_std=%.6f q_range=[%.4g, %.4g] p_gt_tau=%.4f"
                     % (
-                        stats["alpha"],
-                        float(stats["risk_mean"]),
-                        float(stats["risk_min"]),
-                        float(stats["risk_max"]),
-                        float(stats["q_mean"]),
-                        float(stats["q_min"]),
-                        float(stats["q_max"]),
+                        args.calibrated_mne_q_assignment,
+                        float(getattr(model, "_calibrated_mne_stats", {}).get("alpha", calibrated_mne_state["alpha"])),
+                        float(stats.get("q_mean", 1.0)),
+                        float(stats.get("q_std", 0.0)),
+                        float(stats.get("q_min", 1.0)),
+                        float(stats.get("q_max", 1.0)),
+                        float(stats.get("p_gt_tau", 0.0)),
                     )
                 )
             _maybe_run_grad_probe(epoch, epoch_reg_coeff)
@@ -1170,6 +1256,31 @@ def main():
                     epoch, args.epochs, tmp
                 )
             )
+            if args.regularizer == "calibrated_mne_l2":
+                epoch_stats = getattr(model, "_calibrated_mne_epoch_stats", {})
+                last_stats = getattr(model, "_calibrated_mne_stats", {})
+                merged = dict(last_stats)
+                merged.update(epoch_stats)
+                raw_g, coeff_g = _reg_grad_norms(epoch_reg_coeff)
+                _append_epoch_log(
+                    {
+                        "epoch": epoch,
+                        "alpha": float(calibrated_mne_state["alpha"]),
+                        "q_assignment": args.calibrated_mne_q_assignment,
+                        "q_mean": float(merged.get("q_mean", 1.0)),
+                        "q_std": float(merged.get("q_std", 0.0)),
+                        "q_min": float(merged.get("q_min", 1.0)),
+                        "q_max": float(merged.get("q_max", 1.0)),
+                        "q_os_mean": float(merged.get("q_os_mean", 1.0)),
+                        "q_os_std": float(merged.get("q_os_std", 0.0)),
+                        "p_gt_tau": float(merged.get("p_gt_tau", 0.0)),
+                        "reg_grad_norm": raw_g,
+                        "reg_coeff_grad_norm": coeff_g,
+                        "ann_train_acc": acc,
+                        "ann_test_acc": tmp,
+                        "train_loss": loss,
+                    }
+                )
 
             is_better = best_acc < tmp
             if is_better:
