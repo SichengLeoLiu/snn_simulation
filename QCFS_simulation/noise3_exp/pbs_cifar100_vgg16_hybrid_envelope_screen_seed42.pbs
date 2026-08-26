@@ -10,32 +10,27 @@
 #PBS -l wd
 #PBS -j oe
 
-# CIFAR-10/100 VGG16: approach the noise-sweep upper envelope with one checkpoint.
-#   hybrid: optimizer L2-all β0 + Old MNE (detach λ) β1
-#   onesided: q=1+α max(r̂-τ,0) weights-only L2
-#   Selection = 5k train-holdout val sweep. Test is recorded, not used to pick.
+# CIFAR-10/100 VGG16 envelope screen. Logs and default OUT_DIR live on
+# scratch: home quota cannot hold PBS stdout or sweep CSVs.
 #
 # Login:
 #   cd /home/595/sl9144/codes/snn_simulation && git pull
 #   export CIFAR_ROOT=/home/595/sl9144/datasets
-#   # CIFAR-100 (default DATASET)
-#   qsub -v CIFAR_ROOT,FAMILY=onesided,ALPHA=4,TAU=0.5,BETA=5e-4,RMAX=8 \
-#     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_hybrid_envelope_screen_seed42.pbs
-#   # CIFAR-10 green line (onesided α=4 τ=0.5 β=5e-4 rmax=8)
-#   qsub -v CIFAR_ROOT,DATASET=cifar10,FAMILY=onesided,ALPHA=4,TAU=0.5,BETA=5e-4,RMAX=8 \
+#   qsub -l walltime=06:00:00 -v CIFAR_ROOT,DATASET=cifar10,SEED=40,FAMILY=onesided,ALPHA=4,TAU=0.5,BETA=5e-4,RMAX=8,TEST_ONLY=1 \
 #     QCFS_simulation/noise3_exp/pbs_cifar100_vgg16_hybrid_envelope_screen_seed42.pbs
 
 set -euo pipefail
 
-FAMILY="${FAMILY:?set FAMILY=hybrid, onesided, or calibrated}"
+FAMILY="${FAMILY:?set FAMILY=hybrid or onesided}"
 DATASET="${DATASET:-cifar100}"
 SEED="${SEED:-42}"
 
-mkdir -p /home/595/sl9144/logs
-LIVE_LOG="/home/595/sl9144/logs/hybenv_${DATASET}_${FAMILY}_${BETA0:-}_${BETA1:-}_${ALPHA:-}_${RMAX:-}.${PBS_JOBID:-manual}.out"
-exec > >(tee -a "${LIVE_LOG}") 2>&1
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/hybenv_${DATASET}_seed${SEED}_${FAMILY}_${ALPHA:-}_${RMAX:-}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "DATASET=${DATASET} SEED=${SEED} FAMILY=${FAMILY} BETA0=${BETA0:-} BETA1=${BETA1:-} ALPHA=${ALPHA:-} TAU=${TAU:-} BETA=${BETA:-} RMAX=${RMAX:-}"
+echo "DATASET=${DATASET} SEED=${SEED} FAMILY=${FAMILY} BETA0=${BETA0:-} BETA1=${BETA1:-} ALPHA=${ALPHA:-} TAU=${TAU:-} BETA=${BETA:-} RMAX=${RMAX:-} TEST_ONLY=${TEST_ONLY:-0}"
 
 module purge
 module use /g/data/dk92/apps/Modules/modulefiles
@@ -57,7 +52,7 @@ else
 fi
 cd "${ROOT}"
 
-OUT_DIR="${OUT_DIR:-${ROOT}/../important_results/${DATASET}_vgg16_hybrid_envelope_screen_seed${SEED}}"
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/${DATASET}_vgg16_hybrid_envelope_screen_seed${SEED}}"
 mkdir -p "${OUT_DIR}"
 
 echo "=== host=$(hostname) date=$(date) ==="
@@ -82,10 +77,11 @@ ARGS=(
   --batch-size "${CIFAR_BATCH}"
   --workers "${CIFAR_NUM_WORKERS}"
 )
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
 if [[ "${FAMILY}" == "hybrid" ]]; then
   ARGS+=(--beta0 "${BETA0:?}" --beta1 "${BETA1:?}")
-elif [[ "${FAMILY}" == "calibrated" ]]; then
-  ARGS+=(--alpha "${ALPHA:-0.1}" --beta "${BETA:-5e-4}" --risk-max "${RMAX:-2}")
 else
   ARGS+=(--alpha "${ALPHA:-0.1}" --tau "${TAU:-1.0}" --beta "${BETA:-5e-4}" --risk-max "${RMAX:-2}")
 fi
