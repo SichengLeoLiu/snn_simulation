@@ -137,9 +137,17 @@ def train(
                         "q_os_mean": 0.0,
                         "q_os_std": 0.0,
                         "p_gt_tau": 0.0,
+                        "p_at_qmax": 0.0,
                     }
                 n_reg_stats += 1
-                for key in ("q_mean", "q_std", "q_os_mean", "q_os_std", "p_gt_tau"):
+                for key in (
+                    "q_mean",
+                    "q_std",
+                    "q_os_mean",
+                    "q_os_std",
+                    "p_gt_tau",
+                    "p_at_qmax",
+                ):
                     epoch_acc[key] += float(stats.get(key, 0.0))
                 epoch_acc["q_min"] = min(
                     epoch_acc["q_min"], float(stats.get("q_min", 1.0))
@@ -156,7 +164,14 @@ def train(
     if epoch_acc is not None and n_reg_stats > 0:
         averaged = {
             key: epoch_acc[key] / float(n_reg_stats)
-            for key in ("q_mean", "q_std", "q_os_mean", "q_os_std", "p_gt_tau")
+            for key in (
+                "q_mean",
+                "q_std",
+                "q_os_mean",
+                "q_os_std",
+                "p_gt_tau",
+                "p_at_qmax",
+            )
         }
         averaged["q_min"] = epoch_acc["q_min"]
         averaged["q_max"] = epoch_acc["q_max"]
@@ -817,6 +832,7 @@ def compute_l2_calibrated_mne_regularization(
     tau: float = 1.0,
     q_assignment: str = "risk",
     shuffle_seed: int = 0,
+    q_max: float = 0.0,
 ):
     """Weights-only L2 with a detached, mean-one MNE risk reweighting.
 
@@ -840,11 +856,19 @@ def compute_l2_calibrated_mne_regularization(
             f"got {normalization!r}."
         )
     q_assignment = str(q_assignment).strip().lower()
-    if q_assignment not in ("risk", "identity", "strength", "shuffle"):
+    if q_assignment not in (
+        "risk",
+        "identity",
+        "strength",
+        "shuffle",
+        "layer_mean",
+    ):
         raise ValueError(
-            "q_assignment must be risk, identity, strength, or shuffle, "
-            f"got {q_assignment!r}."
+            "q_assignment must be risk, identity, strength, shuffle, "
+            f"or layer_mean, got {q_assignment!r}."
         )
+    q_cap = float(q_max)
+    use_q_cap = math.isfinite(q_cap) and q_cap > 0.0
 
     weighted_layers = []
     plain_weights = []
@@ -904,6 +928,7 @@ def compute_l2_calibrated_mne_regularization(
             "risk_min": 1.0,
             "risk_max": 1.0,
             "q_assignment": q_assignment,
+            "q_cap": q_cap if use_q_cap else 0.0,
             "q_mean": 1.0,
             "q_std": 0.0,
             "q_min": 1.0,
@@ -911,6 +936,7 @@ def compute_l2_calibrated_mne_regularization(
             "q_os_mean": 1.0,
             "q_os_std": 0.0,
             "p_gt_tau": 0.0,
+            "p_at_qmax": 0.0,
             "layer_q_mean_min": 1.0,
             "layer_q_mean_max": 1.0,
         }
@@ -965,6 +991,13 @@ def compute_l2_calibrated_mne_regularization(
                 for normalized in normalized_risks
             ]
 
+        all_raw_q = torch.cat(true_q)
+        if use_q_cap:
+            p_at_qmax = (all_raw_q >= q_cap).to(all_raw_q.dtype).mean()
+            true_q = [q.clamp(max=q_cap) for q in true_q]
+        else:
+            p_at_qmax = all_raw_q.new_zeros(())
+
         q_os_mean = sum(
             n_per_output * q.sum()
             for q, (_, _, n_per_output) in zip(true_q, weighted_layers)
@@ -988,6 +1021,11 @@ def compute_l2_calibrated_mne_regularization(
                     continue
                 perm = torch.randperm(q.numel(), generator=generator)
                 q_values.append(q.reshape(-1)[perm.to(q.device)].reshape_as(q))
+        elif q_assignment == "layer_mean":
+            # q_l = (1/C_l) Σ_c q_{l,c}^{OS}; every channel in the layer shares q_l.
+            q_values = [
+                torch.full_like(q, float(q.mean())) for q in true_q
+            ]
         else:
             q_values = true_q
 
@@ -1003,6 +1041,7 @@ def compute_l2_calibrated_mne_regularization(
             "onesided": bool(onesided),
             "tau": float(tau),
             "q_assignment": q_assignment,
+            "q_cap": q_cap if use_q_cap else 0.0,
             "risk_mean": global_risk_mean.detach(),
             "risk_min": all_normalized.min().detach(),
             "risk_max": all_normalized.max().detach(),
@@ -1013,6 +1052,7 @@ def compute_l2_calibrated_mne_regularization(
             "q_os_mean": q_os_mean.detach(),
             "q_os_std": all_true_q.std(unbiased=False).detach(),
             "p_gt_tau": p_gt_tau.detach(),
+            "p_at_qmax": p_at_qmax.detach(),
             "layer_q_mean_min": layer_q_means.min().detach(),
             "layer_q_mean_max": layer_q_means.max().detach(),
         }

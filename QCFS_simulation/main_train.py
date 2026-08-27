@@ -307,9 +307,16 @@ parser.add_argument(
 parser.add_argument(
     "--calibrated_mne_q_assignment",
     default="risk",
-    choices=("risk", "identity", "strength", "shuffle"),
+    choices=("risk", "identity", "strength", "shuffle", "layer_mean"),
     help="onesided q 如何接到通道: risk=真实风险, identity=q=1, "
-    "strength=全体用 onesided 的均值 q, shuffle=打乱通道对应",
+    "strength=全体用 onesided 的均值 q, shuffle=打乱通道对应, "
+    "layer_mean=层内通道共用该层 q_OS 均值",
+)
+parser.add_argument(
+    "--calibrated_mne_q_max",
+    default=0.0,
+    type=float,
+    help="onesided q 的上限；0 表示不封顶。q=min(q_max, 1+α[r̂-τ]_+)",
 )
 parser.add_argument(
     "--epoch_log_csv",
@@ -650,6 +657,7 @@ def main():
                 q_assignment=args.calibrated_mne_q_assignment,
                 shuffle_seed=int(args.seed) * 1_000_003
                 + int(calibrated_mne_state["shuffle_counter"]),
+                q_max=args.calibrated_mne_q_max,
             )
 
         reg_loss_fn = _calibrated_mne_reg
@@ -844,6 +852,8 @@ def main():
         "q_os_mean",
         "q_os_std",
         "p_gt_tau",
+        "p_at_qmax",
+        "q_cap",
         "reg_grad_norm",
         "reg_coeff_grad_norm",
         "ann_train_acc",
@@ -931,7 +941,7 @@ def main():
             "calibrated_mne_l2: base=0.5*sum(q*W^2), target_alpha=%.4g, "
             "alpha_start=%d, alpha_warmup=%d, risk_clip=[%.4g, %.4g], "
             "fold_bn=%s, normalization=%s, onesided=%s, tau=%.4g, "
-            "q_assignment=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
+            "q_assignment=%s, q_max=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
             % (
                 args.calibrated_mne_alpha,
                 args.calibrated_mne_alpha_start_epoch,
@@ -943,6 +953,11 @@ def main():
                 str(bool(args.calibrated_mne_onesided)),
                 args.calibrated_mne_tau,
                 args.calibrated_mne_q_assignment,
+                (
+                    "none"
+                    if float(args.calibrated_mne_q_max) <= 0
+                    else ("%.4g" % args.calibrated_mne_q_max)
+                ),
             )
         )
     if args.regularizer == "stable_mne_l2":
@@ -1223,16 +1238,22 @@ def main():
             ):
                 stats = getattr(model, "_calibrated_mne_epoch_stats", None) or model._calibrated_mne_stats
                 logger.info(
-                    "  calibrated_mne: assign=%s alpha=%.4f q_mean=%.6f "
-                    "q_std=%.6f q_range=[%.4g, %.4g] p_gt_tau=%.4f"
+                    "  calibrated_mne: assign=%s q_max=%s alpha=%.4f q_mean=%.6f "
+                    "q_std=%.6f q_range=[%.4g, %.4g] p_gt_tau=%.4f p_at_qmax=%.4f"
                     % (
                         args.calibrated_mne_q_assignment,
+                        (
+                            "none"
+                            if float(args.calibrated_mne_q_max) <= 0
+                            else ("%.4g" % args.calibrated_mne_q_max)
+                        ),
                         float(getattr(model, "_calibrated_mne_stats", {}).get("alpha", calibrated_mne_state["alpha"])),
                         float(stats.get("q_mean", 1.0)),
                         float(stats.get("q_std", 0.0)),
                         float(stats.get("q_min", 1.0)),
                         float(stats.get("q_max", 1.0)),
                         float(stats.get("p_gt_tau", 0.0)),
+                        float(stats.get("p_at_qmax", 0.0)),
                     )
                 )
             _maybe_run_grad_probe(epoch, epoch_reg_coeff)
@@ -1274,6 +1295,8 @@ def main():
                         "q_os_mean": float(merged.get("q_os_mean", 1.0)),
                         "q_os_std": float(merged.get("q_os_std", 0.0)),
                         "p_gt_tau": float(merged.get("p_gt_tau", 0.0)),
+                        "p_at_qmax": float(merged.get("p_at_qmax", 0.0)),
+                        "q_cap": float(args.calibrated_mne_q_max),
                         "reg_grad_norm": raw_g,
                         "reg_coeff_grad_norm": coeff_g,
                         "ann_train_acc": acc,
