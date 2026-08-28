@@ -354,23 +354,38 @@ def main() -> None:
             ),
         },
     )
-    images, labels = next(iter(val_loader(args, pin)))
-    criterion = nn.CrossEntropyLoss()
-    coeff = L2_WD if spec["reg_coeff"] is None else spec["reg_coeff"]
-    grads = ce_vs_reg_grad_ratio(
-        model,
-        images,
-        labels,
-        criterion,
-        make_reg_fn(spec),
-        0,
-        LVAL,
-        coeff,
+    eval_args = argparse.Namespace(
+        dataset=args.dataset,
+        batch_size=args.batch_size,
+        workers=0,
     )
-    val_rows = sweep(model, val_loader(args, pin), device, "val", args.seed)
+    val_rows = sweep(model, val_loader(eval_args, pin), device, "val", args.seed)
     write_csv(out / "val_sweep.csv", val_rows)
-    test_rows = sweep(model, test_loader(args, pin), device, "test", args.seed)
+    test_rows = sweep(model, test_loader(eval_args, pin), device, "test", args.seed)
     write_csv(out / "test_sweep.csv", test_rows)
+    grads = {
+        "ce_grad_norm": float("nan"),
+        "reg_grad_norm": float("nan"),
+        "reg_coeff_grad_norm": float("nan"),
+        "reg_ce_ratio": float("nan"),
+        "ce_loss": float("nan"),
+        "reg_loss": float("nan"),
+    }
+    try:
+        images, labels = next(iter(val_loader(eval_args, pin)))
+        coeff = L2_WD if spec["reg_coeff"] is None else spec["reg_coeff"]
+        grads = ce_vs_reg_grad_ratio(
+            model,
+            images,
+            labels,
+            nn.CrossEntropyLoss(),
+            make_reg_fn(spec),
+            0,
+            LVAL,
+            coeff,
+        )
+    except Exception as exc:
+        print(f"[WARN] ce/reg grad ratio failed after sweep: {exc}", flush=True)
     card = {
         "config": config_name(args.variant),
         "label": spec["label"],

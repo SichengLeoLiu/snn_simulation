@@ -626,25 +626,24 @@ def dump_mne_mapping_report(
         layer_map=layer_map,
     )
     pairs = terminal_residual_shortcut_risks(q_rows)
-    identity_pen = compute_l2_calibrated_mne_regularization(
-        model,
-        quant_level=quant_level,
-        alpha=alpha,
-        risk_min=risk_min,
-        risk_max=risk_max,
-        onesided=onesided,
-        tau=tau,
-        q_assignment="identity",
-    )
-    l2_pen = None
-    for row in match_rows:
-        term = 0.5 * row["weight"].pow(2).sum()
-        l2_pen = term if l2_pen is None else l2_pen + term
-    identity_vs_l2 = float("nan")
-    if l2_pen is not None and float(l2_pen.detach()) > 0:
-        identity_vs_l2 = float(
-            (identity_pen.detach() - l2_pen.detach()).abs() / l2_pen.detach()
+    with torch.no_grad():
+        identity_pen = compute_l2_calibrated_mne_regularization(
+            model,
+            quant_level=quant_level,
+            alpha=alpha,
+            risk_min=risk_min,
+            risk_max=risk_max,
+            onesided=onesided,
+            tau=tau,
+            q_assignment="identity",
         )
+        l2_pen = None
+        for row in match_rows:
+            term = 0.5 * row["weight"].pow(2).sum()
+            l2_pen = term if l2_pen is None else l2_pen + term
+    identity_vs_l2 = float("nan")
+    if l2_pen is not None and float(l2_pen) > 0:
+        identity_vs_l2 = float((identity_pen - l2_pen).abs() / l2_pen)
     payload = {
         "layer_map": layer_map,
         "quant_level": int(quant_level),
