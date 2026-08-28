@@ -215,12 +215,50 @@ def train_reg(
     return running_loss, total_abs / max(total_n, 1)
 
 
-def _resolve_bn_if_for_layer(layer_name, module_map):
-    """
-    根据层名匹配该层后续的 BN 与 IF 层（用于 MNE-L2）。
+def _layer_map_from_model(model, layer_map=None) -> str:
+    if layer_map is not None:
+        value = str(layer_map).strip().lower()
+    else:
+        value = str(getattr(model, "_mne_layer_map", "legacy")).strip().lower()
+    if value not in ("legacy", "resnet"):
+        raise ValueError(f"layer_map must be legacy or resnet, got {value!r}.")
+    return value
 
-    1) VGG/nn.Sequential 数字索引：layer1.0(Conv)->layer1.1(BN)->layer1.2(IF)
-    2) 命名启发式：conv1->bn1/if1, fc1->if1 等（MNIST FC/CNN）
+
+def _is_classifier_head(layer_name, module) -> bool:
+    last = str(layer_name).split(".")[-1]
+    return isinstance(module, nn.Linear) and last in ("fc", "classifier")
+
+
+def _weight_layer_role(layer_name: str) -> str:
+    parts = str(layer_name).split(".")
+    last = parts[-1]
+    if last in ("fc", "classifier"):
+        return "classifier_head"
+    if "shortcut" in parts:
+        return "shortcut"
+    if "residual_function" in parts and last.isdigit():
+        return "residual_terminal" if int(last) >= 3 else "residual_preact"
+    if parts[0].startswith("conv1") or layer_name.startswith("conv1"):
+        return "stem"
+    return "other"
+
+
+def _module_name(module_map, module) -> str:
+    if module is None:
+        return ""
+    for name, candidate in module_map.items():
+        if candidate is module:
+            return name
+    return ""
+
+
+def _resolve_bn_if_for_layer(layer_name, module_map, layer_map="legacy"):
+    """Match BN / IF to a Conv or Linear weight layer.
+
+    legacy: same-Sequential Conv→BN→IF (VGG) or conv/fc name heuristics.
+    resnet: also pair the terminal residual conv and shortcut conv with the
+    post-add IF at ``BasicBlock.act``. Stem Conv-BN-IF still uses legacy.
     """
     parts = layer_name.split(".")
     token = parts[-1]
@@ -275,7 +313,398 @@ def _resolve_bn_if_for_layer(layer_name, module_map):
                 if_mod = mod
                 break
 
+    if if_mod is None and str(layer_map).strip().lower() == "resnet":
+        parent_kind = parts[-2] if len(parts) >= 2 else ""
+        if parent_kind in ("residual_function", "shortcut"):
+            if bn_mod is None and token.isdigit():
+                next1 = module_map.get(_full(str(int(token) + 1)))
+                if isinstance(next1, nn.modules.batchnorm._BatchNorm):
+                    bn_mod = next1
+            block_name = ".".join(parts[:-2])
+            act = module_map.get(f"{block_name}.act" if block_name else "act")
+            if isinstance(act, IF):
+                if_mod = act
+
     return bn_mod, if_mod
+
+
+def collect_weight_layer_matches(model, layer_map=None) -> list[dict]:
+    """One row per trainable Conv/Linear weight, with BN/IF match metadata."""
+    layer_map = _layer_map_from_model(model, layer_map)
+    module_map = dict(model.named_modules())
+    rows = []
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        weight = getattr(layer, "weight", None)
+        if weight is None or not weight.requires_grad:
+            continue
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=layer_map
+        )
+        rows.append(
+            {
+                "name": lname,
+                "role": _weight_layer_role(lname),
+                "is_head": _is_classifier_head(lname, layer),
+                "matched": if_mod is not None,
+                "n_params": int(weight.numel()),
+                "out_channels": int(weight.shape[0]),
+                "weight": weight,
+                "bn": bn_mod,
+                "if_mod": if_mod,
+                "bn_name": _module_name(module_map, bn_mod),
+                "if_name": _module_name(module_map, if_mod),
+            }
+        )
+    return rows
+
+
+def summarize_weight_layer_matches(rows: list[dict]) -> dict:
+    n_total = len(rows)
+    n_matched = sum(1 for row in rows if row["matched"])
+    body = [row for row in rows if not row["is_head"]]
+    head = [row for row in rows if row["is_head"]]
+    body_params = sum(row["n_params"] for row in body)
+    matched_body_params = sum(row["n_params"] for row in body if row["matched"])
+    head_params = sum(row["n_params"] for row in head)
+    return {
+        "n_layers": n_total,
+        "n_matched": n_matched,
+        "n_unmatched": n_total - n_matched,
+        "n_body_layers": len(body),
+        "n_body_matched": sum(1 for row in body if row["matched"]),
+        "n_head_layers": len(head),
+        "matched_layers_over_total": f"{n_matched}/{n_total}",
+        "body_param_ratio": (
+            float(matched_body_params) / float(body_params) if body_params else 0.0
+        ),
+        "head_params": int(head_params),
+        "body_params": int(body_params),
+        "unmatched_body": [
+            row["name"] for row in body if not row["matched"]
+        ],
+    }
+
+
+def _raw_channel_risk(row: dict, quant_level: int, eps: float = 1e-6, fold_bn: bool = True):
+    weight = row["weight"]
+    if_mod = row["if_mod"]
+    if if_mod is None:
+        return None
+    lam_min = max(float(eps), 1e-3)
+    lam = if_mod.thresh.detach().to(
+        device=weight.device, dtype=weight.dtype
+    ).clamp(min=lam_min).view(-1)[0]
+    risk = torch.ones(
+        (weight.shape[0],), device=weight.device, dtype=weight.dtype
+    ) * (float(quant_level) ** 2 / (lam.pow(2) + eps))
+    bn_mod = row["bn"]
+    if fold_bn and bn_mod is not None:
+        bn_eps = float(getattr(bn_mod, "eps", eps))
+        gamma = bn_mod.weight.detach().to(device=weight.device, dtype=weight.dtype)
+        var = bn_mod.running_var.detach().to(
+            device=weight.device, dtype=weight.dtype
+        ).clamp(min=bn_eps)
+        risk = risk * gamma.pow(2) / (var + bn_eps)
+    return risk
+
+
+def calibrated_q_by_layer(
+    model,
+    quant_level: int,
+    alpha: float,
+    tau: float = 0.5,
+    risk_min: float = 0.5,
+    risk_max: float = 8.0,
+    fold_bn: bool = True,
+    onesided: bool = True,
+    q_assignment: str = "risk",
+    layer_map=None,
+    eps: float = 1e-6,
+) -> list[dict]:
+    """Per-layer q / risk table. Unmatched layers keep q=1 and empty risk."""
+    rows = collect_weight_layer_matches(model, layer_map=layer_map)
+    matched = [row for row in rows if row["matched"]]
+    risks = []
+    for row in matched:
+        risk = _raw_channel_risk(row, quant_level, eps=eps, fold_bn=fold_bn)
+        row["_risk"] = risk
+        risks.append(risk)
+        row["n_per_output"] = int(row["weight"][0].numel())
+
+    if matched:
+        total_covered = sum(row["n_per_output"] * row["_risk"].numel() for row in matched)
+        global_mean = sum(
+            row["n_per_output"] * row["_risk"].sum() for row in matched
+        ) / float(total_covered)
+        global_mean = global_mean.clamp(min=eps)
+        clipped = [
+            (row["_risk"] / global_mean).clamp(min=risk_min, max=risk_max)
+            for row in matched
+        ]
+        clipped_mean = sum(
+            row["n_per_output"] * c.sum() for row, c in zip(matched, clipped)
+        ) / float(total_covered)
+        clipped_mean = clipped_mean.clamp(min=eps)
+        normalized = [c / clipped_mean for c in clipped]
+        if onesided:
+            true_q = [
+                1.0 + float(alpha) * torch.relu(normed - float(tau))
+                for normed in normalized
+            ]
+        else:
+            true_q = [
+                (1.0 - float(alpha)) + float(alpha) * normed
+                for normed in normalized
+            ]
+        q_os_mean = sum(
+            row["n_per_output"] * q.sum() for row, q in zip(matched, true_q)
+        ) / float(total_covered)
+        if q_assignment == "identity":
+            q_values = [torch.ones_like(q) for q in true_q]
+        elif q_assignment == "strength":
+            q_values = [torch.full_like(q, float(q_os_mean.detach())) for q in true_q]
+        elif q_assignment == "layer_mean":
+            q_values = [torch.full_like(q, float(q.mean())) for q in true_q]
+        else:
+            q_values = true_q
+        for row, normed, q, q_true in zip(matched, normalized, q_values, true_q):
+            row["risk_mean"] = float(normed.mean().detach())
+            row["risk_max"] = float(normed.max().detach())
+            row["p_gt_tau"] = float((normed > float(tau)).float().mean().detach())
+            row["q_mean"] = float(q.mean().detach())
+            row["q_max"] = float(q.max().detach())
+            row["q_os_mean"] = float(q_true.mean().detach())
+            row.pop("_risk", None)
+            row.pop("n_per_output", None)
+
+    for row in rows:
+        row.setdefault("risk_mean", float("nan"))
+        row.setdefault("risk_max", float("nan"))
+        row.setdefault("p_gt_tau", float("nan"))
+        row.setdefault("q_mean", 1.0)
+        row.setdefault("q_max", 1.0)
+        row.setdefault("q_os_mean", 1.0)
+        for key in ("weight", "bn", "if_mod"):
+            row.pop(key, None)
+    return rows
+
+
+def terminal_residual_shortcut_risks(layer_rows: list[dict]) -> list[dict]:
+    """Pair residual_terminal vs shortcut that share the same post-add IF."""
+    by_if = {}
+    for row in layer_rows:
+        if not row.get("matched") or not row.get("if_name"):
+            continue
+        if row["role"] not in ("residual_terminal", "shortcut"):
+            continue
+        by_if.setdefault(row["if_name"], {})[row["role"]] = row
+    pairs = []
+    for if_name, group in sorted(by_if.items()):
+        terminal = group.get("residual_terminal")
+        shortcut = group.get("shortcut")
+        if terminal is None:
+            continue
+        pairs.append(
+            {
+                "if_name": if_name,
+                "residual_name": terminal["name"],
+                "residual_risk_mean": terminal.get("risk_mean"),
+                "residual_q_mean": terminal.get("q_mean"),
+                "residual_q_max": terminal.get("q_max"),
+                "has_shortcut_conv": shortcut is not None,
+                "shortcut_name": "" if shortcut is None else shortcut["name"],
+                "shortcut_risk_mean": (
+                    None if shortcut is None else shortcut.get("risk_mean")
+                ),
+                "shortcut_q_mean": (
+                    None if shortcut is None else shortcut.get("q_mean")
+                ),
+                "shortcut_q_max": (
+                    None if shortcut is None else shortcut.get("q_max")
+                ),
+            }
+        )
+    return pairs
+
+
+def ce_vs_reg_grad_ratio(
+    model,
+    images,
+    labels,
+    criterion,
+    reg_loss_fn,
+    T: int,
+    quant_level,
+    reg_coeff: float,
+) -> dict:
+    """||∇R|| / ||∇CE|| on all trainable parameters, one batch."""
+    was_training = model.training
+    model.train()
+    device = next(model.parameters()).device
+    images = images.to(device)
+    labels = labels.to(device)
+    if T > 0:
+        outputs = model(images).mean(0)
+    else:
+        outputs = model(images)
+    ce = criterion(outputs, labels)
+    params = [p for p in model.parameters() if p.requires_grad]
+    grads_ce = torch.autograd.grad(ce, params, retain_graph=True, allow_unused=True)
+    ce_sq = 0.0
+    for grad in grads_ce:
+        if grad is not None:
+            ce_sq += float(grad.detach().pow(2).sum().item())
+    ce_norm = ce_sq ** 0.5
+    if reg_loss_fn is None:
+        model.zero_grad(set_to_none=True)
+        if not was_training:
+            model.eval()
+        return {
+            "ce_grad_norm": ce_norm,
+            "reg_grad_norm": 0.0,
+            "reg_coeff_grad_norm": 0.0,
+            "reg_ce_ratio": float("nan"),
+            "ce_loss": float(ce.detach()),
+            "reg_loss": 0.0,
+        }
+    reg = reg_loss_fn(model, T, quant_level)
+    grads_reg = torch.autograd.grad(reg, params, allow_unused=True)
+    reg_sq = 0.0
+    for grad in grads_reg:
+        if grad is not None:
+            reg_sq += float(grad.detach().pow(2).sum().item())
+    reg_norm = reg_sq ** 0.5
+    model.zero_grad(set_to_none=True)
+    if not was_training:
+        model.eval()
+    ratio = float("nan") if ce_norm <= 0.0 else (reg_norm * float(reg_coeff)) / ce_norm
+    return {
+        "ce_grad_norm": ce_norm,
+        "reg_grad_norm": reg_norm,
+        "reg_coeff_grad_norm": reg_norm * float(reg_coeff),
+        "reg_ce_ratio": ratio,
+        "ce_loss": float(ce.detach()),
+        "reg_loss": float(reg.detach()) if torch.is_tensor(reg) else float(reg),
+    }
+
+
+def dump_mne_mapping_report(
+    model,
+    out_dir,
+    layer_map=None,
+    quant_level: int = 16,
+    alpha: float = 4.0,
+    tau: float = 0.5,
+    risk_min: float = 0.5,
+    risk_max: float = 8.0,
+    q_assignment: str = "risk",
+    onesided: bool = True,
+    extra=None,
+) -> dict:
+    """Write mapping_summary.json, layer_q.csv, residual_shortcut_risk.csv."""
+    import csv
+    import json
+    from pathlib import Path
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    layer_map = _layer_map_from_model(model, layer_map)
+    model._mne_layer_map = layer_map
+    match_rows = collect_weight_layer_matches(model, layer_map=layer_map)
+    summary = summarize_weight_layer_matches(match_rows)
+    q_rows = calibrated_q_by_layer(
+        model,
+        quant_level=quant_level,
+        alpha=alpha,
+        tau=tau,
+        risk_min=risk_min,
+        risk_max=risk_max,
+        onesided=onesided,
+        q_assignment=q_assignment,
+        layer_map=layer_map,
+    )
+    pairs = terminal_residual_shortcut_risks(q_rows)
+    identity_pen = compute_l2_calibrated_mne_regularization(
+        model,
+        quant_level=quant_level,
+        alpha=alpha,
+        risk_min=risk_min,
+        risk_max=risk_max,
+        onesided=onesided,
+        tau=tau,
+        q_assignment="identity",
+    )
+    l2_pen = None
+    for row in match_rows:
+        term = 0.5 * row["weight"].pow(2).sum()
+        l2_pen = term if l2_pen is None else l2_pen + term
+    identity_vs_l2 = float("nan")
+    if l2_pen is not None and float(l2_pen.detach()) > 0:
+        identity_vs_l2 = float(
+            (identity_pen.detach() - l2_pen.detach()).abs() / l2_pen.detach()
+        )
+    payload = {
+        "layer_map": layer_map,
+        "quant_level": int(quant_level),
+        "alpha": float(alpha),
+        "tau": float(tau),
+        "q_assignment": q_assignment,
+        "identity_vs_l2wo_relerr": identity_vs_l2,
+        **summary,
+        "p_gt_tau": (
+            sum(
+                row["out_channels"] * row["p_gt_tau"]
+                for row in q_rows
+                if row["matched"] and row["p_gt_tau"] == row["p_gt_tau"]
+            )
+            / max(1, sum(row["out_channels"] for row in q_rows if row["matched"]))
+        ),
+        "q_mean": (
+            sum(
+                row["n_params"] * row["q_mean"]
+                for row in q_rows
+                if row["matched"]
+            )
+            / max(1, sum(row["n_params"] for row in q_rows if row["matched"]))
+        ),
+        "residual_shortcut_pairs": pairs,
+    }
+    if extra:
+        payload.update(extra)
+    (out / "mapping_summary.json").write_text(
+        json.dumps(payload, indent=2, default=str) + "\n"
+    )
+    csv_fields = [
+        "name",
+        "role",
+        "is_head",
+        "matched",
+        "n_params",
+        "out_channels",
+        "bn_name",
+        "if_name",
+        "risk_mean",
+        "risk_max",
+        "p_gt_tau",
+        "q_mean",
+        "q_max",
+        "q_os_mean",
+    ]
+    with (out / "layer_q.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=csv_fields)
+        writer.writeheader()
+        for row in q_rows:
+            writer.writerow({key: row.get(key, "") for key in csv_fields})
+    if pairs:
+        with (out / "residual_shortcut_risk.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(pairs[0].keys()))
+            writer.writeheader()
+            writer.writerows(pairs)
+    return payload
 
 
 def compute_l1_regularization(model, T=None, quant_level=None):
@@ -601,7 +1030,9 @@ def compute_effective_l2_regularization(
 
         w = layer.weight
         w_eff = w
-        bn_mod, _ = _resolve_bn_if_for_layer(lname, module_map)
+        bn_mod, _ = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if bn_mod is not None:
             bn_eps = float(getattr(bn_mod, "eps", eps))
             gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
@@ -662,7 +1093,9 @@ def compute_threshold_normalized_l2_regularization(
         if getattr(layer, "weight", None) is None:
             continue
 
-        _, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        _, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if if_mod is None:
             continue
 
@@ -782,7 +1215,9 @@ def compute_spectral_mne_regularization(
         w = layer.weight
         w_eff = w
 
-        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if if_mod is None:
             continue
         if bn_mod is not None:
@@ -881,7 +1316,9 @@ def compute_l2_calibrated_mne_regularization(
         if weight is None or not weight.requires_grad:
             continue
 
-        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if if_mod is None:
             plain_weights.append(weight)
             continue
@@ -1118,7 +1555,9 @@ def compute_mne_l2_regularization(
         w = layer.weight
         w_eff = w
 
-        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         # 方案 C：无匹配 IF 的层（如 VGG classifier.7 输出头）不参与 MNE-L2。
         if if_mod is None:
             continue
@@ -1172,7 +1611,9 @@ def _mne_covered_weight_ids(model) -> set[int]:
         weight = getattr(layer, "weight", None)
         if weight is None or not weight.requires_grad:
             continue
-        _, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        _, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if if_mod is None:
             continue
         covered.add(id(weight))
@@ -1296,7 +1737,9 @@ def compute_hinge_mne_regularization(
         w = layer.weight
         w_eff = w
 
-        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if if_mod is None:
             continue
         if bn_mod is not None:
@@ -1352,7 +1795,9 @@ def _first_matched_conv_bn_if(model):
             continue
         if getattr(layer, "weight", None) is None:
             continue
-        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if if_mod is None:
             continue
         return lname, layer, bn_mod, if_mod
@@ -1644,7 +2089,9 @@ def compute_conv_mne_l2_regularization(
         w = layer.weight
         w_eff = w
 
-        bn_mod, if_mod = _resolve_bn_if_for_layer(lname, module_map)
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=_layer_map_from_model(model)
+        )
         if bn_mod is not None:
             gamma = bn_mod.weight.to(device=w.device, dtype=w.dtype)
             var = bn_mod.running_var.to(device=w.device, dtype=w.dtype)

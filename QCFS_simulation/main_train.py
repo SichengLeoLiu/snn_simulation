@@ -33,6 +33,8 @@ from utils import (
     compute_pc_mne_regularization,
     compute_margin_mne_regularization,
     compute_conv_mne_l2_regularization,
+    dump_mne_mapping_report,
+    ce_vs_reg_grad_ratio,
     compute_l1_regularization,
     compute_l1_all_regularization,
     compute_manual_l2_regularization,
@@ -319,6 +321,19 @@ parser.add_argument(
     help="onesided q 的上限；0 表示不封顶。q=min(q_max, 1+α[r̂-τ]_+)",
 )
 parser.add_argument(
+    "--mne_layer_map",
+    default="legacy",
+    choices=("legacy", "resnet"),
+    help="Conv/IF matching: legacy=same-Sequential Conv-BN-IF; "
+    "resnet=also map residual-terminal and shortcut convs to BasicBlock.act",
+)
+parser.add_argument(
+    "--mapping_diag_dir",
+    default="",
+    type=str,
+    help="若非空，训练开始时写出 mapping_summary.json / layer_q.csv",
+)
+parser.add_argument(
     "--epoch_log_csv",
     default="",
     type=str,
@@ -523,6 +538,7 @@ def main():
     if arch != args.model:
         print("提示: 已用 arch=%s 构建与保存（与 -arch 输入不同）" % (arch,))
     model = modelpool(arch, args.dataset)
+    model._mne_layer_map = args.mne_layer_map
     model.set_L(args.L)
     model.set_T(args.time)
     if hasattr(model, "set_spike_schedule"):
@@ -856,6 +872,8 @@ def main():
         "q_cap",
         "reg_grad_norm",
         "reg_coeff_grad_norm",
+        "ce_grad_norm",
+        "reg_ce_ratio",
         "ann_train_acc",
         "ann_test_acc",
         "train_loss",
@@ -894,6 +912,35 @@ def main():
         model.zero_grad(set_to_none=True)
         raw = total ** 0.5
         return raw, raw * float(epoch_reg_coeff)
+
+    def _ce_reg_ratio(epoch_reg_coeff: float) -> dict:
+        if reg_loss_fn is None:
+            return {
+                "ce_grad_norm": 0.0,
+                "reg_grad_norm": 0.0,
+                "reg_coeff_grad_norm": 0.0,
+                "reg_ce_ratio": float("nan"),
+            }
+        try:
+            images, labels = next(iter(train_loader))
+            return ce_vs_reg_grad_ratio(
+                model,
+                images,
+                labels,
+                criterion,
+                reg_loss_fn,
+                args.time,
+                args.L,
+                epoch_reg_coeff,
+            )
+        except Exception as exc:
+            logger.info("ce/reg grad ratio failed: %s", exc)
+            return {
+                "ce_grad_norm": 0.0,
+                "reg_grad_norm": 0.0,
+                "reg_coeff_grad_norm": 0.0,
+                "reg_ce_ratio": float("nan"),
+            }
     logger.info(
         "start training dataset=%s arch=%s T=%d" % (args.dataset, arch, args.time)
     )
@@ -912,7 +959,7 @@ def main():
     logger.info("ckpt_save_mode=%s", args.ckpt_save_mode)
     if args.regularizer == "mne_l2":
         logger.info(
-            "mne_l2: L=%d, eps=%.3e, use_max=%s, frobenius=%s, detach_lambda=%s, detach_bn_stats=%s, fold_bn=%s"
+            "mne_l2: L=%d, eps=%.3e, use_max=%s, frobenius=%s, detach_lambda=%s, detach_bn_stats=%s, fold_bn=%s, layer_map=%s"
             % (
                 args.L,
                 args.mne_eps,
@@ -921,6 +968,7 @@ def main():
                 str(bool(args.mne_detach_lambda)),
                 str(bool(not args.mne_no_detach_bn_stats)),
                 str(bool(not args.mne_no_bn_fold)),
+                args.mne_layer_map,
             )
         )
     if args.regularizer == "mne_l2_all":
@@ -941,7 +989,7 @@ def main():
             "calibrated_mne_l2: base=0.5*sum(q*W^2), target_alpha=%.4g, "
             "alpha_start=%d, alpha_warmup=%d, risk_clip=[%.4g, %.4g], "
             "fold_bn=%s, normalization=%s, onesided=%s, tau=%.4g, "
-            "q_assignment=%s, q_max=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
+            "q_assignment=%s, q_max=%s, layer_map=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
             % (
                 args.calibrated_mne_alpha,
                 args.calibrated_mne_alpha_start_epoch,
@@ -958,6 +1006,7 @@ def main():
                     if float(args.calibrated_mne_q_max) <= 0
                     else ("%.4g" % args.calibrated_mne_q_max)
                 ),
+                args.mne_layer_map,
             )
         )
     if args.regularizer == "stable_mne_l2":
@@ -1101,6 +1150,33 @@ def main():
     if is_diff1d:
         logger.info(
             "diff1d：回归 y=x1-x2（数据上 x1>=x2）；Linear 无 bias、写死差分；指标为 RMSE"
+        )
+
+    if args.mapping_diag_dir.strip():
+        map_dir = os.path.abspath(args.mapping_diag_dir.strip())
+        os.makedirs(map_dir, exist_ok=True)
+        report = dump_mne_mapping_report(
+            model,
+            map_dir,
+            layer_map=args.mne_layer_map,
+            quant_level=args.L,
+            alpha=float(args.calibrated_mne_alpha),
+            tau=float(args.calibrated_mne_tau),
+            risk_min=float(args.calibrated_mne_risk_min),
+            risk_max=float(args.calibrated_mne_risk_max),
+            q_assignment=args.calibrated_mne_q_assignment,
+            onesided=bool(args.calibrated_mne_onesided),
+        )
+        logger.info(
+            "mapping_diag layer_map=%s matched=%s body_param_ratio=%.4f "
+            "identity_vs_l2wo_relerr=%.3e p_gt_tau=%.4f"
+            % (
+                args.mne_layer_map,
+                report["matched_layers_over_total"],
+                float(report["body_param_ratio"]),
+                float(report["identity_vs_l2wo_relerr"]),
+                float(report.get("p_gt_tau", float("nan"))),
+            )
         )
 
     extra_save = set()
@@ -1277,12 +1353,14 @@ def main():
                     epoch, args.epochs, tmp
                 )
             )
-            if args.regularizer == "calibrated_mne_l2":
+            if args.regularizer in ("calibrated_mne_l2", "mne_l2") and (
+                args.regularizer == "calibrated_mne_l2" or args.epoch_log_csv.strip()
+            ):
                 epoch_stats = getattr(model, "_calibrated_mne_epoch_stats", {})
                 last_stats = getattr(model, "_calibrated_mne_stats", {})
                 merged = dict(last_stats)
                 merged.update(epoch_stats)
-                raw_g, coeff_g = _reg_grad_norms(epoch_reg_coeff)
+                grads = _ce_reg_ratio(epoch_reg_coeff)
                 _append_epoch_log(
                     {
                         "epoch": epoch,
@@ -1297,8 +1375,10 @@ def main():
                         "p_gt_tau": float(merged.get("p_gt_tau", 0.0)),
                         "p_at_qmax": float(merged.get("p_at_qmax", 0.0)),
                         "q_cap": float(args.calibrated_mne_q_max),
-                        "reg_grad_norm": raw_g,
-                        "reg_coeff_grad_norm": coeff_g,
+                        "reg_grad_norm": grads["reg_grad_norm"],
+                        "reg_coeff_grad_norm": grads["reg_coeff_grad_norm"],
+                        "ce_grad_norm": grads["ce_grad_norm"],
+                        "reg_ce_ratio": grads["reg_ce_ratio"],
                         "ann_train_acc": acc,
                         "ann_test_acc": tmp,
                         "train_loss": loss,
