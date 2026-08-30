@@ -321,11 +321,24 @@ parser.add_argument(
     help="onesided q 的上限；0 表示不封顶。q=min(q_max, 1+α[r̂-τ]_+)",
 )
 parser.add_argument(
+    "--calibrated_mne_mean_normalize_q",
+    action="store_true",
+    help="Use tilde q_i = q_i / mean(q) in calibrated MNE so E[q]=1; "
+    "does not retune alpha/tau. Isolates q shape from global strength.",
+)
+parser.add_argument(
     "--mne_layer_map",
     default="legacy",
     choices=("legacy", "resnet"),
     help="Conv/IF matching: legacy=same-Sequential Conv-BN-IF; "
     "resnet=also map residual-terminal and shortcut convs to BasicBlock.act",
+)
+parser.add_argument(
+    "--mne_grad_match_layer_map",
+    default="",
+    choices=("", "legacy", "resnet"),
+    help="If set, scale Old MNE so ||∇R|| matches this layer map. "
+    "Use with --mne_layer_map resnet --mne_grad_match_layer_map legacy.",
 )
 parser.add_argument(
     "--mapping_diag_dir",
@@ -539,6 +552,7 @@ def main():
         print("提示: 已用 arch=%s 构建与保存（与 -arch 输入不同）" % (arch,))
     model = modelpool(arch, args.dataset)
     model._mne_layer_map = args.mne_layer_map
+    model._mne_grad_match_layer_map = args.mne_grad_match_layer_map or None
     model.set_L(args.L)
     model.set_T(args.time)
     if hasattr(model, "set_spike_schedule"):
@@ -644,6 +658,7 @@ def main():
             detach_bn_stats=(not args.mne_no_detach_bn_stats),
             fold_bn=(not args.mne_no_bn_fold),
             full_frobenius=args.mne_frobenius,
+            grad_match_layer_map=args.mne_grad_match_layer_map or None,
         )
     elif args.regularizer == "mne_l2_all":
         reg_loss_fn = lambda m, t, q: compute_mne_l2_all_regularization(
@@ -674,6 +689,7 @@ def main():
                 shuffle_seed=int(args.seed) * 1_000_003
                 + int(calibrated_mne_state["shuffle_counter"]),
                 q_max=args.calibrated_mne_q_max,
+                mean_normalize_q=args.calibrated_mne_mean_normalize_q,
             )
 
         reg_loss_fn = _calibrated_mne_reg
@@ -862,6 +878,8 @@ def main():
         "alpha",
         "q_assignment",
         "q_mean",
+        "q_mean_pre_norm",
+        "q_tilde_mean",
         "q_std",
         "q_min",
         "q_max",
@@ -870,6 +888,9 @@ def main():
         "p_gt_tau",
         "p_at_qmax",
         "q_cap",
+        "mean_normalize_q",
+        "mne_grad_match_scale",
+        "mne_ref_grad_norm",
         "reg_grad_norm",
         "reg_coeff_grad_norm",
         "ce_grad_norm",
@@ -1166,6 +1187,7 @@ def main():
             risk_max=float(args.calibrated_mne_risk_max),
             q_assignment=args.calibrated_mne_q_assignment,
             onesided=bool(args.calibrated_mne_onesided),
+            mean_normalize_q=bool(args.calibrated_mne_mean_normalize_q),
         )
         logger.info(
             "mapping_diag layer_map=%s matched=%s body_param_ratio=%.4f "
@@ -1315,7 +1337,8 @@ def main():
                 stats = getattr(model, "_calibrated_mne_epoch_stats", None) or model._calibrated_mne_stats
                 logger.info(
                     "  calibrated_mne: assign=%s q_max=%s alpha=%.4f q_mean=%.6f "
-                    "q_std=%.6f q_range=[%.4g, %.4g] p_gt_tau=%.4f p_at_qmax=%.4f"
+                    "q_pre=%.6f mean_norm=%s q_std=%.6f q_range=[%.4g, %.4g] "
+                    "p_gt_tau=%.4f p_at_qmax=%.4f"
                     % (
                         args.calibrated_mne_q_assignment,
                         (
@@ -1325,11 +1348,29 @@ def main():
                         ),
                         float(getattr(model, "_calibrated_mne_stats", {}).get("alpha", calibrated_mne_state["alpha"])),
                         float(stats.get("q_mean", 1.0)),
+                        float(stats.get("q_mean_pre_norm", stats.get("q_mean", 1.0))),
+                        "on" if args.calibrated_mne_mean_normalize_q else "off",
                         float(stats.get("q_std", 0.0)),
                         float(stats.get("q_min", 1.0)),
                         float(stats.get("q_max", 1.0)),
                         float(stats.get("p_gt_tau", 0.0)),
                         float(stats.get("p_at_qmax", 0.0)),
+                    )
+                )
+            match_stats = getattr(model, "_mne_grad_match_stats", None)
+            if args.regularizer == "mne_l2" and match_stats:
+                logger.info(
+                    "  mne_grad_match: map=%s -> %s scale=%.6f "
+                    "||∇R||=%.6g ||∇R_ref||=%.6g ||∇(sR)||=%.6g"
+                    % (
+                        match_stats.get("layer_map", args.mne_layer_map),
+                        match_stats.get(
+                            "grad_match_layer_map", args.mne_grad_match_layer_map
+                        ),
+                        float(match_stats.get("scale", float("nan"))),
+                        float(match_stats.get("reg_grad_norm", float("nan"))),
+                        float(match_stats.get("ref_grad_norm", float("nan"))),
+                        float(match_stats.get("matched_grad_norm", float("nan"))),
                     )
                 )
             _maybe_run_grad_probe(epoch, epoch_reg_coeff)
@@ -1360,6 +1401,7 @@ def main():
                 last_stats = getattr(model, "_calibrated_mne_stats", {})
                 merged = dict(last_stats)
                 merged.update(epoch_stats)
+                match_stats = getattr(model, "_mne_grad_match_stats", {}) or {}
                 grads = _ce_reg_ratio(epoch_reg_coeff)
                 _append_epoch_log(
                     {
@@ -1367,6 +1409,12 @@ def main():
                         "alpha": float(calibrated_mne_state["alpha"]),
                         "q_assignment": args.calibrated_mne_q_assignment,
                         "q_mean": float(merged.get("q_mean", 1.0)),
+                        "q_mean_pre_norm": float(
+                            merged.get("q_mean_pre_norm", merged.get("q_mean", 1.0))
+                        ),
+                        "q_tilde_mean": float(
+                            merged.get("q_tilde_mean", merged.get("q_mean", 1.0))
+                        ),
                         "q_std": float(merged.get("q_std", 0.0)),
                         "q_min": float(merged.get("q_min", 1.0)),
                         "q_max": float(merged.get("q_max", 1.0)),
@@ -1375,6 +1423,11 @@ def main():
                         "p_gt_tau": float(merged.get("p_gt_tau", 0.0)),
                         "p_at_qmax": float(merged.get("p_at_qmax", 0.0)),
                         "q_cap": float(args.calibrated_mne_q_max),
+                        "mean_normalize_q": int(
+                            bool(args.calibrated_mne_mean_normalize_q)
+                        ),
+                        "mne_grad_match_scale": match_stats.get("scale", ""),
+                        "mne_ref_grad_norm": match_stats.get("ref_grad_norm", ""),
                         "reg_grad_norm": grads["reg_grad_norm"],
                         "reg_coeff_grad_norm": grads["reg_coeff_grad_norm"],
                         "ce_grad_norm": grads["ce_grad_norm"],

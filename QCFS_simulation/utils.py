@@ -422,6 +422,7 @@ def calibrated_q_by_layer(
     q_assignment: str = "risk",
     layer_map=None,
     eps: float = 1e-6,
+    mean_normalize_q: bool = False,
 ) -> list[dict]:
     """Per-layer q / risk table. Unmatched layers keep q=1 and empty risk."""
     rows = collect_weight_layer_matches(model, layer_map=layer_map)
@@ -469,6 +470,12 @@ def calibrated_q_by_layer(
             q_values = [torch.full_like(q, float(q.mean())) for q in true_q]
         else:
             q_values = true_q
+        q_mean_pre_norm = sum(
+            row["n_per_output"] * q.sum() for row, q in zip(matched, q_values)
+        ) / float(total_covered)
+        if mean_normalize_q:
+            q_bar = q_mean_pre_norm.clamp(min=eps).detach()
+            q_values = [q / q_bar for q in q_values]
         for row, normed, q, q_true in zip(matched, normalized, q_values, true_q):
             row["risk_mean"] = float(normed.mean().detach())
             row["risk_max"] = float(normed.max().detach())
@@ -476,6 +483,7 @@ def calibrated_q_by_layer(
             row["q_mean"] = float(q.mean().detach())
             row["q_max"] = float(q.max().detach())
             row["q_os_mean"] = float(q_true.mean().detach())
+            row["q_mean_pre_norm"] = float(q_mean_pre_norm.detach())
             row.pop("_risk", None)
             row.pop("n_per_output", None)
 
@@ -486,6 +494,7 @@ def calibrated_q_by_layer(
         row.setdefault("q_mean", 1.0)
         row.setdefault("q_max", 1.0)
         row.setdefault("q_os_mean", 1.0)
+        row.setdefault("q_mean_pre_norm", row.get("q_mean", 1.0))
         for key in ("weight", "bn", "if_mod"):
             row.pop(key, None)
     return rows
@@ -601,6 +610,7 @@ def dump_mne_mapping_report(
     risk_max: float = 8.0,
     q_assignment: str = "risk",
     onesided: bool = True,
+    mean_normalize_q: bool = False,
     extra=None,
 ) -> dict:
     """Write mapping_summary.json, layer_q.csv, residual_shortcut_risk.csv."""
@@ -624,6 +634,7 @@ def dump_mne_mapping_report(
         onesided=onesided,
         q_assignment=q_assignment,
         layer_map=layer_map,
+        mean_normalize_q=mean_normalize_q,
     )
     pairs = terminal_residual_shortcut_risks(q_rows)
     with torch.no_grad():
@@ -650,6 +661,7 @@ def dump_mne_mapping_report(
         "alpha": float(alpha),
         "tau": float(tau),
         "q_assignment": q_assignment,
+        "mean_normalize_q": bool(mean_normalize_q),
         "identity_vs_l2wo_relerr": identity_vs_l2,
         **summary,
         "p_gt_tau": (
@@ -667,6 +679,14 @@ def dump_mne_mapping_report(
                 if row["matched"]
             )
             / max(1, sum(row["n_params"] for row in q_rows if row["matched"]))
+        ),
+        "q_mean_pre_norm": next(
+            (
+                row.get("q_mean_pre_norm", row["q_mean"])
+                for row in q_rows
+                if row["matched"]
+            ),
+            1.0,
         ),
         "residual_shortcut_pairs": pairs,
     }
@@ -690,6 +710,7 @@ def dump_mne_mapping_report(
         "q_mean",
         "q_max",
         "q_os_mean",
+        "q_mean_pre_norm",
     ]
     with (out / "layer_q.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=csv_fields)
@@ -1267,6 +1288,7 @@ def compute_l2_calibrated_mne_regularization(
     q_assignment: str = "risk",
     shuffle_seed: int = 0,
     q_max: float = 0.0,
+    mean_normalize_q: bool = False,
 ):
     """Weights-only L2 with a detached, mean-one MNE risk reweighting.
 
@@ -1375,6 +1397,9 @@ def compute_l2_calibrated_mne_regularization(
             "p_at_qmax": 0.0,
             "layer_q_mean_min": 1.0,
             "layer_q_mean_max": 1.0,
+            "mean_normalize_q": bool(mean_normalize_q),
+            "q_mean_pre_norm": 1.0,
+            "q_tilde_mean": 1.0,
         }
         return 0.5 * penalty
 
@@ -1465,6 +1490,13 @@ def compute_l2_calibrated_mne_regularization(
         else:
             q_values = true_q
 
+        q_mean_pre_norm = sum(
+            n_per_output * q.sum()
+            for q, (_, _, n_per_output) in zip(q_values, weighted_layers)
+        ) / float(total_covered_params)
+        if mean_normalize_q:
+            q_bar = q_mean_pre_norm.clamp(min=eps).detach()
+            q_values = [q / q_bar for q in q_values]
         q_mean = sum(
             n_per_output * q.sum()
             for q, (_, _, n_per_output) in zip(q_values, weighted_layers)
@@ -1491,6 +1523,9 @@ def compute_l2_calibrated_mne_regularization(
             "p_at_qmax": p_at_qmax.detach(),
             "layer_q_mean_min": layer_q_means.min().detach(),
             "layer_q_mean_max": layer_q_means.max().detach(),
+            "mean_normalize_q": bool(mean_normalize_q),
+            "q_mean_pre_norm": q_mean_pre_norm.detach(),
+            "q_tilde_mean": q_mean.detach(),
         }
 
     penalty = None
@@ -1504,46 +1539,28 @@ def compute_l2_calibrated_mne_regularization(
     return 0.5 * penalty
 
 
-def compute_mne_l2_regularization(
+def _mne_l2_penalty(
     model,
     quant_level: int,
-    eps: float = 1e-6,
-    use_max: bool = False,
-    detach_lambda: bool = False,
-    detach_bn_stats: bool = True,
-    detach_bn_affine=None,
-    normalize_by_fan_in: bool = False,
-    layer_reduction: str = "sum",
-    l_ref=None,
-    fold_bn: bool = True,
-    full_frobenius: bool = False,
+    eps: float,
+    use_max: bool,
+    detach_lambda: bool,
+    detach_bn_stats: bool,
+    detach_bn_affine,
+    normalize_by_fan_in: bool,
+    layer_reduction: str,
+    l_ref,
+    fold_bn: bool,
+    full_frobenius: bool,
+    layer_map: str,
 ):
-    """
-    Margin-Normalized Effective L2 (MNE-L2):
-
-      R_rho = sum_l  (L^2 * M_eff,l) / (lambda_l^2 + eps)
-
-    默认 BN-folded effective weight:
-      W_tilde = gamma / sqrt(var + eps) * W
-    若无 BN，或 fold_bn=False，则 W_tilde = W（γ 不进入正则）。
-
-    M_eff,l:
-      - mean 版本: mean_o ||W_tilde_{l,o}||_F^2
-      - max  版本: max_o  ||W_tilde_{l,o}||_F^2
-      - frobenius 版本: ||W_tilde_l||_F^2，与 weights-only L2 的逐层项相同
-    """
-    if layer_reduction not in ("sum", "mean"):
-        raise ValueError(f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'.")
-    if full_frobenius and use_max:
-        raise ValueError("full_frobenius and use_max cannot be set together.")
-    if detach_bn_affine is None:
-        detach_bn_affine = detach_bn_stats
-    if l_ref is not None and l_ref <= 0:
-        raise ValueError(f"l_ref must be positive, got {l_ref}.")
-
     module_map = dict(model.named_modules())
     terms = []
-    level_factor = (float(quant_level) / float(l_ref)) ** 2 if l_ref is not None else float(quant_level) ** 2
+    level_factor = (
+        (float(quant_level) / float(l_ref)) ** 2
+        if l_ref is not None
+        else float(quant_level) ** 2
+    )
 
     for lname, layer in model.named_modules():
         if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
@@ -1555,7 +1572,7 @@ def compute_mne_l2_regularization(
         w_eff = w
 
         bn_mod, if_mod = _resolve_bn_if_for_layer(
-            lname, module_map, layer_map=_layer_map_from_model(model)
+            lname, module_map, layer_map=layer_map
         )
         # 方案 C：无匹配 IF 的层（如 VGG classifier.7 输出头）不参与 MNE-L2。
         if if_mod is None:
@@ -1598,6 +1615,106 @@ def compute_mne_l2_regularization(
         return torch.zeros((), device=p.device, dtype=p.dtype)
     stacked = torch.stack([term.reshape(()) for term in terms])
     return stacked.mean() if layer_reduction == "mean" else stacked.sum()
+
+
+def _parameter_grad_norm(loss, params, retain_graph: bool):
+    if not torch.is_tensor(loss) or not bool(loss.requires_grad):
+        return loss.new_zeros(()) if torch.is_tensor(loss) else torch.zeros(())
+    grads = torch.autograd.grad(
+        loss, params, retain_graph=retain_graph, allow_unused=True
+    )
+    total = None
+    for grad in grads:
+        if grad is None:
+            continue
+        term = grad.pow(2).sum()
+        total = term if total is None else total + term
+    if total is None:
+        return loss.new_zeros(())
+    return total.sqrt()
+
+
+def compute_mne_l2_regularization(
+    model,
+    quant_level: int,
+    eps: float = 1e-6,
+    use_max: bool = False,
+    detach_lambda: bool = False,
+    detach_bn_stats: bool = True,
+    detach_bn_affine=None,
+    normalize_by_fan_in: bool = False,
+    layer_reduction: str = "sum",
+    l_ref=None,
+    fold_bn: bool = True,
+    full_frobenius: bool = False,
+    layer_map=None,
+    grad_match_layer_map=None,
+):
+    """
+    Margin-Normalized Effective L2 (MNE-L2):
+
+      R_rho = sum_l  (L^2 * M_eff,l) / (lambda_l^2 + eps)
+
+    默认 BN-folded effective weight:
+      W_tilde = gamma / sqrt(var + eps) * W
+    若无 BN，或 fold_bn=False，则 W_tilde = W（γ 不进入正则）。
+
+    M_eff,l:
+      - mean 版本: mean_o ||W_tilde_{l,o}||_F^2
+      - max  版本: max_o  ||W_tilde_{l,o}||_F^2
+      - frobenius 版本: ||W_tilde_l||_F^2，与 weights-only L2 的逐层项相同
+
+    If ``grad_match_layer_map`` differs from the active map, scale R so
+    ||∇R|| matches that reference map (detached scale, same graph for R).
+    """
+    if layer_reduction not in ("sum", "mean"):
+        raise ValueError(f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'.")
+    if full_frobenius and use_max:
+        raise ValueError("full_frobenius and use_max cannot be set together.")
+    if detach_bn_affine is None:
+        detach_bn_affine = detach_bn_stats
+    if l_ref is not None and l_ref <= 0:
+        raise ValueError(f"l_ref must be positive, got {l_ref}.")
+
+    active_map = _layer_map_from_model(model, layer_map)
+    kwargs = dict(
+        model=model,
+        quant_level=quant_level,
+        eps=eps,
+        use_max=use_max,
+        detach_lambda=detach_lambda,
+        detach_bn_stats=detach_bn_stats,
+        detach_bn_affine=detach_bn_affine,
+        normalize_by_fan_in=normalize_by_fan_in,
+        layer_reduction=layer_reduction,
+        l_ref=l_ref,
+        fold_bn=fold_bn,
+        full_frobenius=full_frobenius,
+    )
+    penalty = _mne_l2_penalty(layer_map=active_map, **kwargs)
+    match_to = grad_match_layer_map
+    if match_to is None:
+        match_to = getattr(model, "_mne_grad_match_layer_map", None)
+    if match_to in (None, "", active_map):
+        return penalty
+
+    match_to = _layer_map_from_model(model, match_to)
+    if match_to == active_map:
+        return penalty
+    ref = _mne_l2_penalty(layer_map=match_to, **kwargs)
+    params = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    ref_norm = _parameter_grad_norm(ref, params, retain_graph=False)
+    raw_norm = _parameter_grad_norm(penalty, params, retain_graph=True)
+    scale = (ref_norm / raw_norm.clamp(min=eps)).detach()
+    model._mne_grad_match_stats = {
+        "scale": float(scale.detach()),
+        "reg_grad_norm": float(raw_norm.detach()),
+        "ref_grad_norm": float(ref_norm.detach()),
+        "matched_grad_norm": float((scale * raw_norm).detach()),
+        "layer_map": active_map,
+        "grad_match_layer_map": match_to,
+    }
+    return scale * penalty
 
 
 def _mne_covered_weight_ids(model) -> set[int]:
