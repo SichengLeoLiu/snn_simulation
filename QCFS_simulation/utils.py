@@ -230,6 +230,32 @@ def _is_classifier_head(layer_name, module) -> bool:
     return isinstance(module, nn.Linear) and last in ("fc", "classifier")
 
 
+MNE_LAYER_ROLES = (
+    "stem",
+    "residual_preact",
+    "residual_terminal",
+    "shortcut",
+    "classifier_head",
+    "other",
+)
+
+
+def parse_mne_include_roles(value) -> tuple[str, ...] | None:
+    if value in (None, "", (), []):
+        return None
+    if isinstance(value, str):
+        roles = tuple(part.strip() for part in value.split(",") if part.strip())
+    else:
+        roles = tuple(str(part).strip() for part in value if str(part).strip())
+    unknown = [role for role in roles if role not in MNE_LAYER_ROLES]
+    if unknown:
+        raise ValueError(
+            "mne include_roles must be in %s, got %s"
+            % (MNE_LAYER_ROLES, unknown)
+        )
+    return roles
+
+
 def _weight_layer_role(layer_name: str) -> str:
     parts = str(layer_name).split(".")
     last = parts[-1]
@@ -1553,6 +1579,7 @@ def _mne_l2_penalty(
     fold_bn: bool,
     full_frobenius: bool,
     layer_map: str,
+    include_roles=None,
 ):
     module_map = dict(model.named_modules())
     terms = []
@@ -1576,6 +1603,8 @@ def _mne_l2_penalty(
         )
         # 方案 C：无匹配 IF 的层（如 VGG classifier.7 输出头）不参与 MNE-L2。
         if if_mod is None:
+            continue
+        if include_roles is not None and _weight_layer_role(lname) not in include_roles:
             continue
         if fold_bn and bn_mod is not None:
             bn_eps = float(getattr(bn_mod, "eps", eps))
@@ -1649,6 +1678,7 @@ def compute_mne_l2_regularization(
     full_frobenius: bool = False,
     layer_map=None,
     grad_match_layer_map=None,
+    include_roles=None,
 ):
     """
     Margin-Normalized Effective L2 (MNE-L2):
@@ -1665,7 +1695,9 @@ def compute_mne_l2_regularization(
       - frobenius 版本: ||W_tilde_l||_F^2，与 weights-only L2 的逐层项相同
 
     If ``grad_match_layer_map`` differs from the active map, scale R so
-    ||∇R|| matches that reference map (detached scale, same graph for R).
+    ||∇R|| matches that reference map. The reference is never role-filtered.
+    If ``include_roles`` is set, only matched Conv/Linear layers whose
+    role is in that set receive an MNE term.
     """
     if layer_reduction not in ("sum", "mean"):
         raise ValueError(f"Unsupported layer_reduction={layer_reduction!r}; expected 'sum' or 'mean'.")
@@ -1677,6 +1709,9 @@ def compute_mne_l2_regularization(
         raise ValueError(f"l_ref must be positive, got {l_ref}.")
 
     active_map = _layer_map_from_model(model, layer_map)
+    if include_roles is None:
+        include_roles = getattr(model, "_mne_include_roles", None)
+    include_roles = parse_mne_include_roles(include_roles)
     kwargs = dict(
         model=model,
         quant_level=quant_level,
@@ -1691,7 +1726,9 @@ def compute_mne_l2_regularization(
         fold_bn=fold_bn,
         full_frobenius=full_frobenius,
     )
-    penalty = _mne_l2_penalty(layer_map=active_map, **kwargs)
+    penalty = _mne_l2_penalty(
+        layer_map=active_map, include_roles=include_roles, **kwargs
+    )
     match_to = grad_match_layer_map
     if match_to is None:
         match_to = getattr(model, "_mne_grad_match_layer_map", None)
@@ -1699,9 +1736,9 @@ def compute_mne_l2_regularization(
         return penalty
 
     match_to = _layer_map_from_model(model, match_to)
-    if match_to == active_map:
+    if match_to == active_map and include_roles is None:
         return penalty
-    ref = _mne_l2_penalty(layer_map=match_to, **kwargs)
+    ref = _mne_l2_penalty(layer_map=match_to, include_roles=None, **kwargs)
     params = [parameter for parameter in model.parameters() if parameter.requires_grad]
     ref_norm = _parameter_grad_norm(ref, params, retain_graph=False)
     raw_norm = _parameter_grad_norm(penalty, params, retain_graph=True)

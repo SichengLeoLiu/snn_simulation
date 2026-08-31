@@ -334,6 +334,13 @@ parser.add_argument(
     "resnet=also map residual-terminal and shortcut convs to BasicBlock.act",
 )
 parser.add_argument(
+    "--mne_include_roles",
+    default="",
+    type=str,
+    help="Comma-separated MNE layer roles to keep. Empty = all matched layers. "
+    "Roles: stem,residual_preact,residual_terminal,shortcut,classifier_head,other.",
+)
+parser.add_argument(
     "--mne_grad_match_layer_map",
     default="",
     choices=("", "legacy", "resnet"),
@@ -553,6 +560,7 @@ def main():
     model = modelpool(arch, args.dataset)
     model._mne_layer_map = args.mne_layer_map
     model._mne_grad_match_layer_map = args.mne_grad_match_layer_map or None
+    model._mne_include_roles = args.mne_include_roles or None
     model.set_L(args.L)
     model.set_T(args.time)
     if hasattr(model, "set_spike_schedule"):
@@ -659,6 +667,7 @@ def main():
             fold_bn=(not args.mne_no_bn_fold),
             full_frobenius=args.mne_frobenius,
             grad_match_layer_map=args.mne_grad_match_layer_map or None,
+            include_roles=args.mne_include_roles or None,
         )
     elif args.regularizer == "mne_l2_all":
         reg_loss_fn = lambda m, t, q: compute_mne_l2_all_regularization(
@@ -980,7 +989,8 @@ def main():
     logger.info("ckpt_save_mode=%s", args.ckpt_save_mode)
     if args.regularizer == "mne_l2":
         logger.info(
-            "mne_l2: L=%d, eps=%.3e, use_max=%s, frobenius=%s, detach_lambda=%s, detach_bn_stats=%s, fold_bn=%s, layer_map=%s"
+            "mne_l2: L=%d, eps=%.3e, use_max=%s, frobenius=%s, detach_lambda=%s, "
+            "detach_bn_stats=%s, fold_bn=%s, layer_map=%s, include_roles=%s"
             % (
                 args.L,
                 args.mne_eps,
@@ -990,6 +1000,7 @@ def main():
                 str(bool(not args.mne_no_detach_bn_stats)),
                 str(bool(not args.mne_no_bn_fold)),
                 args.mne_layer_map,
+                args.mne_include_roles or "all",
             )
         )
     if args.regularizer == "mne_l2_all":
