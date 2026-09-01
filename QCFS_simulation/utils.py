@@ -226,8 +226,11 @@ def _layer_map_from_model(model, layer_map=None) -> str:
 
 
 def _is_classifier_head(layer_name, module) -> bool:
-    last = str(layer_name).split(".")[-1]
-    return isinstance(module, nn.Linear) and last in ("fc", "classifier")
+    parts = str(layer_name).split(".")
+    last = parts[-1]
+    if not isinstance(module, nn.Linear):
+        return False
+    return last in ("fc", "classifier") or parts[0] == "classifier"
 
 
 MNE_LAYER_ROLES = (
@@ -235,6 +238,11 @@ MNE_LAYER_ROLES = (
     "residual_preact",
     "residual_terminal",
     "shortcut",
+    "layer1",
+    "layer2",
+    "layer3",
+    "layer4",
+    "layer5",
     "classifier_head",
     "other",
 )
@@ -259,12 +267,14 @@ def parse_mne_include_roles(value) -> tuple[str, ...] | None:
 def _weight_layer_role(layer_name: str) -> str:
     parts = str(layer_name).split(".")
     last = parts[-1]
-    if last in ("fc", "classifier"):
+    if last in ("fc", "classifier") or parts[0] == "classifier":
         return "classifier_head"
     if "shortcut" in parts:
         return "shortcut"
     if "residual_function" in parts and last.isdigit():
         return "residual_terminal" if int(last) >= 3 else "residual_preact"
+    if parts[0] in ("layer1", "layer2", "layer3", "layer4", "layer5") and last.isdigit():
+        return parts[0]
     if parts[0].startswith("conv1") or layer_name.startswith("conv1"):
         return "stem"
     return "other"

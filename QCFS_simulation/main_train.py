@@ -338,7 +338,8 @@ parser.add_argument(
     default="",
     type=str,
     help="Comma-separated MNE layer roles to keep. Empty = all matched layers. "
-    "Roles: stem,residual_preact,residual_terminal,shortcut,classifier_head,other.",
+    "Roles: stem,residual_preact,residual_terminal,shortcut,"
+    "layer1,layer2,layer3,layer4,layer5,classifier_head,other.",
 )
 parser.add_argument(
     "--mne_grad_match_layer_map",
