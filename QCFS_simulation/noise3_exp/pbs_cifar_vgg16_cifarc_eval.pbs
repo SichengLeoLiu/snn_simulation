@@ -1,0 +1,108 @@
+#!/bin/bash
+#PBS -N cifarc
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR-C eval of existing VGG-16 ckpts. GPU nodes have no network.
+# METHOD: mne | l2wo | l2all | onesided
+# DATASET: cifar10 | cifar100   (maps to CIFAR-10-C / CIFAR-100-C)
+#
+# Download FIRST on copyq or login (see pbs_download_cifar_c.pbs), then:
+#   cd /home/595/sl9144/codes/snn_simulation && git fetch origin && git reset --hard origin/main
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   export CIFAR_C_ROOT=/scratch/gs14/sl9144/datasets
+#   for DS in cifar10 cifar100; do
+#     for M in mne l2wo l2all onesided; do
+#       qsub -N "cifarc_${DS}_${M}" \
+#         -v CIFAR_ROOT,CIFAR_C_ROOT,DATASET=${DS},METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/cifar_vgg16_cifarc_seed42 \
+#         QCFS_simulation/noise3_exp/pbs_cifar_vgg16_cifarc_eval.pbs
+#     done
+#   done
+
+set -euo pipefail
+
+METHOD="${METHOD:?set METHOD=mne|l2wo|l2all|onesided}"
+DATASET="${DATASET:-cifar10}"
+SEED="${SEED:-42}"
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/cifarc_${DATASET}_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "DATASET=${DATASET} METHOD=${METHOD} SEED=${SEED}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_C_ROOT="${CIFAR_C_ROOT:-/scratch/gs14/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_vgg16_cifarc_seed42}"
+CKPT_ROOT="${CKPT_ROOT:-/home/595/sl9144/codes/snn_simulation/QCFS_simulation}"
+ONESIDED_ROOT="${ONESIDED_ROOT:-/scratch/gs14/sl9144/snn_results/cifar_vgg16_onesided_q_assignment_ablation_seed${SEED}}"
+mkdir -p "${OUT_DIR}"
+
+CNAME="CIFAR-10-C"
+if [[ "${DATASET}" == "cifar100" ]]; then
+  CNAME="CIFAR-100-C"
+fi
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "CIFAR_ROOT=${CIFAR_ROOT}"
+echo "CIFAR_C_ROOT=${CIFAR_C_ROOT}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+
+if [[ "${DATASET}" == "cifar10" && ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+  echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+if [[ "${DATASET}" == "cifar100" && ! -f "${CIFAR_ROOT}/cifar-100-python/meta" ]]; then
+  echo "ERROR: CIFAR-100 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+if [[ ! -f "${CIFAR_C_ROOT}/${CNAME}/labels.npy" ]]; then
+  echo "ERROR: ${CNAME} missing under CIFAR_C_ROOT=${CIFAR_C_ROOT}"
+  echo "Download on login/copyq first. gpuvolta has no network."
+  echo "  qsub QCFS_simulation/noise3_exp/pbs_download_cifar_c.pbs"
+  exit 1
+fi
+
+python -u noise3_exp/run_cifar_vgg16_cifarc_eval.py \
+  --dataset "${DATASET}" \
+  --method "${METHOD}" \
+  --seed "${SEED}" \
+  --out-root "${OUT_DIR}" \
+  --ckpt-root "${CKPT_ROOT}" \
+  --onesided-root "${ONESIDED_ROOT}" \
+  --cifar-c-root "${CIFAR_C_ROOT}" \
+  --cifar-root "${CIFAR_ROOT}" \
+  --batch-size "${CIFAR_BATCH}" \
+  --workers "${CIFAR_NUM_WORKERS}"
+
+echo "=== ALL DONE $(date) DATASET=${DATASET} METHOD=${METHOD} ==="
+ls -la "${OUT_DIR}/${DATASET}/${METHOD}" || ls -la "${OUT_DIR}"

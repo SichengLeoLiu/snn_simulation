@@ -1,0 +1,45 @@
+#!/bin/bash
+#PBS -N cifarc_dl
+#PBS -P gs14
+#PBS -q copyq
+#PBS -l walltime=04:00:00
+#PBS -l ncpus=1
+#PBS -l mem=8GB
+#PBS -l storage=scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# Download CIFAR-10-C / CIFAR-100-C. copyq has network; gpuvolta does not.
+#
+#   cd /home/595/sl9144/codes/snn_simulation && git fetch origin && git reset --hard origin/main
+#   qsub -v CIFAR_C_ROOT=/scratch/gs14/sl9144/datasets \
+#     QCFS_simulation/noise3_exp/pbs_download_cifar_c.pbs
+#
+# Login-node alternative (also has network):
+#   export CIFAR_C_ROOT=/scratch/gs14/sl9144/datasets
+#   bash QCFS_simulation/noise3_exp/download_cifar_c.sh
+
+set -euo pipefail
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/cifarc_dl.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+
+export CIFAR_C_ROOT="${CIFAR_C_ROOT:-/scratch/gs14/sl9144/datasets}"
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -f "${REPO}/QCFS_simulation/noise3_exp/download_cifar_c.sh" ]]; then
+  SCRIPT="${REPO}/QCFS_simulation/noise3_exp/download_cifar_c.sh"
+elif [[ -f "${REPO}/noise3_exp/download_cifar_c.sh" ]]; then
+  SCRIPT="${REPO}/noise3_exp/download_cifar_c.sh"
+else
+  SCRIPT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation/noise3_exp/download_cifar_c.sh"
+fi
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "CIFAR_C_ROOT=${CIFAR_C_ROOT}"
+echo "SCRIPT=${SCRIPT}"
+bash "${SCRIPT}"
+echo "=== ALL DONE $(date) ==="
