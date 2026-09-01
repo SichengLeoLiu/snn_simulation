@@ -118,6 +118,10 @@ def train(
         optimizer.zero_grad()
         labels = labels.to(device)
         images = images.to(device)
+        ga_mode = str(getattr(model, "_ga_mne_mode", "") or "")
+        ga_on = ga_mode in ("nocov", "full")
+        if ga_on:
+            set_basicblock_ga_cache(model, True)
         if T > 0:
             outputs = model(images).mean(0)
         else:
@@ -155,6 +159,8 @@ def train(
                 epoch_acc["q_max"] = max(
                     epoch_acc["q_max"], float(stats.get("q_max", 1.0))
                 )
+        if ga_on:
+            set_basicblock_ga_cache(model, False)
         running_loss += loss.item()
         loss.backward()
         optimizer.step()
@@ -423,6 +429,164 @@ def summarize_weight_layer_matches(rows: list[dict]) -> dict:
     }
 
 
+def _is_basic_block(module) -> bool:
+    return (
+        hasattr(module, "residual_function")
+        and hasattr(module, "shortcut")
+        and hasattr(module, "act")
+    )
+
+
+def _iter_basic_blocks(model):
+    for name, module in model.named_modules():
+        if _is_basic_block(module):
+            yield name, module
+
+
+def set_basicblock_ga_cache(model, enabled: bool) -> None:
+    for _, module in _iter_basic_blocks(model):
+        module._ga_cache = bool(enabled)
+        if not enabled:
+            for key in ("_ga_x", "_ga_h_res", "_ga_h_sc"):
+                if hasattr(module, key):
+                    delattr(module, key)
+
+
+def _ga_branch_for_layer(layer_name: str):
+    parts = str(layer_name).split(".")
+    if "residual_function" in parts:
+        idx = parts.index("residual_function")
+        last = parts[-1]
+        if last.isdigit() and int(last) >= 3:
+            return ".".join(parts[:idx]), "residual"
+        return None
+    if "shortcut" in parts:
+        idx = parts.index("shortcut")
+        return ".".join(parts[:idx]), "shortcut"
+    return None
+
+
+def _channel_moment(left, right):
+    if left.dim() == 4:
+        return (left * right).mean(dim=(0, 2, 3))
+    return (left * right).mean(dim=0)
+
+
+def _forward_branches_frozen(block, x):
+    saved = []
+    for module in list(block.residual_function.modules()) + list(block.shortcut.modules()):
+        if isinstance(module, nn.modules.batchnorm._BatchNorm):
+            saved.append((module, module.track_running_stats))
+            module.track_running_stats = False
+    try:
+        h_res = block.residual_function(x)
+        h_sc = block.shortcut(x)
+        return h_res, h_sc
+    finally:
+        for module, flag in saved:
+            module.track_running_stats = flag
+
+
+def estimate_ga_branch_stats(
+    model,
+    include_cov: bool = True,
+    probe_sigma: float = 0.1,
+    eps: float = 1e-6,
+) -> dict:
+    """Per-block φ/κ from a probe at each additive merge.
+
+    Uses cached block inputs from the last CE forward when present.
+    Identity shortcuts still enter κ even though they have no weights.
+    """
+    stats = {}
+    sigma = float(probe_sigma)
+    for name, block in _iter_basic_blocks(model):
+        x = getattr(block, "_ga_x", None)
+        if x is None:
+            continue
+        x = x.detach()
+        noise = sigma * torch.randn_like(x)
+        with torch.no_grad():
+            h_res, h_sc = _forward_branches_frozen(block, x)
+            h_res_p, h_sc_p = _forward_branches_frozen(block, x + noise)
+        dh_res = h_res_p - h_res
+        dh_sc = h_sc_p - h_sc
+        var_res = _channel_moment(dh_res, dh_res)
+        var_sc = _channel_moment(dh_sc, dh_sc)
+        cov = _channel_moment(dh_res, dh_sc)
+        if include_cov:
+            phi_res = var_res + cov
+            phi_sc = var_sc + cov
+        else:
+            phi_res = var_res
+            phi_sc = var_sc
+        n_branch = 2
+        pos_res = torch.relu(phi_res)
+        pos_sc = torch.relu(phi_sc)
+        denom = pos_res + pos_sc + float(eps)
+        kappa_res = n_branch * pos_res / denom
+        kappa_sc = n_branch * pos_sc / denom
+        delta_u = dh_res + dh_sc
+        stats[name] = {
+            "n_branch": n_branch,
+            "phi_res": phi_res,
+            "phi_sc": phi_sc,
+            "kappa_res": kappa_res,
+            "kappa_sc": kappa_sc,
+            "var_res": var_res,
+            "var_sc": var_sc,
+            "cov": cov,
+            "delta_u_rms": delta_u.pow(2).mean(dim=(0, 2, 3)).sqrt()
+            if delta_u.dim() == 4
+            else delta_u.pow(2).mean(dim=0).sqrt(),
+            "has_shortcut_conv": any(
+                isinstance(child, (nn.Conv1d, nn.Conv2d, nn.Conv3d))
+                for child in block.shortcut.modules()
+            ),
+        }
+    return stats
+
+
+def _kappa_for_layer(layer_name: str, ga_stats: dict, channels: int, device, dtype):
+    spec = _ga_branch_for_layer(layer_name)
+    if spec is None or not ga_stats:
+        return torch.ones((channels,), device=device, dtype=dtype)
+    block_name, branch = spec
+    block = ga_stats.get(block_name)
+    if block is None:
+        return torch.ones((channels,), device=device, dtype=dtype)
+    key = "kappa_res" if branch == "residual" else "kappa_sc"
+    kappa = block[key].to(device=device, dtype=dtype)
+    if kappa.numel() != channels:
+        return torch.ones((channels,), device=device, dtype=dtype)
+    return kappa
+
+
+def _summarize_ga_stats(ga_stats: dict) -> dict:
+    if not ga_stats:
+        return {
+            "ga_n_blocks": 0,
+            "ga_kappa_res_mean": 1.0,
+            "ga_kappa_sc_mean": 1.0,
+            "ga_frac_phi_neg_res": 0.0,
+            "ga_frac_phi_neg_sc": 0.0,
+            "ga_cov_mean": 0.0,
+        }
+    kappa_res = torch.cat([row["kappa_res"].reshape(-1) for row in ga_stats.values()])
+    kappa_sc = torch.cat([row["kappa_sc"].reshape(-1) for row in ga_stats.values()])
+    phi_res = torch.cat([row["phi_res"].reshape(-1) for row in ga_stats.values()])
+    phi_sc = torch.cat([row["phi_sc"].reshape(-1) for row in ga_stats.values()])
+    cov = torch.cat([row["cov"].reshape(-1) for row in ga_stats.values()])
+    return {
+        "ga_n_blocks": len(ga_stats),
+        "ga_kappa_res_mean": float(kappa_res.mean()),
+        "ga_kappa_sc_mean": float(kappa_sc.mean()),
+        "ga_frac_phi_neg_res": float((phi_res < 0).to(phi_res.dtype).mean()),
+        "ga_frac_phi_neg_sc": float((phi_sc < 0).to(phi_sc.dtype).mean()),
+        "ga_cov_mean": float(cov.mean()),
+    }
+
+
 def _raw_channel_risk(row: dict, quant_level: int, eps: float = 1e-6, fold_bn: bool = True):
     weight = row["weight"]
     if_mod = row["if_mod"]
@@ -459,13 +623,35 @@ def calibrated_q_by_layer(
     layer_map=None,
     eps: float = 1e-6,
     mean_normalize_q: bool = False,
+    ga_mode: str = "off",
+    ga_probe_sigma: float = 0.1,
 ) -> list[dict]:
     """Per-layer q / risk table. Unmatched layers keep q=1 and empty risk."""
     rows = collect_weight_layer_matches(model, layer_map=layer_map)
     matched = [row for row in rows if row["matched"]]
+    ga_mode = str(ga_mode or getattr(model, "_ga_mne_mode", "off") or "off").strip().lower()
+    ga_stats = {}
+    if ga_mode in ("nocov", "full"):
+        ga_stats = estimate_ga_branch_stats(
+            model,
+            include_cov=(ga_mode == "full"),
+            probe_sigma=float(
+                getattr(model, "_ga_mne_probe_sigma", ga_probe_sigma)
+            ),
+            eps=eps,
+        )
+        model._ga_mne_block_stats = ga_stats
     risks = []
     for row in matched:
         risk = _raw_channel_risk(row, quant_level, eps=eps, fold_bn=fold_bn)
+        if ga_stats:
+            kappa = _kappa_for_layer(
+                row["name"], ga_stats, risk.numel(), risk.device, risk.dtype
+            )
+            row["kappa_mean"] = float(kappa.mean().detach())
+            risk = risk * kappa
+        else:
+            row["kappa_mean"] = 1.0
         row["_risk"] = risk
         risks.append(risk)
         row["n_per_output"] = int(row["weight"][0].numel())
@@ -531,6 +717,7 @@ def calibrated_q_by_layer(
         row.setdefault("q_max", 1.0)
         row.setdefault("q_os_mean", 1.0)
         row.setdefault("q_mean_pre_norm", row.get("q_mean", 1.0))
+        row.setdefault("kappa_mean", 1.0)
         for key in ("weight", "bn", "if_mod"):
             row.pop(key, None)
     return rows
@@ -569,6 +756,10 @@ def terminal_residual_shortcut_risks(layer_rows: list[dict]) -> list[dict]:
                 "shortcut_q_max": (
                     None if shortcut is None else shortcut.get("q_max")
                 ),
+                "residual_kappa_mean": terminal.get("kappa_mean"),
+                "shortcut_kappa_mean": (
+                    None if shortcut is None else shortcut.get("kappa_mean")
+                ),
             }
         )
     return pairs
@@ -590,6 +781,9 @@ def ce_vs_reg_grad_ratio(
     device = next(model.parameters()).device
     images = images.to(device)
     labels = labels.to(device)
+    ga_on = str(getattr(model, "_ga_mne_mode", "") or "") in ("nocov", "full")
+    if ga_on:
+        set_basicblock_ga_cache(model, True)
     if T > 0:
         outputs = model(images).mean(0)
     else:
@@ -604,6 +798,8 @@ def ce_vs_reg_grad_ratio(
     ce_norm = ce_sq ** 0.5
     if reg_loss_fn is None:
         model.zero_grad(set_to_none=True)
+        if ga_on:
+            set_basicblock_ga_cache(model, False)
         if not was_training:
             model.eval()
         return {
@@ -622,6 +818,8 @@ def ce_vs_reg_grad_ratio(
             reg_sq += float(grad.detach().pow(2).sum().item())
     reg_norm = reg_sq ** 0.5
     model.zero_grad(set_to_none=True)
+    if ga_on:
+        set_basicblock_ga_cache(model, False)
     if not was_training:
         model.eval()
     ratio = float("nan") if ce_norm <= 0.0 else (reg_norm * float(reg_coeff)) / ce_norm
@@ -647,6 +845,8 @@ def dump_mne_mapping_report(
     q_assignment: str = "risk",
     onesided: bool = True,
     mean_normalize_q: bool = False,
+    ga_mode: str = "off",
+    ga_probe_sigma: float = 0.1,
     extra=None,
 ) -> dict:
     """Write mapping_summary.json, layer_q.csv, residual_shortcut_risk.csv."""
@@ -671,6 +871,8 @@ def dump_mne_mapping_report(
         q_assignment=q_assignment,
         layer_map=layer_map,
         mean_normalize_q=mean_normalize_q,
+        ga_mode=ga_mode,
+        ga_probe_sigma=ga_probe_sigma,
     )
     pairs = terminal_residual_shortcut_risks(q_rows)
     with torch.no_grad():
@@ -698,6 +900,7 @@ def dump_mne_mapping_report(
         "tau": float(tau),
         "q_assignment": q_assignment,
         "mean_normalize_q": bool(mean_normalize_q),
+        "ga_mode": str(ga_mode or "off"),
         "identity_vs_l2wo_relerr": identity_vs_l2,
         **summary,
         "p_gt_tau": (
@@ -747,6 +950,7 @@ def dump_mne_mapping_report(
         "q_max",
         "q_os_mean",
         "q_mean_pre_norm",
+        "kappa_mean",
     ]
     with (out / "layer_q.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=csv_fields)
@@ -760,6 +964,36 @@ def dump_mne_mapping_report(
             writer = csv.DictWriter(handle, fieldnames=list(pairs[0].keys()))
             writer.writeheader()
             writer.writerows(pairs)
+    ga_stats = getattr(model, "_ga_mne_block_stats", None) or {}
+    if ga_stats:
+        ga_rows = []
+        for block_name, block in sorted(ga_stats.items()):
+            ga_rows.append(
+                {
+                    "block": block_name,
+                    "has_shortcut_conv": int(bool(block["has_shortcut_conv"])),
+                    "kappa_res_mean": float(block["kappa_res"].mean()),
+                    "kappa_sc_mean": float(block["kappa_sc"].mean()),
+                    "phi_res_mean": float(block["phi_res"].mean()),
+                    "phi_sc_mean": float(block["phi_sc"].mean()),
+                    "cov_mean": float(block["cov"].mean()),
+                    "frac_phi_neg_res": float(
+                        (block["phi_res"] < 0).to(block["phi_res"].dtype).mean()
+                    ),
+                    "frac_phi_neg_sc": float(
+                        (block["phi_sc"] < 0).to(block["phi_sc"].dtype).mean()
+                    ),
+                    "delta_u_rms_mean": float(block["delta_u_rms"].mean()),
+                }
+            )
+        with (out / "ga_block_stats.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(ga_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(ga_rows)
+        payload.update(_summarize_ga_stats(ga_stats))
+        (out / "mapping_summary.json").write_text(
+            json.dumps(payload, indent=2, default=str) + "\n"
+        )
     return payload
 
 
@@ -1325,6 +1559,8 @@ def compute_l2_calibrated_mne_regularization(
     shuffle_seed: int = 0,
     q_max: float = 0.0,
     mean_normalize_q: bool = False,
+    ga_mode: str = "off",
+    ga_probe_sigma: float = 0.1,
 ):
     """Weights-only L2 with a detached, mean-one MNE risk reweighting.
 
@@ -1361,6 +1597,18 @@ def compute_l2_calibrated_mne_regularization(
         )
     q_cap = float(q_max)
     use_q_cap = math.isfinite(q_cap) and q_cap > 0.0
+    ga_mode = str(ga_mode or getattr(model, "_ga_mne_mode", "off") or "off").strip().lower()
+    ga_stats = {}
+    if ga_mode in ("nocov", "full"):
+        ga_stats = estimate_ga_branch_stats(
+            model,
+            include_cov=(ga_mode == "full"),
+            probe_sigma=float(
+                getattr(model, "_ga_mne_probe_sigma", ga_probe_sigma)
+            ),
+            eps=eps,
+        )
+        model._ga_mne_block_stats = ga_stats
 
     weighted_layers = []
     plain_weights = []
@@ -1399,6 +1647,11 @@ def compute_l2_calibrated_mne_regularization(
                     device=weight.device, dtype=weight.dtype
                 ).clamp(min=bn_eps)
                 risk = risk * gamma.pow(2) / (var + bn_eps)
+            if ga_stats:
+                kappa = _kappa_for_layer(
+                    lname, ga_stats, risk.numel(), risk.device, risk.dtype
+                )
+                risk = risk * kappa
 
         n_per_output = weight[0].numel()
         weighted_layers.append((weight, risk, n_per_output))
@@ -1562,6 +1815,8 @@ def compute_l2_calibrated_mne_regularization(
             "mean_normalize_q": bool(mean_normalize_q),
             "q_mean_pre_norm": q_mean_pre_norm.detach(),
             "q_tilde_mean": q_mean.detach(),
+            **_summarize_ga_stats(ga_stats),
+            "ga_mode": ga_mode,
         }
 
     penalty = None

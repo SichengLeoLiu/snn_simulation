@@ -327,6 +327,19 @@ parser.add_argument(
     "does not retune alpha/tau. Isolates q shape from global strength.",
 )
 parser.add_argument(
+    "--calibrated_mne_ga",
+    default="off",
+    choices=("off", "nocov", "full"),
+    help="Graph-aware onesided risk. off=local r only; nocov=φ without "
+    "branch covariance; full=φ with covariance. VGG has one path so κ=1.",
+)
+parser.add_argument(
+    "--calibrated_mne_ga_probe_sigma",
+    default=0.1,
+    type=float,
+    help="Probe σ for GA-MNE branch perturbations at additive merges.",
+)
+parser.add_argument(
     "--mne_layer_map",
     default="legacy",
     choices=("legacy", "resnet"),
@@ -562,6 +575,8 @@ def main():
     model._mne_layer_map = args.mne_layer_map
     model._mne_grad_match_layer_map = args.mne_grad_match_layer_map or None
     model._mne_include_roles = args.mne_include_roles or None
+    model._ga_mne_mode = args.calibrated_mne_ga
+    model._ga_mne_probe_sigma = float(args.calibrated_mne_ga_probe_sigma)
     model.set_L(args.L)
     model.set_T(args.time)
     if hasattr(model, "set_spike_schedule"):
@@ -700,6 +715,8 @@ def main():
                 + int(calibrated_mne_state["shuffle_counter"]),
                 q_max=args.calibrated_mne_q_max,
                 mean_normalize_q=args.calibrated_mne_mean_normalize_q,
+                ga_mode=args.calibrated_mne_ga,
+                ga_probe_sigma=args.calibrated_mne_ga_probe_sigma,
             )
 
         reg_loss_fn = _calibrated_mne_reg
@@ -899,6 +916,11 @@ def main():
         "p_at_qmax",
         "q_cap",
         "mean_normalize_q",
+        "ga_mode",
+        "ga_kappa_res_mean",
+        "ga_kappa_sc_mean",
+        "ga_frac_phi_neg_res",
+        "ga_cov_mean",
         "mne_grad_match_scale",
         "mne_ref_grad_norm",
         "reg_grad_norm",
@@ -1022,7 +1044,7 @@ def main():
             "calibrated_mne_l2: base=0.5*sum(q*W^2), target_alpha=%.4g, "
             "alpha_start=%d, alpha_warmup=%d, risk_clip=[%.4g, %.4g], "
             "fold_bn=%s, normalization=%s, onesided=%s, tau=%.4g, "
-            "q_assignment=%s, q_max=%s, layer_map=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
+            "q_assignment=%s, q_max=%s, layer_map=%s, ga=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
             % (
                 args.calibrated_mne_alpha,
                 args.calibrated_mne_alpha_start_epoch,
@@ -1040,6 +1062,7 @@ def main():
                     else ("%.4g" % args.calibrated_mne_q_max)
                 ),
                 args.mne_layer_map,
+                args.calibrated_mne_ga,
             )
         )
     if args.regularizer == "stable_mne_l2":
@@ -1200,6 +1223,8 @@ def main():
             q_assignment=args.calibrated_mne_q_assignment,
             onesided=bool(args.calibrated_mne_onesided),
             mean_normalize_q=bool(args.calibrated_mne_mean_normalize_q),
+            ga_mode=args.calibrated_mne_ga,
+            ga_probe_sigma=float(args.calibrated_mne_ga_probe_sigma),
         )
         logger.info(
             "mapping_diag layer_map=%s matched=%s body_param_ratio=%.4f "
@@ -1438,6 +1463,17 @@ def main():
                         "mean_normalize_q": int(
                             bool(args.calibrated_mne_mean_normalize_q)
                         ),
+                        "ga_mode": args.calibrated_mne_ga,
+                        "ga_kappa_res_mean": float(
+                            merged.get("ga_kappa_res_mean", 1.0)
+                        ),
+                        "ga_kappa_sc_mean": float(
+                            merged.get("ga_kappa_sc_mean", 1.0)
+                        ),
+                        "ga_frac_phi_neg_res": float(
+                            merged.get("ga_frac_phi_neg_res", 0.0)
+                        ),
+                        "ga_cov_mean": float(merged.get("ga_cov_mean", 0.0)),
                         "mne_grad_match_scale": match_stats.get("scale", ""),
                         "mne_ref_grad_norm": match_stats.get("ref_grad_norm", ""),
                         "reg_grad_norm": grads["reg_grad_norm"],

@@ -37,8 +37,13 @@ class BasicBlock(nn.Module):
         self.act = IF()
 
     def forward(self, x):
-        x = self.residual_function(x) + self.shortcut(x)
-        return self.act(x)
+        h_res = self.residual_function(x)
+        h_sc = self.shortcut(x)
+        if getattr(self, "_ga_cache", False):
+            self._ga_x = x
+            self._ga_h_res = h_res
+            self._ga_h_sc = h_sc
+        return self.act(h_res + h_sc)
 
 class ResNet(nn.Module):
     def __init__(self, block, num_block, num_classes=100, imagenet_stem=False):
