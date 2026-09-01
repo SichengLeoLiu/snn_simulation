@@ -245,6 +245,27 @@ parser.add_argument(
     help="--regularizer=mne_l2 时允许正则梯度回传到 BN running_var/gamma",
 )
 parser.add_argument(
+    "--mne_no_detach_bn_affine",
+    action="store_true",
+    help="--regularizer=mne_l2 时允许正则梯度回传到 BN gamma（running_var 仍跟随 --mne_no_detach_bn_stats）",
+)
+parser.add_argument(
+    "--mne_no_lambda",
+    action="store_true",
+    help="--regularizer=mne_l2 时去掉 1/lambda^2，只保留 BN-folded M_eff（Effective L2）",
+)
+parser.add_argument(
+    "--mne_no_l_scale",
+    action="store_true",
+    help="--regularizer=mne_l2 时去掉 L^2 / (L/L_ref)^2 缩放",
+)
+parser.add_argument(
+    "--mne_l_ref",
+    default=None,
+    type=float,
+    help="若设置，MNE-L2 用 (L/L_ref)^2 代替 L^2；与 --mne_no_l_scale 同时出现时以后者为准",
+)
+parser.add_argument(
     "--mne_no_bn_fold",
     action="store_true",
     help="--regularizer=mne_l2 时分子只用生权重 W，不把 BN γ/var fold 进去",
@@ -680,8 +701,14 @@ def main():
             use_max=args.mne_use_max,
             detach_lambda=args.mne_detach_lambda,
             detach_bn_stats=(not args.mne_no_detach_bn_stats),
+            detach_bn_affine=(
+                False if args.mne_no_detach_bn_affine else None
+            ),
             fold_bn=(not args.mne_no_bn_fold),
             full_frobenius=args.mne_frobenius,
+            l_ref=args.mne_l_ref,
+            divide_by_lambda=(not args.mne_no_lambda),
+            scale_by_l=(not args.mne_no_l_scale),
             grad_match_layer_map=args.mne_grad_match_layer_map or None,
             include_roles=args.mne_include_roles or None,
         )
@@ -1013,7 +1040,8 @@ def main():
     if args.regularizer == "mne_l2":
         logger.info(
             "mne_l2: L=%d, eps=%.3e, use_max=%s, frobenius=%s, detach_lambda=%s, "
-            "detach_bn_stats=%s, fold_bn=%s, layer_map=%s, include_roles=%s"
+            "detach_bn_stats=%s, detach_bn_affine=%s, fold_bn=%s, "
+            "divide_by_lambda=%s, scale_by_l=%s, l_ref=%s, layer_map=%s, include_roles=%s"
             % (
                 args.L,
                 args.mne_eps,
@@ -1021,7 +1049,11 @@ def main():
                 str(bool(args.mne_frobenius)),
                 str(bool(args.mne_detach_lambda)),
                 str(bool(not args.mne_no_detach_bn_stats)),
+                str(bool(not args.mne_no_detach_bn_affine)),
                 str(bool(not args.mne_no_bn_fold)),
+                str(bool(not args.mne_no_lambda)),
+                str(bool(not args.mne_no_l_scale)),
+                ("none" if args.mne_l_ref is None else ("%.4g" % args.mne_l_ref)),
                 args.mne_layer_map,
                 args.mne_include_roles or "all",
             )

@@ -1845,14 +1845,17 @@ def _mne_l2_penalty(
     full_frobenius: bool,
     layer_map: str,
     include_roles=None,
+    divide_by_lambda: bool = True,
+    scale_by_l: bool = True,
 ):
     module_map = dict(model.named_modules())
     terms = []
-    level_factor = (
-        (float(quant_level) / float(l_ref)) ** 2
-        if l_ref is not None
-        else float(quant_level) ** 2
-    )
+    if not scale_by_l:
+        level_factor = 1.0
+    elif l_ref is not None:
+        level_factor = (float(quant_level) / float(l_ref)) ** 2
+    else:
+        level_factor = float(quant_level) ** 2
 
     for lname, layer in model.named_modules():
         if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
@@ -1900,7 +1903,10 @@ def _mne_l2_penalty(
         if detach_lambda:
             lam = lam.detach()
 
-        terms.append(level_factor * m_eff / (lam.pow(2) + eps))
+        term = level_factor * m_eff
+        if divide_by_lambda:
+            term = term / (lam.pow(2) + eps)
+        terms.append(term)
 
     if not terms:
         p = next(model.parameters(), None)
@@ -1944,11 +1950,18 @@ def compute_mne_l2_regularization(
     layer_map=None,
     grad_match_layer_map=None,
     include_roles=None,
+    divide_by_lambda: bool = True,
+    scale_by_l: bool = True,
 ):
     """
     Margin-Normalized Effective L2 (MNE-L2):
 
       R_rho = sum_l  (L^2 * M_eff,l) / (lambda_l^2 + eps)
+
+    Component-ablation switches (defaults preserve the published formula):
+      divide_by_lambda=False → drop 1/λ^2
+      scale_by_l=False → drop L^2 (or (L/l_ref)^2)
+      l_ref=K → replace L^2 with (L/K)^2
 
     默认 BN-folded effective weight:
       W_tilde = gamma / sqrt(var + eps) * W
@@ -1990,6 +2003,8 @@ def compute_mne_l2_regularization(
         l_ref=l_ref,
         fold_bn=fold_bn,
         full_frobenius=full_frobenius,
+        divide_by_lambda=divide_by_lambda,
+        scale_by_l=scale_by_l,
     )
     penalty = _mne_l2_penalty(
         layer_map=active_map, include_roles=include_roles, **kwargs
