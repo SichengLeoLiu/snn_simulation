@@ -361,6 +361,55 @@ parser.add_argument(
     help="Probe σ for GA-MNE branch perturbations at additive merges.",
 )
 parser.add_argument(
+    "--calibrated_mne_risk_source",
+    default="bn",
+    choices=("bn", "gm"),
+    help="onesided 风险来源: bn=L^2 γ^2/λ^2 v; gm=p_n D_n m_{e→n}",
+)
+parser.add_argument(
+    "--gm_os_no_p",
+    action="store_true",
+    help="Graph-Margin: 关掉边界跨越概率 p，令 p=1",
+)
+parser.add_argument(
+    "--gm_os_use_d",
+    action="store_true",
+    help="Graph-Margin: 乘下游敏感度 D=E[||∂L/∂u||^2]",
+)
+parser.add_argument(
+    "--gm_os_use_m",
+    action="store_true",
+    help="Graph-Margin: 把节点风险按边际贡献 m 分到流入边",
+)
+parser.add_argument(
+    "--gm_os_ema_rho",
+    default=0.1,
+    type=float,
+    help="Graph-Margin 风险 EMA 系数 ρ，r ← (1-ρ)r + ρ r_batch",
+)
+parser.add_argument(
+    "--gm_os_sigma_mode",
+    default="act",
+    choices=("act", "fixed"),
+    help="σ_eff: act=通道激活标准差（无 BN）; fixed=全局噪声地板",
+)
+parser.add_argument(
+    "--gm_os_sigma",
+    default=1.0,
+    type=float,
+    help="Graph-Margin 噪声地板（r 尺度）。act 模式与 std(z) 合成",
+)
+parser.add_argument(
+    "--gm_os_m_cov",
+    action="store_true",
+    help="Graph-Margin m 使用分支协方差；默认只用方差",
+)
+parser.add_argument(
+    "--gm_os_budget_norm",
+    action="store_true",
+    help="用 [r-b]_+ / mean([r-b]_+) 分配额外 L2 预算，而不是 α[r̂-τ]_+",
+)
+parser.add_argument(
     "--mne_layer_map",
     default="legacy",
     choices=("legacy", "resnet"),
@@ -598,6 +647,23 @@ def main():
     model._mne_include_roles = args.mne_include_roles or None
     model._ga_mne_mode = args.calibrated_mne_ga
     model._ga_mne_probe_sigma = float(args.calibrated_mne_ga_probe_sigma)
+    model._calibrated_mne_risk_source = args.calibrated_mne_risk_source
+    if args.calibrated_mne_risk_source == "gm":
+        model._gm_os_cfg = {
+            "use_p": (not args.gm_os_no_p),
+            "use_d": bool(args.gm_os_use_d),
+            "use_m": bool(args.gm_os_use_m),
+            "ema_rho": float(args.gm_os_ema_rho),
+            "sigma_mode": args.gm_os_sigma_mode,
+            "sigma_noise": float(args.gm_os_sigma),
+            "include_cov": bool(args.gm_os_m_cov),
+            "probe_sigma": float(args.calibrated_mne_ga_probe_sigma),
+            "budget_norm": bool(args.gm_os_budget_norm),
+            "quant_level": int(args.L),
+            "eps": float(args.mne_eps),
+        }
+    else:
+        model._gm_os_cfg = None
     model.set_L(args.L)
     model.set_T(args.time)
     if hasattr(model, "set_spike_schedule"):
@@ -744,6 +810,8 @@ def main():
                 mean_normalize_q=args.calibrated_mne_mean_normalize_q,
                 ga_mode=args.calibrated_mne_ga,
                 ga_probe_sigma=args.calibrated_mne_ga_probe_sigma,
+                risk_source=args.calibrated_mne_risk_source,
+                budget_norm=args.gm_os_budget_norm,
             )
 
         reg_loss_fn = _calibrated_mne_reg
@@ -948,6 +1016,11 @@ def main():
         "ga_kappa_sc_mean",
         "ga_frac_phi_neg_res",
         "ga_cov_mean",
+        "risk_source",
+        "gm_p_mean",
+        "gm_d_mean",
+        "gm_m_mean",
+        "gm_r_mean",
         "mne_grad_match_scale",
         "mne_ref_grad_norm",
         "reg_grad_norm",
@@ -1076,7 +1149,8 @@ def main():
             "calibrated_mne_l2: base=0.5*sum(q*W^2), target_alpha=%.4g, "
             "alpha_start=%d, alpha_warmup=%d, risk_clip=[%.4g, %.4g], "
             "fold_bn=%s, normalization=%s, onesided=%s, tau=%.4g, "
-            "q_assignment=%s, q_max=%s, layer_map=%s, ga=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
+            "q_assignment=%s, q_max=%s, layer_map=%s, ga=%s, risk_source=%s, "
+            "gm_p=%s, gm_d=%s, gm_m=%s, gm_budget=%s, risk_detached=True, unmatched_head_q=1, optimizer_wd=0"
             % (
                 args.calibrated_mne_alpha,
                 args.calibrated_mne_alpha_start_epoch,
@@ -1095,6 +1169,11 @@ def main():
                 ),
                 args.mne_layer_map,
                 args.calibrated_mne_ga,
+                args.calibrated_mne_risk_source,
+                str(bool(not args.gm_os_no_p)),
+                str(bool(args.gm_os_use_d)),
+                str(bool(args.gm_os_use_m)),
+                str(bool(args.gm_os_budget_norm)),
             )
         )
     if args.regularizer == "stable_mne_l2":
@@ -1506,6 +1585,11 @@ def main():
                             merged.get("ga_frac_phi_neg_res", 0.0)
                         ),
                         "ga_cov_mean": float(merged.get("ga_cov_mean", 0.0)),
+                        "risk_source": args.calibrated_mne_risk_source,
+                        "gm_p_mean": float(merged.get("gm_p_mean", 1.0)),
+                        "gm_d_mean": float(merged.get("gm_d_mean", 1.0)),
+                        "gm_m_mean": float(merged.get("gm_m_mean", 1.0)),
+                        "gm_r_mean": float(merged.get("gm_r_mean", 1.0)),
                         "mne_grad_match_scale": match_stats.get("scale", ""),
                         "mne_ref_grad_norm": match_stats.get("ref_grad_norm", ""),
                         "reg_grad_norm": grads["reg_grad_norm"],

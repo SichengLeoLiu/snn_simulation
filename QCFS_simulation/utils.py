@@ -119,7 +119,8 @@ def train(
         labels = labels.to(device)
         images = images.to(device)
         ga_mode = str(getattr(model, "_ga_mne_mode", "") or "")
-        ga_on = ga_mode in ("nocov", "full")
+        gm_cfg = _gm_os_cfg(model)
+        ga_on = ga_mode in ("nocov", "full") or bool(gm_cfg and gm_cfg.get("use_m"))
         if ga_on:
             set_basicblock_ga_cache(model, True)
         if T > 0:
@@ -127,6 +128,8 @@ def train(
         else:
             outputs = model(images)
         loss = criterion(outputs, labels)
+        if gm_cfg is not None:
+            update_graph_margin_stats(model, loss)
         if reg_loss_fn is not None:
             reg = reg_loss_fn(model, T, quant_level)
             loss = loss + float(reg_coeff) * reg
@@ -163,6 +166,8 @@ def train(
             set_basicblock_ga_cache(model, False)
         running_loss += loss.item()
         loss.backward()
+        if gm_cfg is not None:
+            clear_if_pre_quant(model)
         optimizer.step()
         total += float(labels.size(0))
         _, predicted = outputs.cpu().max(1)
@@ -562,6 +567,227 @@ def _kappa_for_layer(layer_name: str, ga_stats: dict, channels: int, device, dty
     return kappa
 
 
+def _gm_os_cfg(model) -> dict | None:
+    cfg = getattr(model, "_gm_os_cfg", None)
+    return cfg if isinstance(cfg, dict) and cfg else None
+
+
+def _gm_os_enabled(model) -> bool:
+    return _gm_os_cfg(model) is not None
+
+
+def _channel_mean(tensor: torch.Tensor) -> torch.Tensor:
+    if tensor.dim() == 4:
+        return tensor.mean(dim=(0, 2, 3))
+    if tensor.dim() == 2:
+        return tensor.mean(dim=0)
+    return tensor.reshape(-1)
+
+
+def _gaussian_q(z: torch.Tensor) -> torch.Tensor:
+    return _standard_normal_cdf(-z)
+
+
+def _if_margin_crossing_prob(
+    if_mod,
+    quant_level: int,
+    sigma_mode: str = "act",
+    sigma_noise: float = 1.0,
+    eps: float = 1e-6,
+) -> torch.Tensor | None:
+    """Per-channel p = E[2 Q(d / (σ_eff+ε))] on QCFS-normalized activations."""
+    z = getattr(if_mod, "last_pre_quant", None)
+    if z is None:
+        return None
+    z = z.detach()
+    lam_min = max(float(eps), 1e-3)
+    lam = if_mod.thresh.detach().to(device=z.device, dtype=z.dtype).clamp(min=lam_min).view(-1)[0]
+    r = float(quant_level) * z / (lam + eps)
+    d_left, d_right, use_left, use_right = _activation_boundary_distances(
+        r, quant_level, eps=eps
+    )
+    d_near = torch.where(
+        use_left & use_right,
+        torch.minimum(d_left, d_right),
+        torch.where(use_left, d_left, d_right),
+    )
+    mode = str(sigma_mode).strip().lower()
+    if mode == "act":
+        if z.dim() == 4:
+            std_z = z.flatten(2).std(dim=(0, 2), unbiased=False)
+            view = (1, -1, 1, 1)
+        elif z.dim() == 2:
+            std_z = z.std(dim=0, unbiased=False)
+            view = (1, -1)
+        else:
+            std_z = z.std().reshape(1)
+            view = (1,)
+        sigma_r = (float(quant_level) / (lam + eps)) * std_z
+        sigma = torch.sqrt(sigma_r.pow(2) + float(sigma_noise) ** 2).view(*view)
+    else:
+        sigma = z.new_full((), max(float(sigma_noise), eps))
+    zscore = (d_near / (sigma + eps)).clamp(min=0.0, max=20.0)
+    p_map = (2.0 * _gaussian_q(zscore)).clamp(0.0, 1.0)
+    return _channel_mean(p_map)
+
+
+def _if_downstream_energy(grad: torch.Tensor | None) -> torch.Tensor | None:
+    if grad is None:
+        return None
+    return _channel_mean(grad.detach().pow(2))
+
+
+def _allocate_edge_mass(
+    layer_name: str,
+    channels: int,
+    ga_stats: dict,
+    device,
+    dtype,
+    eps: float,
+) -> torch.Tensor:
+    ones = torch.ones((channels,), device=device, dtype=dtype)
+    spec = _ga_branch_for_layer(layer_name)
+    if spec is None or not ga_stats:
+        return ones
+    block_name, branch = spec
+    block = ga_stats.get(block_name)
+    if block is None or not block.get("has_shortcut_conv", False):
+        return ones
+    pos_res = torch.relu(block["phi_res"]).to(device=device, dtype=dtype)
+    pos_sc = torch.relu(block["phi_sc"]).to(device=device, dtype=dtype)
+    denom = pos_res + pos_sc + float(eps)
+    mass = pos_res / denom if branch == "residual" else pos_sc / denom
+    if mass.numel() != channels:
+        return ones
+    return mass
+
+
+def _ema_inplace(store: dict, key: str, value: torch.Tensor, rho: float) -> torch.Tensor:
+    prev = store.get(key)
+    if prev is None or prev.shape != value.shape or prev.device != value.device:
+        store[key] = value.clone()
+    else:
+        store[key] = (1.0 - float(rho)) * prev + float(rho) * value
+    return store[key]
+
+
+def clear_if_pre_quant(model) -> None:
+    for module in model.modules():
+        if isinstance(module, IF):
+            module.last_pre_quant = None
+
+
+def update_graph_margin_stats(model, ce_loss) -> dict:
+    """Refresh detached node/edge risks from the current CE graph.
+
+    r_n = p_n D_n,  r_e = r_n m_{e→n}. Risks are EMA-smoothed and never
+    backpropagated into p, D, or m.
+    """
+    cfg = _gm_os_cfg(model)
+    if cfg is None:
+        return {}
+    eps = float(cfg.get("eps", 1e-6))
+    quant_level = int(cfg.get("quant_level", 16))
+    rho = float(cfg.get("ema_rho", 0.1))
+    use_p = bool(cfg.get("use_p", True))
+    use_d = bool(cfg.get("use_d", False))
+    use_m = bool(cfg.get("use_m", False))
+    module_map = dict(model.named_modules())
+    p_by_if = {}
+    d_by_if = {}
+    if_entries = []
+    for name, module in module_map.items():
+        if not isinstance(module, IF):
+            continue
+        z = getattr(module, "last_pre_quant", None)
+        if z is None:
+            continue
+        if_entries.append((name, module, z))
+        if use_p:
+            p_c = _if_margin_crossing_prob(
+                module,
+                quant_level=quant_level,
+                sigma_mode=str(cfg.get("sigma_mode", "act")),
+                sigma_noise=float(cfg.get("sigma_noise", 1.0)),
+                eps=eps,
+            )
+            if p_c is not None:
+                p_by_if[name] = p_c
+    if use_d and torch.is_tensor(ce_loss) and bool(ce_loss.requires_grad):
+        acts = []
+        names = []
+        for name, module, z in if_entries:
+            if z.requires_grad:
+                names.append(name)
+                acts.append(z)
+        if acts:
+            grads = torch.autograd.grad(
+                ce_loss, acts, retain_graph=True, allow_unused=True
+            )
+            for name, grad in zip(names, grads):
+                energy = _if_downstream_energy(grad)
+                if energy is not None:
+                    d_by_if[name] = energy
+    ga_stats = {}
+    if use_m:
+        ga_stats = estimate_ga_branch_stats(
+            model,
+            include_cov=bool(cfg.get("include_cov", False)),
+            probe_sigma=float(cfg.get("probe_sigma", 0.1)),
+            eps=eps,
+        )
+        model._ga_mne_block_stats = ga_stats
+
+    rows = collect_weight_layer_matches(model)
+    edge_store = getattr(model, "_gm_os_edge_ema", None)
+    if not isinstance(edge_store, dict):
+        edge_store = {}
+        model._gm_os_edge_ema = edge_store
+    edge_risk = {}
+    p_vals, d_vals, m_vals = [], [], []
+    for row in rows:
+        if not row["matched"]:
+            continue
+        weight = row["weight"]
+        channels = int(weight.shape[0])
+        if_name = row["if_name"]
+        device, dtype = weight.device, weight.dtype
+        p_c = p_by_if.get(if_name)
+        if p_c is None or p_c.numel() != channels:
+            p_c = torch.ones((channels,), device=device, dtype=dtype)
+        else:
+            p_c = p_c.to(device=device, dtype=dtype)
+        d_c = d_by_if.get(if_name)
+        if d_c is None or d_c.numel() != channels:
+            d_c = torch.ones((channels,), device=device, dtype=dtype)
+            d_raw = d_c
+        else:
+            d_c = d_c.to(device=device, dtype=dtype)
+            d_raw = d_c
+            scale = d_c.mean().clamp(min=eps)
+            d_c = torch.ones_like(d_c) if float(d_c.max()) <= eps else d_c / scale
+        r_n = p_c * d_c
+        m_c = _allocate_edge_mass(
+            row["name"], channels, ga_stats, device, dtype, eps
+        ) if use_m else torch.ones((channels,), device=device, dtype=dtype)
+        r_e = (r_n * m_c).detach()
+        edge_risk[row["name"]] = _ema_inplace(edge_store, row["name"], r_e, rho)
+        p_vals.append(p_c.detach())
+        d_vals.append(d_raw.detach())
+        m_vals.append(m_c.detach())
+    model._gm_os_edge_risk = edge_risk
+    stats = {
+        "gm_n_edges": len(edge_risk),
+        "gm_p_mean": float(torch.cat(p_vals).mean()) if p_vals else 1.0,
+        "gm_d_mean": float(torch.cat(d_vals).mean()) if d_vals else 1.0,
+        "gm_m_mean": float(torch.cat(m_vals).mean()) if m_vals else 1.0,
+        "gm_r_mean": float(torch.cat(list(edge_risk.values())).mean()) if edge_risk else 1.0,
+        **_summarize_ga_stats(ga_stats),
+    }
+    model._gm_os_stats = stats
+    return stats
+
+
 def _summarize_ga_stats(ga_stats: dict) -> dict:
     if not ga_stats:
         return {
@@ -782,6 +1008,9 @@ def ce_vs_reg_grad_ratio(
     images = images.to(device)
     labels = labels.to(device)
     ga_on = str(getattr(model, "_ga_mne_mode", "") or "") in ("nocov", "full")
+    gm_cfg = _gm_os_cfg(model)
+    if gm_cfg and gm_cfg.get("use_m"):
+        ga_on = True
     if ga_on:
         set_basicblock_ga_cache(model, True)
     if T > 0:
@@ -789,6 +1018,8 @@ def ce_vs_reg_grad_ratio(
     else:
         outputs = model(images)
     ce = criterion(outputs, labels)
+    if gm_cfg is not None:
+        update_graph_margin_stats(model, ce)
     params = [p for p in model.parameters() if p.requires_grad]
     grads_ce = torch.autograd.grad(ce, params, retain_graph=True, allow_unused=True)
     ce_sq = 0.0
@@ -1561,6 +1792,8 @@ def compute_l2_calibrated_mne_regularization(
     mean_normalize_q: bool = False,
     ga_mode: str = "off",
     ga_probe_sigma: float = 0.1,
+    risk_source: str = "bn",
+    budget_norm: bool = False,
 ):
     """Weights-only L2 with a detached, mean-one MNE risk reweighting.
 
@@ -1597,9 +1830,17 @@ def compute_l2_calibrated_mne_regularization(
         )
     q_cap = float(q_max)
     use_q_cap = math.isfinite(q_cap) and q_cap > 0.0
+    gm_cfg = _gm_os_cfg(model)
+    risk_source = str(
+        risk_source or (gm_cfg and "gm") or getattr(model, "_calibrated_mne_risk_source", "bn")
+        or "bn"
+    ).strip().lower()
+    if gm_cfg is not None:
+        risk_source = "gm"
+        budget_norm = bool(gm_cfg.get("budget_norm", budget_norm))
     ga_mode = str(ga_mode or getattr(model, "_ga_mne_mode", "off") or "off").strip().lower()
     ga_stats = {}
-    if ga_mode in ("nocov", "full"):
+    if risk_source != "gm" and ga_mode in ("nocov", "full"):
         ga_stats = estimate_ga_branch_stats(
             model,
             include_cov=(ga_mode == "full"),
@@ -1613,6 +1854,7 @@ def compute_l2_calibrated_mne_regularization(
     weighted_layers = []
     plain_weights = []
     module_map = dict(model.named_modules())
+    gm_risks = getattr(model, "_gm_os_edge_risk", {}) if risk_source == "gm" else {}
 
     for lname, layer in model.named_modules():
         if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
@@ -1629,29 +1871,38 @@ def compute_l2_calibrated_mne_regularization(
             continue
 
         with torch.no_grad():
-            lam_min = max(float(eps), 1e-3)
-            lam = if_mod.thresh.detach().to(
-                device=weight.device, dtype=weight.dtype
-            ).clamp(min=lam_min).view(-1)[0]
-            base_risk = float(quant_level) ** 2 / (lam.pow(2) + eps)
-            risk = torch.ones(
-                (weight.shape[0],), device=weight.device, dtype=weight.dtype
-            ) * base_risk
+            if risk_source == "gm":
+                cached = gm_risks.get(lname) if isinstance(gm_risks, dict) else None
+                if cached is not None and cached.numel() == weight.shape[0]:
+                    risk = cached.detach().to(device=weight.device, dtype=weight.dtype)
+                else:
+                    risk = torch.ones(
+                        (weight.shape[0],), device=weight.device, dtype=weight.dtype
+                    )
+            else:
+                lam_min = max(float(eps), 1e-3)
+                lam = if_mod.thresh.detach().to(
+                    device=weight.device, dtype=weight.dtype
+                ).clamp(min=lam_min).view(-1)[0]
+                base_risk = float(quant_level) ** 2 / (lam.pow(2) + eps)
+                risk = torch.ones(
+                    (weight.shape[0],), device=weight.device, dtype=weight.dtype
+                ) * base_risk
 
-            if fold_bn and bn_mod is not None:
-                bn_eps = float(getattr(bn_mod, "eps", eps))
-                gamma = bn_mod.weight.detach().to(
-                    device=weight.device, dtype=weight.dtype
-                )
-                var = bn_mod.running_var.detach().to(
-                    device=weight.device, dtype=weight.dtype
-                ).clamp(min=bn_eps)
-                risk = risk * gamma.pow(2) / (var + bn_eps)
-            if ga_stats:
-                kappa = _kappa_for_layer(
-                    lname, ga_stats, risk.numel(), risk.device, risk.dtype
-                )
-                risk = risk * kappa
+                if fold_bn and bn_mod is not None:
+                    bn_eps = float(getattr(bn_mod, "eps", eps))
+                    gamma = bn_mod.weight.detach().to(
+                        device=weight.device, dtype=weight.dtype
+                    )
+                    var = bn_mod.running_var.detach().to(
+                        device=weight.device, dtype=weight.dtype
+                    ).clamp(min=bn_eps)
+                    risk = risk * gamma.pow(2) / (var + bn_eps)
+                if ga_stats:
+                    kappa = _kappa_for_layer(
+                        lname, ga_stats, risk.numel(), risk.device, risk.dtype
+                    )
+                    risk = risk * kappa
 
         n_per_output = weight[0].numel()
         weighted_layers.append((weight, risk, n_per_output))
@@ -1731,10 +1982,24 @@ def compute_l2_calibrated_mne_regularization(
 
         if onesided:
             # q = 1 + α max(r̂ − τ, 0): strengthen high-risk channels only.
-            true_q = [
-                1.0 + float(alpha) * torch.relu(normalized - float(tau))
+            excess = [
+                torch.relu(normalized - float(tau))
                 for normalized in normalized_risks
             ]
+            if budget_norm:
+                total_excess = sum(
+                    n_per_output * extra.sum()
+                    for extra, (_, _, n_per_output) in zip(excess, weighted_layers)
+                ) / float(total_covered_params)
+                total_excess = total_excess.clamp(min=eps)
+                true_q = [
+                    1.0 + float(alpha) * extra / total_excess
+                    for extra in excess
+                ]
+            else:
+                true_q = [
+                    1.0 + float(alpha) * extra for extra in excess
+                ]
         else:
             true_q = [
                 (1.0 - float(alpha)) + float(alpha) * normalized
@@ -1817,6 +2082,9 @@ def compute_l2_calibrated_mne_regularization(
             "q_tilde_mean": q_mean.detach(),
             **_summarize_ga_stats(ga_stats),
             "ga_mode": ga_mode,
+            "risk_source": risk_source,
+            "budget_norm": bool(budget_norm),
+            **(getattr(model, "_gm_os_stats", {}) or {}),
         }
 
     penalty = None
