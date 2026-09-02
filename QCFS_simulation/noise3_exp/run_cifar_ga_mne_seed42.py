@@ -273,18 +273,28 @@ def _spearman(x, y) -> float:
 
 def diagnose_ga(model, images, spec) -> dict:
     ga_on = spec["ga_mode"] in ("nocov", "full")
+    # ANN probe: GA κ is defined on QCFS activations, not the T-expanded SNN
+    # batch. Also avoids add_dimention mutating a live 4D tensor.
+    prev_t = int(getattr(model, "T", 0) or 0)
+    if images.dim() == 5 and int(images.size(1)) == 1:
+        images = images.squeeze(1)
+    images = images.detach()
+    model.set_T(0)
     set_basicblock_ga_cache(model, True)
-    with torch.no_grad():
-        logits_clean = model(images)
-        if ga_on:
-            stats = estimate_ga_branch_stats(
-                model, include_cov=(spec["ga_mode"] == "full")
-            )
-        else:
-            stats = {}
-        noisy = images + torch.randn_like(images)
-        logits_noisy = model(noisy)
-    set_basicblock_ga_cache(model, False)
+    try:
+        with torch.no_grad():
+            logits_clean = model(images)
+            if ga_on:
+                stats = estimate_ga_branch_stats(
+                    model, include_cov=(spec["ga_mode"] == "full")
+                )
+            else:
+                stats = {}
+            noisy = images + torch.randn_like(images)
+            logits_noisy = model(noisy)
+    finally:
+        set_basicblock_ga_cache(model, False)
+        model.set_T(prev_t)
     logit_rms = float((logits_noisy - logits_clean).pow(2).mean().sqrt())
     out = {
         "logit_change_rms_sigma1": logit_rms,
@@ -378,9 +388,12 @@ def main() -> None:
     )
     images, labels = next(iter(val_loader(eval_args, pin)))
     images = images.to(device)
+    prev_t = int(getattr(model, "T", 0) or 0)
+    model.set_T(0)
     set_basicblock_ga_cache(model, spec["ga_mode"] in ("nocov", "full"))
     with torch.no_grad():
         model(images)
+    model.set_T(prev_t)
     report = dump_mne_mapping_report(
         model,
         out,

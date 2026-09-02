@@ -205,6 +205,9 @@ class IF(nn.Module):
  
  
 def add_dimention(x, T):
-    x.unsqueeze_(1)
-    x = x.repeat(T, 1, 1, 1, 1)
-    return x
+    # Must not use unsqueeze_: it mutates the caller's 4D batch in-place.
+    # A second forward on the same tensor then becomes 6D and
+    # x.repeat(T, 1, 1, 1, 1) raises
+    # "repeat dims can not be smaller than number of dimensions".
+    x = x.unsqueeze(1)
+    return x.repeat(T, 1, 1, 1, 1)
