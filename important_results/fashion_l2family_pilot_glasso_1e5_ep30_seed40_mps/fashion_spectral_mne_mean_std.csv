@@ -1,0 +1,3 @@
+model,method,method_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+cnn2_c8_c16,group_lasso,group_lasso_rc1em05,group_lasso,1em05,0,1,87.490000,0.000000
+cnn2_c8_c16,group_lasso,group_lasso_rc1em05,group_lasso,1em05,1,1,66.050000,0.000000

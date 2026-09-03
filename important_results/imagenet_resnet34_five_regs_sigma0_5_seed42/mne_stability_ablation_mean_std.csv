@@ -1,0 +1,106 @@
+dataset,variant,variant_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+imagenet,weight_decay,L2-all (all params),weight_decay,none,0,1,64.454000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,0.25,1,8.796000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,0.5,1,0.142000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,0.75,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,1,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,1.25,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,1.5,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,1.75,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,2,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,2.25,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,2.5,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,2.75,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,3,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,3.25,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,3.5,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,3.75,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,4,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,4.25,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,4.5,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,4.75,1,0.100000,0.000000
+imagenet,weight_decay,L2-all (all params),weight_decay,none,5,1,0.100000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,0,1,51.454000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,0.25,1,42.188000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,0.5,1,31.690000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,0.75,1,20.586000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,1,1,11.076000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,1.25,1,4.952000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,1.5,1,1.966000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,1.75,1,0.770000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,2,1,0.328000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,2.25,1,0.228000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,2.5,1,0.180000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,2.75,1,0.134000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,3,1,0.106000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,3.25,1,0.102000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,3.5,1,0.100000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,3.75,1,0.100000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,4,1,0.100000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,4.25,1,0.100000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,4.5,1,0.100000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,4.75,1,0.094000,0.000000
+imagenet,weight_decay_weights_only,L2-wo (weights only),weight_decay_weights_only,none,5,1,0.094000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,0,1,56.054000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,0.25,1,52.266000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,0.5,1,46.934000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,0.75,1,40.042000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,1,1,31.030000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,1.25,1,20.398000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,1.5,1,10.340000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,1.75,1,3.934000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,2,1,1.230000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,2.25,1,0.434000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,2.5,1,0.202000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,2.75,1,0.126000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,3,1,0.102000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,3.25,1,0.102000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,3.5,1,0.102000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,3.75,1,0.100000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,4,1,0.100000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,4.25,1,0.100000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,4.5,1,0.100000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,4.75,1,0.100000,0.000000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",l1,1em05,5,1,0.100000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,0,1,59.832000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,0.25,1,55.818000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,0.5,1,48.520000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,0.75,1,37.152000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,1,1,23.982000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,1.25,1,12.956000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,1.5,1,5.876000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,1.75,1,2.288000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,2,1,0.906000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,2.25,1,0.422000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,2.5,1,0.256000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,2.75,1,0.198000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,3,1,0.176000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,3.25,1,0.154000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,3.5,1,0.142000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,3.75,1,0.136000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,4,1,0.112000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,4.25,1,0.092000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,4.5,1,0.104000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,4.75,1,0.104000,0.000000
+imagenet,old_detach,Old MNE (detach $\lambda$),mne_l2,0p0001,5,1,0.100000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,0,1,57.014000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,0.25,1,51.646000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,0.5,1,45.476000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,0.75,1,37.968000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,1,1,29.366000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,1.25,1,20.188000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,1.5,1,12.214000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,1.75,1,6.706000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,2,1,3.432000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,2.25,1,1.774000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,2.5,1,0.988000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,2.75,1,0.560000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,3,1,0.302000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,3.25,1,0.184000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,3.5,1,0.130000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,3.75,1,0.124000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,4,1,0.122000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,4.25,1,0.110000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,4.5,1,0.120000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,4.75,1,0.096000,0.000000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),calibrated_mne_l2,0p0001,5,1,0.124000,0.000000

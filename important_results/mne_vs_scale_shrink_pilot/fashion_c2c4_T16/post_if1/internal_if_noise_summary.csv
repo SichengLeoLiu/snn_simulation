@@ -1,0 +1,8 @@
+site,method,method_label,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+post_if1,elastic_net_all,Elastic Net (all params),81.590000,1,22.610000,58.980000,0.277117,51.604167,0.632482
+post_if1,l1_all,L1 (all params),81.190000,1,35.196667,45.993333,0.433510,63.402917,0.780920
+post_if1,no_reg_current,No Reg,82.070000,1,35.430000,46.640000,0.431705,63.867917,0.778213
+post_if1,old_detach_current,MNE-L2,81.940000,1,38.710000,43.230000,0.472419,66.041667,0.805976
+post_if1,scale_l2,Scale-L2 diagnostic,82.210000,1,25.116667,57.093333,0.305518,55.117500,0.670448
+post_if1,wd_all_current,WD (all params),81.710000,1,24.903333,56.806667,0.304777,54.198333,0.663301
+post_if1,wd_weight_only,WD (weights only),82.190000,1,30.776667,51.413333,0.374458,60.729167,0.738888

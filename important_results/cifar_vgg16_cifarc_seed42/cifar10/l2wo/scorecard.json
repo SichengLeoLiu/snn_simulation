@@ -1,0 +1,33 @@
+{
+  "dataset": "cifar10",
+  "method": "l2wo",
+  "label": "L2-wo",
+  "arch": "vgg16",
+  "seed": 42,
+  "checkpoint": "/home/595/sl9144/codes/snn_simulation/QCFS_simulation/cifar10-checkpoints/vgg16_L[16]_mneablate_cifar10_weight_decay_weights_only_rcnone_seed42_L16_trainT0.pth",
+  "clean": 91.17,
+  "mCA": 75.38399999999999,
+  "n_corrupt_evals": 75,
+  "severity_1": 85.456,
+  "severity_2": 81.56866666666669,
+  "severity_3": 77.47733333333333,
+  "severity_4": 70.98733333333332,
+  "severity_5": 61.43066666666667,
+  "per_corruption": {
+    "gaussian_noise": 57.96600000000001,
+    "shot_noise": 66.704,
+    "impulse_noise": 75.744,
+    "defocus_blur": 81.018,
+    "glass_blur": 54.422000000000004,
+    "motion_blur": 72.596,
+    "zoom_blur": 77.35799999999999,
+    "snow": 78.74000000000001,
+    "frost": 73.864,
+    "fog": 85.324,
+    "brightness": 90.086,
+    "contrast": 81.034,
+    "elastic_transform": 82.78200000000001,
+    "pixelate": 68.80600000000001,
+    "jpeg_compression": 84.316
+  }
+}

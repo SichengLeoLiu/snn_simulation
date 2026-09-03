@@ -1,0 +1,13 @@
+arch,regularizer,sigma0_acc_mean,sigma1_acc_mean,delta
+cnn2_c2_c4,weight_decay,95.902,76.892,-19.010
+cnn2_c2_c4,mne_l2,93.678,92.028,-1.650
+cnn2_c2_c4,no_regularization,95.384,75.468,-19.916
+cnn2_c4_c8,weight_decay,98.452,86.218,-12.234
+cnn2_c4_c8,mne_l2,96.140,95.778,-0.362
+cnn2_c4_c8,no_regularization,98.222,83.312,-14.910
+cnn2_c8_c16,weight_decay,98.816,80.234,-18.582
+cnn2_c8_c16,mne_l2,95.098,93.550,-1.548
+cnn2_c8_c16,no_regularization,98.804,89.016,-9.788
+cnn2_c16_c32,weight_decay,98.912,82.260,-16.652
+cnn2_c16_c32,mne_l2,97.818,97.252,-0.566
+cnn2_c16_c32,no_regularization,99.070,92.958,-6.112

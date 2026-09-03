@@ -1,0 +1,64 @@
+method,label,sigma,acc_mean,acc_std,n_seeds
+weight_decay,weight_decay,0.00,62.272000,0.372988,5
+weight_decay,weight_decay,0.05,62.208000,0.328207,5
+weight_decay,weight_decay,0.10,62.188000,0.489306,5
+weight_decay,weight_decay,0.15,62.010000,0.412371,5
+weight_decay,weight_decay,0.20,61.886000,0.428287,5
+weight_decay,weight_decay,0.25,61.756000,0.506290,5
+weight_decay,weight_decay,0.30,61.406000,0.584491,5
+weight_decay,weight_decay,0.35,61.062000,0.558901,5
+weight_decay,weight_decay,0.40,60.598000,0.544123,5
+weight_decay,weight_decay,0.45,60.076000,0.734561,5
+weight_decay,weight_decay,0.50,59.508000,0.725031,5
+weight_decay,weight_decay,0.55,58.896000,0.763237,5
+weight_decay,weight_decay,0.60,58.080000,0.861887,5
+weight_decay,weight_decay,0.65,57.374000,0.664552,5
+weight_decay,weight_decay,0.70,56.434000,0.909632,5
+weight_decay,weight_decay,0.75,55.508000,0.702688,5
+weight_decay,weight_decay,0.80,54.410000,0.863423,5
+weight_decay,weight_decay,0.85,53.424000,0.944262,5
+weight_decay,weight_decay,0.90,52.242000,0.945341,5
+weight_decay,weight_decay,0.95,50.810000,1.152367,5
+weight_decay,weight_decay,1.00,49.490000,0.957001,5
+mne_l2,mne_l2 rc=1e-4,0.00,59.620000,0.224611,5
+mne_l2,mne_l2 rc=1e-4,0.05,59.598000,0.202040,5
+mne_l2,mne_l2 rc=1e-4,0.10,59.620000,0.244540,5
+mne_l2,mne_l2 rc=1e-4,0.15,59.574000,0.239646,5
+mne_l2,mne_l2 rc=1e-4,0.20,59.608000,0.257430,5
+mne_l2,mne_l2 rc=1e-4,0.25,59.626000,0.181466,5
+mne_l2,mne_l2 rc=1e-4,0.30,59.612000,0.247326,5
+mne_l2,mne_l2 rc=1e-4,0.35,59.574000,0.221766,5
+mne_l2,mne_l2 rc=1e-4,0.40,59.606000,0.216633,5
+mne_l2,mne_l2 rc=1e-4,0.45,59.610000,0.265330,5
+mne_l2,mne_l2 rc=1e-4,0.50,59.556000,0.255402,5
+mne_l2,mne_l2 rc=1e-4,0.55,59.528000,0.166193,5
+mne_l2,mne_l2 rc=1e-4,0.60,59.600000,0.283989,5
+mne_l2,mne_l2 rc=1e-4,0.65,59.560000,0.289223,5
+mne_l2,mne_l2 rc=1e-4,0.70,59.624000,0.233838,5
+mne_l2,mne_l2 rc=1e-4,0.75,59.530000,0.194294,5
+mne_l2,mne_l2 rc=1e-4,0.80,59.588000,0.296934,5
+mne_l2,mne_l2 rc=1e-4,0.85,59.558000,0.290723,5
+mne_l2,mne_l2 rc=1e-4,0.90,59.528000,0.295584,5
+mne_l2,mne_l2 rc=1e-4,0.95,59.500000,0.334066,5
+mne_l2,mne_l2 rc=1e-4,1.00,59.504000,0.273002,5
+no_regularization,no regularization,0.00,53.362000,6.407396,5
+no_regularization,no regularization,0.05,53.368000,6.428147,5
+no_regularization,no regularization,0.10,53.336000,6.326079,5
+no_regularization,no regularization,0.15,53.368000,6.348340,5
+no_regularization,no regularization,0.20,53.382000,6.422213,5
+no_regularization,no regularization,0.25,53.370000,6.307932,5
+no_regularization,no regularization,0.30,53.348000,6.353737,5
+no_regularization,no regularization,0.35,53.288000,6.353107,5
+no_regularization,no regularization,0.40,53.302000,6.331332,5
+no_regularization,no regularization,0.45,53.320000,6.317072,5
+no_regularization,no regularization,0.50,53.292000,6.286523,5
+no_regularization,no regularization,0.55,53.266000,6.326791,5
+no_regularization,no regularization,0.60,53.236000,6.361645,5
+no_regularization,no regularization,0.65,53.174000,6.308703,5
+no_regularization,no regularization,0.70,53.214000,6.308195,5
+no_regularization,no regularization,0.75,53.142000,6.360623,5
+no_regularization,no regularization,0.80,53.142000,6.180596,5
+no_regularization,no regularization,0.85,53.090000,6.232560,5
+no_regularization,no regularization,0.90,53.052000,6.244735,5
+no_regularization,no regularization,0.95,53.034000,6.191452,5
+no_regularization,no regularization,1.00,53.038000,6.198021,5

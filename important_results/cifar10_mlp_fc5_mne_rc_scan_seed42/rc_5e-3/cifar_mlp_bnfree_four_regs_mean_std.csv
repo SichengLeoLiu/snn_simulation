@@ -1,0 +1,12 @@
+dataset,method,method_label,sigma,n,acc_mean,acc_std
+cifar10,old_detach,MNE-standard,0,1,51.230000,0.000000
+cifar10,old_detach,MNE-standard,0.1,1,50.920000,0.000000
+cifar10,old_detach,MNE-standard,0.2,1,50.890000,0.000000
+cifar10,old_detach,MNE-standard,0.3,1,50.820000,0.000000
+cifar10,old_detach,MNE-standard,0.4,1,50.560000,0.000000
+cifar10,old_detach,MNE-standard,0.5,1,50.570000,0.000000
+cifar10,old_detach,MNE-standard,0.6,1,50.500000,0.000000
+cifar10,old_detach,MNE-standard,0.7,1,49.900000,0.000000
+cifar10,old_detach,MNE-standard,0.8,1,49.650000,0.000000
+cifar10,old_detach,MNE-standard,0.9,1,49.790000,0.000000
+cifar10,old_detach,MNE-standard,1,1,49.780000,0.000000

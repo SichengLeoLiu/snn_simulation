@@ -1,0 +1,11 @@
+{
+  "dataset": "cifar10",
+  "seed": 42,
+  "quant_level": 8,
+  "mne_rc": 0.0001,
+  "mne_weight_grad_norm": 0.6231623291969299,
+  "target_coeff_grad_norm": 6.231623291969299e-05,
+  "variant_weight_grad_norm": 0.00973691139370203,
+  "gmatch_reg_coeff": 0.0063999999999999994,
+  "gmatch_scale_vs_fixed_mne_rc": 63.99999999999999
+}

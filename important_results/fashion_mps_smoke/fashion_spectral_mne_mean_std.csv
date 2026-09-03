@@ -1,0 +1,2 @@
+model,method,method_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,1,82.970000,0.000000

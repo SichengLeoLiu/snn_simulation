@@ -1,0 +1,4 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,0,81.880000,0.000000,1,24.120000,0.000000,57.760000,0.294577
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0,78.190000,0.000000,1,33.490000,0.000000,44.700000,0.428316
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,79.480000,0.000000,1,32.660000,0.000000,46.820000,0.410921

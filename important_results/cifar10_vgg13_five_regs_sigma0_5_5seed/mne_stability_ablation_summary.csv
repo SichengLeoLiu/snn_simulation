@@ -1,0 +1,6 @@
+dataset,variant,variant_label,regularizer,reg_coeff,hinge_tau,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cifar10,weight_decay,weight_decay,weight_decay,none,none,0,90.934000,0.136125,5,9.994000,0.013416,80.940000,0.109904
+cifar10,weight_decay_weights_only,weight_decay_conv_linear_only,weight_decay_weights_only,none,none,0,91.436000,0.136492,5,22.778000,5.992443,68.658000,0.249114
+cifar10,l1,l1_rc1e-5,l1,1e-05,none,0,90.298000,0.135536,5,42.168000,10.200386,48.130000,0.466987
+cifar10,old_detach,old_mne_detach_lambda,mne_l2,0.0001,none,0,90.608000,0.187803,5,74.282000,3.251080,16.326000,0.819817
+cifar10,calibrated_mne_a0p1,l2_calibrated_mne_alpha_0p1,calibrated_mne_l2,0.0005,none,0,91.412000,0.128725,5,21.384000,2.584459,70.028000,0.233930

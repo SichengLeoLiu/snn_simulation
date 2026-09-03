@@ -1,0 +1,53 @@
+method,method_label,sigma,n,acc_mean,acc_std
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),0,1,86.930000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),0.25,1,85.340000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),0.5,1,79.680000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),0.75,1,65.960000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),1,1,47.770000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),1.25,1,34.860000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),1.5,1,27.660000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),1.75,1,23.200000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),2,1,19.640000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),2.25,1,17.020000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),2.5,1,15.560000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),2.75,1,14.780000,0.000000
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),3,1,14.010000,0.000000
+old_detach,Old MNE (detach λ),0,1,86.760000,0.000000
+old_detach,Old MNE (detach λ),0.25,1,85.690000,0.000000
+old_detach,Old MNE (detach λ),0.5,1,78.870000,0.000000
+old_detach,Old MNE (detach λ),0.75,1,64.930000,0.000000
+old_detach,Old MNE (detach λ),1,1,48.020000,0.000000
+old_detach,Old MNE (detach λ),1.25,1,36.090000,0.000000
+old_detach,Old MNE (detach λ),1.5,1,28.660000,0.000000
+old_detach,Old MNE (detach λ),1.75,1,24.020000,0.000000
+old_detach,Old MNE (detach λ),2,1,20.500000,0.000000
+old_detach,Old MNE (detach λ),2.25,1,17.390000,0.000000
+old_detach,Old MNE (detach λ),2.5,1,15.960000,0.000000
+old_detach,Old MNE (detach λ),2.75,1,15.040000,0.000000
+old_detach,Old MNE (detach λ),3,1,13.870000,0.000000
+weight_decay,L2-all (all params),0,1,87.860000,0.000000
+weight_decay,L2-all (all params),0.25,1,85.240000,0.000000
+weight_decay,L2-all (all params),0.5,1,75.780000,0.000000
+weight_decay,L2-all (all params),0.75,1,57.150000,0.000000
+weight_decay,L2-all (all params),1,1,40.610000,0.000000
+weight_decay,L2-all (all params),1.25,1,31.840000,0.000000
+weight_decay,L2-all (all params),1.5,1,26.640000,0.000000
+weight_decay,L2-all (all params),1.75,1,23.410000,0.000000
+weight_decay,L2-all (all params),2,1,20.240000,0.000000
+weight_decay,L2-all (all params),2.25,1,18.030000,0.000000
+weight_decay,L2-all (all params),2.5,1,16.500000,0.000000
+weight_decay,L2-all (all params),2.75,1,15.090000,0.000000
+weight_decay,L2-all (all params),3,1,14.430000,0.000000
+weight_decay_weights_only,L2-wo (weights only),0,1,86.600000,0.000000
+weight_decay_weights_only,L2-wo (weights only),0.25,1,85.170000,0.000000
+weight_decay_weights_only,L2-wo (weights only),0.5,1,78.770000,0.000000
+weight_decay_weights_only,L2-wo (weights only),0.75,1,63.830000,0.000000
+weight_decay_weights_only,L2-wo (weights only),1,1,46.250000,0.000000
+weight_decay_weights_only,L2-wo (weights only),1.25,1,33.980000,0.000000
+weight_decay_weights_only,L2-wo (weights only),1.5,1,27.070000,0.000000
+weight_decay_weights_only,L2-wo (weights only),1.75,1,22.860000,0.000000
+weight_decay_weights_only,L2-wo (weights only),2,1,19.530000,0.000000
+weight_decay_weights_only,L2-wo (weights only),2.25,1,17.110000,0.000000
+weight_decay_weights_only,L2-wo (weights only),2.5,1,15.650000,0.000000
+weight_decay_weights_only,L2-wo (weights only),2.75,1,14.910000,0.000000
+weight_decay_weights_only,L2-wo (weights only),3,1,13.760000,0.000000

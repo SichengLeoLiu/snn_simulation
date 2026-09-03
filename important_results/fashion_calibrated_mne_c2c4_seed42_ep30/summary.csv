@@ -1,0 +1,3 @@
+method,alpha,ann_acc,snn_sigma0,snn_sigma1,drop,checkpoint
+l2_wo,,84.390000,82.190000,42.070000,40.120000,/Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/QCFS_simulation/fashion_mnist-checkpoints/cnn2_c2_c4_L[16]_fashion_calibrated_mne_cnn2_c2_c4_l2_wo_seed42_ep30_L16.pth
+cmne_a0p1,0.1,84.500000,82.780000,50.290000,32.490000,/Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/QCFS_simulation/fashion_mnist-checkpoints/cnn2_c2_c4_L[16]_fashion_calibrated_mne_cnn2_c2_c4_cmne_a0p1_seed42_ep30_L16.pth

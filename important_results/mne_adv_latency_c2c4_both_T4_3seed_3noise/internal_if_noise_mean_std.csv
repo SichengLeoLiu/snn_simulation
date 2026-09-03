@@ -1,0 +1,13 @@
+site,method,method_label,sigma,n,acc_mean,acc_std
+both,l2,L2,0,3,74.946667,6.746735
+both,l2,L2,0.25,3,66.375556,8.449148
+both,l2,L2,0.5,3,26.442222,6.176697
+both,no_reg,No Reg,0,3,70.096667,9.464467
+both,no_reg,No Reg,0.25,3,67.142222,5.831762
+both,no_reg,No Reg,0.5,3,36.835556,5.050351
+both,old_detach,MNE-L2,0,3,75.783333,1.407172
+both,old_detach,MNE-L2,0.25,3,66.282222,2.986505
+both,old_detach,MNE-L2,0.5,3,42.115556,9.156034
+both,orthogonal,Orthogonal,0,3,70.650000,9.732066
+both,orthogonal,Orthogonal,0.25,3,66.921111,3.900989
+both,orthogonal,Orthogonal,0.5,3,40.386667,7.085519

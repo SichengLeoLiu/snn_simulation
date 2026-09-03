@@ -1,0 +1,2 @@
+dataset,variant,variant_label,regularizer,reg_coeff,hinge_tau,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cifar10,l2_numerator,mne_l2_numerator_lambda_trainable,mne_l2,1e-07,none,0,89.730000,0.000000,1,89.590000,0.000000,0.140000,0.998440

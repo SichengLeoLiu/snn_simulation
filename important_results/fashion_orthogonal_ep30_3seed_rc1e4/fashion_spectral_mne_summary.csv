@@ -1,0 +1,5 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cnn2,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,82.593333,0.877857,1,55.273333,5.630385,27.320000,0.669223
+cnn2_c4_c8,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,85.586667,0.673523,1,59.850000,4.323933,25.736667,0.699291
+fc3_h256,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,87.023333,0.116762,1,83.720000,0.055678,3.303333,0.962041
+fc3_h8,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,80.606667,0.420278,1,76.550000,0.516430,4.056667,0.949673

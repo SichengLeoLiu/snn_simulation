@@ -1,0 +1,9 @@
+model,method,method_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+cnn2_c16_c32,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0,4,88.220000,0.287402
+cnn2_c16_c32,l2_sp,l2_sp_rc0p01,l2_sp,0p01,1,4,50.955000,8.181485
+cnn2_c16_c32,threshold_l2,threshold_l2_rc0p0001,threshold_l2,0p0001,0,4,88.090000,0.329242
+cnn2_c16_c32,threshold_l2,threshold_l2_rc0p0001,threshold_l2,0p0001,1,4,50.205000,7.270362
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0,4,87.010000,0.453064
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,1,4,62.152500,9.595306
+cnn2_c8_c16,threshold_l2,threshold_l2_rc0p0001,threshold_l2,0p0001,0,4,87.125000,0.477598
+cnn2_c8_c16,threshold_l2,threshold_l2_rc0p0001,threshold_l2,0p0001,1,4,60.517500,8.138281

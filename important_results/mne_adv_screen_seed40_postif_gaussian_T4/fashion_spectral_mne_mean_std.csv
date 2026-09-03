@@ -1,0 +1,16 @@
+model,method,method_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,0,1,81.880000,0.000000
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,0.25,1,75.120000,0.000000
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,0.5,1,50.660000,0.000000
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,0.75,1,35.670000,0.000000
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,1,1,24.120000,0.000000
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0,1,78.190000,0.000000
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0.25,1,76.260000,0.000000
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0.5,1,56.490000,0.000000
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0.75,1,46.350000,0.000000
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,1,1,33.490000,0.000000
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,1,79.480000,0.000000
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0.25,1,75.560000,0.000000
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0.5,1,56.650000,0.000000
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0.75,1,45.430000,0.000000
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,1,1,32.660000,0.000000

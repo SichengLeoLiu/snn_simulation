@@ -1,0 +1,2 @@
+model,method,method_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+fc3_h8,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em06,0,1,73.290000,0.000000

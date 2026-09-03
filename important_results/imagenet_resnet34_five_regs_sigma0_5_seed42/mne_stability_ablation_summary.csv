@@ -1,0 +1,6 @@
+dataset,variant,variant_label,clean_acc_mean,end_sigma,end_acc_mean,absolute_drop
+imagenet,weight_decay,L2-all (all params),64.454000,5,0.100000,64.354000
+imagenet,weight_decay_weights_only,L2-wo (weights only),51.454000,5,0.094000,51.360000
+imagenet,l1,"L1-wo (weights only, $10^{-5}$)",56.054000,5,0.100000,55.954000
+imagenet,old_detach,Old MNE (detach $\lambda$),59.832000,5,0.100000,59.732000
+imagenet,calibrated_mne_a0p1,Calibrated MNE ($\alpha = 0.1$),57.014000,5,0.124000,56.890000

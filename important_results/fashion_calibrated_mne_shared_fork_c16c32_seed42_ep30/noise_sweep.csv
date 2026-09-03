@@ -1,0 +1,45 @@
+branch,label,sigma,accuracy
+A_l2_wo,A: weights-only L2,0.0,88.33
+A_l2_wo,A: weights-only L2,0.1,88.58
+A_l2_wo,A: weights-only L2,0.2,88.05
+A_l2_wo,A: weights-only L2,0.3,87.21
+A_l2_wo,A: weights-only L2,0.4,85.94
+A_l2_wo,A: weights-only L2,0.5,84.35
+A_l2_wo,A: weights-only L2,0.6,82.17
+A_l2_wo,A: weights-only L2,0.7,79.25
+A_l2_wo,A: weights-only L2,0.8,75.27
+A_l2_wo,A: weights-only L2,0.9,70.47
+A_l2_wo,A: weights-only L2,1.0,64.79
+B_global_cmne,B: global Calibrated MNE,0.0,88.32
+B_global_cmne,B: global Calibrated MNE,0.1,87.99
+B_global_cmne,B: global Calibrated MNE,0.2,87.85
+B_global_cmne,B: global Calibrated MNE,0.3,86.95
+B_global_cmne,B: global Calibrated MNE,0.4,85.5
+B_global_cmne,B: global Calibrated MNE,0.5,84.05
+B_global_cmne,B: global Calibrated MNE,0.6,81.11
+B_global_cmne,B: global Calibrated MNE,0.7,78.85
+B_global_cmne,B: global Calibrated MNE,0.8,74.71
+B_global_cmne,B: global Calibrated MNE,0.9,69.99
+B_global_cmne,B: global Calibrated MNE,1.0,64.53
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.0,88.48
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.1,88.51
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.2,87.34
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.3,86.06
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.4,84.15
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.5,81.0
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.6,77.55
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.7,73.21
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.8,67.12
+C_layerwise_cmne,C: layerwise Calibrated MNE,0.9,61.17
+C_layerwise_cmne,C: layerwise Calibrated MNE,1.0,55.2
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.0,87.83
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.1,87.75
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.2,86.67
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.3,85.42
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.4,83.44
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.5,81.44
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.6,78.29
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.7,74.43
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.8,70.26
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",0.9,64.9
+D_global_cmne_frozen,"D: global MNE, BN/lambda frozen",1.0,59.6

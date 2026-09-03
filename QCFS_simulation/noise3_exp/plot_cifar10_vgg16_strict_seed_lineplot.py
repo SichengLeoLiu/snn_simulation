@@ -21,14 +21,14 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parent
 
 PLOT_ORDER = [
-    "weight_decay",
     "mne_l2 rc=1e-4",
+    "weight_decay",
     "no regularization",
 ]
 LINE_STYLES = {
-    "weight_decay": {"color": "#ff7f0e", "label": "L2"},
-    "mne_l2 rc=1e-4": {"color": "#1f77b4", "label": "MNE L2"},
-    "no regularization": {"color": "#2ca02c", "label": "No reg"},
+    "mne_l2 rc=1e-4": {"color": "#ff7f0e", "label": "MNE-L2"},
+    "weight_decay": {"color": "#1f77b4", "label": "L2"},
+    "no regularization": {"color": "#2ca02c", "label": "No Reg"},
 }
 
 

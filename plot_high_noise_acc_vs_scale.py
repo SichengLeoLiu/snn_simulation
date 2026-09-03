@@ -68,15 +68,15 @@ def collect_cnn_rows(target_sigma: float = 1.0) -> list[dict]:
         print(f"[CNN] {arch}: {source} ({data_root})", flush=True)
     return rows
 
-METHODS = ["weight_decay", "mne_l2", "no_regularization"]
+METHODS = ["mne_l2", "weight_decay", "no_regularization"]
 METHOD_LABELS = {
+    "mne_l2": "MNE-L2 (Ours)",
     "weight_decay": "L2",
-    "mne_l2": "MNE L2",
-    "no_regularization": "No reg",
+    "no_regularization": "No Reg",
 }
 METHOD_STYLES = {
-    "weight_decay": {"color": "#ff7f0e", "marker": "o"},
-    "mne_l2": {"color": "#1f77b4", "marker": "s"},
+    "mne_l2": {"color": "#ff7f0e", "marker": "s"},
+    "weight_decay": {"color": "#1f77b4", "marker": "o"},
     "no_regularization": {"color": "#2ca02c", "marker": "^"},
 }
 

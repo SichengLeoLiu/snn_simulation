@@ -1,0 +1,3 @@
+model,method,method_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+cnn2_c8_c16,spectral_norm,spectral_norm_rc0p0001,spectral_norm,0p0001,0,1,87.320000,0.000000
+cnn2_c8_c16,spectral_norm,spectral_norm_rc0p0001,spectral_norm,0p0001,1,1,63.590000,0.000000

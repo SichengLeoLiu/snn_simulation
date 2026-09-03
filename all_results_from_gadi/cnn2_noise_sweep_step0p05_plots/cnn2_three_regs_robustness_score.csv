@@ -1,0 +1,13 @@
+arch,arch_label,method,method_label,RS_mean,RS_std,RS_sem,n_seeds
+cnn2_c2_c4,c2c4,weight_decay,L2,0.848155,0.188108,0.084124,5
+cnn2_c2_c4,c2c4,mne_l2,MNE L2,0.986129,0.019662,0.008793,5
+cnn2_c2_c4,c2c4,no_regularization,No reg,0.838757,0.230020,0.102868,5
+cnn2_c4_c8,c4c8,weight_decay,L2,0.941773,0.084466,0.037774,5
+cnn2_c4_c8,c4c8,mne_l2,MNE L2,0.999133,0.001317,0.000589,5
+cnn2_c4_c8,c4c8,no_regularization,No reg,0.930755,0.071644,0.032040,5
+cnn2_c8_c16,c8c16,weight_decay,L2,0.942251,0.043507,0.019457,5
+cnn2_c8_c16,c8c16,mne_l2,MNE L2,0.992244,0.007253,0.003243,5
+cnn2_c8_c16,c8c16,no_regularization,No reg,0.952276,0.062904,0.028132,5
+cnn2_c16_c32,c16c32,weight_decay,L2,0.955197,0.007132,0.003190,5
+cnn2_c16_c32,c16c32,mne_l2,MNE L2,0.997994,0.001139,0.000509,5
+cnn2_c16_c32,c16c32,no_regularization,No reg,0.977100,0.007946,0.003554,5

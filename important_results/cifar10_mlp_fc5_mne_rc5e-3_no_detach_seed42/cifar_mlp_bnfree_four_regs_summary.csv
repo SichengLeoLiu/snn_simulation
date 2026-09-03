@@ -1,0 +1,2 @@
+dataset,method,method_label,clean_acc,end_sigma,end_acc,absolute_drop,end_retention
+cifar10,old_no_detach,MNE-standard (lambda trainable),49.530000,1,47.940000,1.590000,0.967898

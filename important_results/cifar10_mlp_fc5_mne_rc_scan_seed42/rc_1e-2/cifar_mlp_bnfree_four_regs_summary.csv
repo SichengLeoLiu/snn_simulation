@@ -1,0 +1,2 @@
+dataset,method,method_label,clean_acc,end_sigma,end_acc,absolute_drop,end_retention
+cifar10,old_detach,MNE-standard,50.070000,1,49.440000,0.630000,0.987418

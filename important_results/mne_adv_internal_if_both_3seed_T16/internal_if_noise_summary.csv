@@ -1,0 +1,6 @@
+site,method,method_label,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+both,l2,L2,87.973333,1,28.346667,59.626666,0.322219,62.185000,0.706862
+both,l2_sp,L2-SP,86.983333,1,41.280000,45.703333,0.474574,69.952500,0.804206
+both,old_detach,MNE-L2,87.180000,1,38.393333,48.786667,0.440392,68.023333,0.780263
+both,orthogonal,Orthogonal,87.323333,1,35.583333,51.740000,0.407489,67.513333,0.773142
+both,threshold_l2,Threshold-L2,87.143333,1,37.703333,49.440000,0.432659,68.190000,0.782504

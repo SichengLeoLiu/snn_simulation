@@ -1,0 +1,26 @@
+site,method,method_label,sigma_scale,sigma,n,acc_mean,acc_std
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0,1,88.290000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0.25,1,79.410000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0.5,1,62.958000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0.75,1,48.026000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,1,1,37.066000,0.000000
+post_input_if,manual_l2_w_bn,L2 (weights + BN),absolute,0,1,88.370000,0.000000
+post_input_if,manual_l2_w_bn,L2 (weights + BN),absolute,0.25,1,84.322000,0.000000
+post_input_if,manual_l2_w_bn,L2 (weights + BN),absolute,0.5,1,73.638000,0.000000
+post_input_if,manual_l2_w_bn,L2 (weights + BN),absolute,0.75,1,55.632000,0.000000
+post_input_if,manual_l2_w_bn,L2 (weights + BN),absolute,1,1,42.236000,0.000000
+post_input_if,manual_l2_w_bn_if,L2 (weights + BN + IF),absolute,0,1,87.550000,0.000000
+post_input_if,manual_l2_w_bn_if,L2 (weights + BN + IF),absolute,0.25,1,83.442000,0.000000
+post_input_if,manual_l2_w_bn_if,L2 (weights + BN + IF),absolute,0.5,1,68.536000,0.000000
+post_input_if,manual_l2_w_bn_if,L2 (weights + BN + IF),absolute,0.75,1,49.364000,0.000000
+post_input_if,manual_l2_w_bn_if,L2 (weights + BN + IF),absolute,1,1,35.798000,0.000000
+post_input_if,manual_l2_w_if,L2 (weights + IF),absolute,0,1,88.060000,0.000000
+post_input_if,manual_l2_w_if,L2 (weights + IF),absolute,0.25,1,78.684000,0.000000
+post_input_if,manual_l2_w_if,L2 (weights + IF),absolute,0.5,1,56.226000,0.000000
+post_input_if,manual_l2_w_if,L2 (weights + IF),absolute,0.75,1,42.368000,0.000000
+post_input_if,manual_l2_w_if,L2 (weights + IF),absolute,1,1,33.078000,0.000000
+post_input_if,wd_weight_only,WD (weights only),absolute,0,1,87.490000,0.000000
+post_input_if,wd_weight_only,WD (weights only),absolute,0.25,1,83.198000,0.000000
+post_input_if,wd_weight_only,WD (weights only),absolute,0.5,1,74.048000,0.000000
+post_input_if,wd_weight_only,WD (weights only),absolute,0.75,1,60.932000,0.000000
+post_input_if,wd_weight_only,WD (weights only),absolute,1,1,48.250000,0.000000

@@ -89,6 +89,21 @@ def _variant_specs(l_ref: float) -> dict:
             "label": "old_mne_detach_lambda",
             "train_args": ["--mne_detach_lambda"],
         },
+        "mne_bn_trainable": {
+            "regularizer": "mne_l2",
+            "label": "mne_detach_lambda_bn_affine_trainable",
+            "train_args": ["--mne_detach_lambda", "--mne_no_detach_bn_stats"],
+        },
+        "effective_l2": {
+            "regularizer": "effective_l2",
+            "label": "bn_folded_l2_without_margin_normalization",
+            "train_args": [],
+        },
+        "threshold_l2": {
+            "regularizer": "threshold_l2",
+            "label": "threshold_normalized_l2_without_bn_folding",
+            "train_args": [],
+        },
         "mne_l2_all": {
             "regularizer": "mne_l2_all",
             "label": "mne_l2_plus_residual_l2_all_params",
@@ -368,6 +383,8 @@ def train_one(dataset: str, variant_key: str, spec: dict, rc, seed: int, hinge_t
         "spectral_norm",
         "orthogonal",
         "manual_l2",
+        "effective_l2",
+        "threshold_l2",
     ):
         cmd += ["--reg_warmup_epochs", str(args.reg_warmup_epochs)]
     cmd += ["--mne_eps", str(args.mne_eps)]

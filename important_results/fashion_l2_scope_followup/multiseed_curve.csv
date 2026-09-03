@@ -1,0 +1,11 @@
+method,method_label,sigma,n_training_seeds,accuracy_mean,accuracy_std
+manual_l2_all,All parameters,0.0,5,88.424,0.33012118986820116
+manual_l2_all,All parameters,0.25,5,82.67066666666666,2.026600053729838
+manual_l2_all,All parameters,0.5,5,65.04933333333334,4.981800990717223
+manual_l2_all,All parameters,0.75,5,48.43,6.5013733591877
+manual_l2_all,All parameters,1.0,5,36.913333333333334,6.757485561295051
+wd_weight_only,Weights only,0.0,5,87.4,0.19416487838947616
+wd_weight_only,Weights only,0.25,5,83.29,2.0185418279320113
+wd_weight_only,Weights only,0.5,5,71.574,5.26064497524358
+wd_weight_only,Weights only,0.75,5,57.077333333333335,5.233015595449932
+wd_weight_only,Weights only,1.0,5,44.768,5.53331807226811

@@ -18,15 +18,15 @@ ARCH_LABELS = {
     "cnn2_c8_c16": "c8c16",
     "cnn2_c16_c32": "c16c32",
 }
-METHODS = ["weight_decay", "mne_l2", "no_regularization"]
+METHODS = ["mne_l2", "weight_decay", "no_regularization"]
 METHOD_LABELS = {
+    "mne_l2": "MNE-L2",
     "weight_decay": "L2",
-    "mne_l2": "MNE L2",
-    "no_regularization": "No reg",
+    "no_regularization": "No Reg",
 }
 METHOD_COLORS = {
-    "weight_decay": "#ff7f0e",
-    "mne_l2": "#1f77b4",
+    "mne_l2": "#ff7f0e",
+    "weight_decay": "#1f77b4",
     "no_regularization": "#2ca02c",
 }
 
@@ -164,7 +164,9 @@ def plot_bar(rows, out_dir: Path, error_key: str | None, suffix: str):
     ax.set_ylabel("Derivative Robustness Score (DRS)")
     all_vals = [r["DRS_mean"] for r in rows]
     if all_vals:
-        ax.set_ylim(max(0.0, min(all_vals) - 0.08), min(1.02, max(all_vals) + 0.08))
+        spread = max(all_vals) - min(all_vals)
+        pad = max(0.006, 0.18 * spread)
+        ax.set_ylim(max(0.0, min(all_vals) - pad), min(1.02, max(all_vals) + pad))
     ax.grid(axis="y", alpha=0.25, linewidth=0.9)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.18), ncol=3, frameon=False)
     fig.tight_layout()

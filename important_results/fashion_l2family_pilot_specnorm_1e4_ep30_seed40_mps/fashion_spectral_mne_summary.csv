@@ -1,0 +1,2 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cnn2_c8_c16,spectral_norm,spectral_norm_rc0p0001,spectral_norm,0p0001,0,87.320000,0.000000,1,63.590000,0.000000,23.730000,0.728241

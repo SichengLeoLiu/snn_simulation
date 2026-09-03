@@ -1,0 +1,13 @@
+model,method,method_label,regularizer,reg_coeff,sigma,n,acc_mean,acc_std
+cnn2_c16_c32,l2,l2_wd0p0005,weight_decay,none,0,4,88.930000,0.183666
+cnn2_c16_c32,l2,l2_wd0p0005,weight_decay,none,1,4,45.470000,6.428380
+cnn2_c16_c32,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,4,88.160000,0.134412
+cnn2_c16_c32,old_detach,old_mne_detach_lambda,mne_l2,0p0001,1,4,51.112500,7.698742
+cnn2_c16_c32,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,4,88.445000,0.205670
+cnn2_c16_c32,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,1,4,48.990000,5.457637
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,0,4,87.857500,0.285818
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,1,4,52.115000,7.249186
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,4,87.142500,0.311595
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,1,4,61.485000,9.043854
+cnn2_c8_c16,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,4,87.327500,0.474227
+cnn2_c8_c16,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,1,4,57.102500,8.707783

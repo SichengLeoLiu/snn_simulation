@@ -1,0 +1,9 @@
+if_name,residual_name,residual_risk_mean,residual_q_mean,residual_q_max,has_shortcut_conv,shortcut_name,shortcut_risk_mean,shortcut_q_mean,shortcut_q_max
+conv2_x.0.act,conv2_x.0.residual_function.3,0.5350520610809326,1.0,1.0,False,,,,
+conv2_x.1.act,conv2_x.1.residual_function.3,1.0313090085983276,1.0,1.0,False,,,,
+conv3_x.0.act,conv3_x.0.residual_function.3,0.492684543132782,1.0,1.0,True,conv3_x.0.shortcut.0,0.5659644603729248,1.0,1.0
+conv3_x.1.act,conv3_x.1.residual_function.3,0.5862751007080078,1.0,1.0,False,,,,
+conv4_x.0.act,conv4_x.0.residual_function.3,0.42991310358047485,1.0,1.0,True,conv4_x.0.shortcut.0,0.4296817481517792,1.0,1.0
+conv4_x.1.act,conv4_x.1.residual_function.3,1.0902678966522217,1.0,1.0,False,,,,
+conv5_x.0.act,conv5_x.0.residual_function.3,0.8934176564216614,1.0,1.0,True,conv5_x.0.shortcut.0,0.43009188771247864,1.0,1.0
+conv5_x.1.act,conv5_x.1.residual_function.3,2.4620728492736816,1.0,1.0,False,,,,

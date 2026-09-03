@@ -214,7 +214,9 @@ def main() -> None:
             min(xmax, zoom_limit),
             max(0.0, min(zoom_vals) - 4.0),
             min(100.0, max(zoom_vals) + 2.0),
-            args.title.replace(r"$\sigma \in [0, 3]$", r"$\sigma \in [0, 1.5]$"),
+            args.title.replace(r"$\sigma \in [0, 3]$", r"$\sigma \in [0, 1.5]$").replace(
+                r"$\sigma \in [0, 5]$", r"$\sigma \in [0, 1.5]$"
+            ),
             legend=True,
         )
         ax.set_xlim(-0.05, zoom_limit + 0.05)

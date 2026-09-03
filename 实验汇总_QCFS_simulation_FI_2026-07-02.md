@@ -17,22 +17,23 @@
 ## 2) MNIST CNN2 三路正则噪声扫描（strict-seed, L=16, T=16, rate_uniform）
 
 - 结果目录：`cnn_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16/`（每个 arch × 正则 × seed 的 `noise_sweep_combined_L_T.csv`）
+- 本次更新数据源（step=0.05）：`all_results_from_gadi/cnn2_noise_sweep_step0p05_full_extracted/cnn_strict_seed_three_regs_noise_sweep_mean_std.csv`
 - 关键对比（聚合 5 seeds 后，sigma=0 与 sigma=1）：
 
 | 架构 | 方法 | sigma=0 acc(mean) | sigma=1 acc(mean) | Δ(sigma1-sigma0) |
 |---|---|---:|---:|---:|
-| `cnn2_c2_c4` | weight_decay | 95.902 | 76.990 | -18.912 |
-| `cnn2_c2_c4` | mne_l2 | 93.678 | 92.068 | -1.610 |
+| `cnn2_c2_c4` | weight_decay | 95.902 | 76.892 | -19.010 |
+| `cnn2_c2_c4` | mne_l2 | 93.678 | 92.028 | -1.650 |
 | `cnn2_c2_c4` | no_regularization | 95.384 | 75.468 | -19.916 |
-| `cnn2_c4_c8` | weight_decay | 98.452 | 86.288 | -12.164 |
-| `cnn2_c4_c8` | mne_l2 | 96.140 | 95.828 | -0.312 |
-| `cnn2_c4_c8` | no_regularization | 98.222 | 83.362 | -14.860 |
-| `cnn2_c8_c16` | weight_decay | 98.816 | 80.326 | -18.490 |
-| `cnn2_c8_c16` | mne_l2 | 95.098 | 93.432 | -1.666 |
-| `cnn2_c8_c16` | no_regularization | 98.804 | 89.052 | -9.752 |
-| `cnn2_c16_c32` | weight_decay | 98.912 | 82.340 | -16.572 |
-| `cnn2_c16_c32` | mne_l2 | 97.818 | 97.152 | -0.666 |
-| `cnn2_c16_c32` | no_regularization | 99.070 | 93.048 | -6.022 |
+| `cnn2_c4_c8` | weight_decay | 98.452 | 86.218 | -12.234 |
+| `cnn2_c4_c8` | mne_l2 | 96.140 | 95.778 | -0.362 |
+| `cnn2_c4_c8` | no_regularization | 98.222 | 83.312 | -14.910 |
+| `cnn2_c8_c16` | weight_decay | 98.816 | 80.234 | -18.582 |
+| `cnn2_c8_c16` | mne_l2 | 95.098 | 93.550 | -1.548 |
+| `cnn2_c8_c16` | no_regularization | 98.804 | 89.016 | -9.788 |
+| `cnn2_c16_c32` | weight_decay | 98.912 | 82.260 | -16.652 |
+| `cnn2_c16_c32` | mne_l2 | 97.818 | 97.252 | -0.566 |
+| `cnn2_c16_c32` | no_regularization | 99.070 | 92.958 | -6.112 |
 
 ## 3) MNIST FC3 三路正则噪声扫描（strict-seed, rate_uniform）
 
@@ -245,6 +246,33 @@
 | MNE L2 + WD (`mne_l2_wd`) | 63.940 ± 0.258 | 60.340 ± 0.384 | -3.600 |
 
 来源文件：`noise3_exp/cifar100_vgg16_strict_seed_three_regs_noise_sweep_rate_uniform_L16_T16/cifar100_vgg16_strict_seed_three_regs_noise_sweep_mean_std.csv`
+
+补充 raw 明细来源：`all_results_from_gadi/cifar100_vgg16_strict_seed_three_regs_noise_sweep_raw.csv`
+
+逐 seed（sigma=0 与 sigma=1）：
+
+| method | seed | acc@0.0 | acc@1.0 | Δ(1.0-0.0) |
+|---|---:|---:|---:|---:|
+| weight_decay | 40 | 62.67 | 13.98 | -48.69 |
+| weight_decay | 41 | 62.57 | 10.04 | -52.53 |
+| weight_decay | 42 | 62.27 | 15.96 | -46.31 |
+| weight_decay | 43 | 61.74 | 18.13 | -43.61 |
+| weight_decay | 44 | 62.11 | 15.10 | -47.01 |
+| mne_l2 | 40 | 59.83 | 59.60 | -0.23 |
+| mne_l2 | 41 | 59.38 | 59.25 | -0.13 |
+| mne_l2 | 42 | 59.56 | 59.73 | 0.17 |
+| mne_l2 | 43 | 59.45 | 59.19 | -0.26 |
+| mne_l2 | 44 | 59.88 | 59.42 | -0.46 |
+| mne_l2_wd | 40 | 63.73 | 60.83 | -2.90 |
+| mne_l2_wd | 41 | 63.81 | 59.97 | -3.84 |
+| mne_l2_wd | 42 | 64.24 | 60.26 | -3.98 |
+| mne_l2_wd | 43 | 64.20 | 60.64 | -3.56 |
+| mne_l2_wd | 44 | 63.72 | 60.00 | -3.72 |
+| no_regularization | 40 | 57.69 | 57.57 | -0.12 |
+| no_regularization | 41 | 58.39 | 58.64 | 0.25 |
+| no_regularization | 42 | 46.15 | 46.58 | 0.43 |
+
+注：`no_regularization` 在该 raw 文件中仅有 seed 40/41/42，seed 43/44 缺失。
 
 ### 7.2) CIFAR-100 VGG16 组合实验（best test summary）
 

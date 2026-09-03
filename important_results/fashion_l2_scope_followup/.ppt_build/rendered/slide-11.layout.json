@@ -1,0 +1,1198 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/jkn15e",
+    "id": "jkn15e",
+    "slide": 11,
+    "layoutId": "f530bfe6-d6bc-4a6d-988d-6f997ed135f1",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "c1276067-eec7-492a-92ed-d900e6a58e92",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Heiti SC"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "f530bfe6-d6bc-4a6d-988d-6f997ed135f1",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "c1276067-eec7-492a-92ed-d900e6a58e92",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "c1276067-eec7-492a-92ed-d900e6a58e92",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m9ozaxs3",
+      "id": "1",
+      "bbox": [
+        42,
+        28,
+        500,
+        30
+      ],
+      "geometry": "rect",
+      "text": "FASHION-MNIST / QCFS ANN-to-SNN",
+      "textPreview": "FASHION-MNIST / QCFS ANN-to-SNN",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Heiti SC",
+        "color": "#555B66",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "FASHION-MNIST / QCFS ANN-to-SNN"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "FASHION-MNIST / QCFS ANN-to-SNN",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Heiti SC",
+            "color": "#555B66",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "FASHION-MNIST / QCFS ANN-to-SNN",
+              "fontSize": 16,
+              "typeface": "Heiti SC",
+              "color": "#555B66",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9cfy5cbu",
+      "id": "2",
+      "bbox": [
+        42,
+        67,
+        1196,
+        78
+      ],
+      "geometry": "rect",
+      "text": "可辩护的结论更窄，也更强",
+      "textPreview": "可辩护的结论更窄，也更强",
+      "resolvedFontSize": 48,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 48,
+        "typeface": "Heiti SC",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "可辩护的结论更窄，也更强"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "可辩护的结论更窄，也更强",
+          "resolvedTextStyle": {
+            "fontSize": 48,
+            "typeface": "Heiti SC",
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "可辩护的结论更窄，也更强",
+              "fontSize": 48,
+              "typeface": "Heiti SC",
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8b6hc7a9",
+      "id": "3",
+      "bbox": [
+        42,
+        154,
+        1196,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8BCC4",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zmdgzits",
+      "id": "4",
+      "bbox": [
+        1184,
+        668,
+        54,
+        20
+      ],
+      "geometry": "rect",
+      "text": "11",
+      "textPreview": "11",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Heiti SC",
+        "color": "#555B66",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "11"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "11",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Heiti SC",
+            "color": "#555B66",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "11",
+              "fontSize": 14,
+              "typeface": "Heiti SC",
+              "color": "#555B66",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yl4z6xs7",
+      "id": "5",
+      "bbox": [
+        42,
+        190,
+        70,
+        48
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Heiti SC",
+        "color": "#3D8DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Heiti SC",
+            "color": "#3D8DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 38,
+              "typeface": "Heiti SC",
+              "color": "#3D8DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lovy1sbi",
+      "id": "6",
+      "bbox": [
+        132,
+        190,
+        440,
+        42
+      ],
+      "geometry": "rect",
+      "text": "已确认",
+      "textPreview": "已确认",
+      "resolvedFontSize": 28,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 28,
+        "typeface": "Heiti SC",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "已确认"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "已确认",
+          "resolvedTextStyle": {
+            "fontSize": 28,
+            "typeface": "Heiti SC",
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "已确认",
+              "fontSize": 28,
+              "typeface": "Heiti SC",
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/knmh8nad",
+      "id": "7",
+      "bbox": [
+        132,
+        248,
+        470,
+        120
+      ],
+      "geometry": "rect",
+      "text": "VGG-like CNN6 中，all-parameter L2 的 post-input-IF absolute-noise 鲁棒性平均低于 weights-only，且在 5 seeds 上复现。",
+      "textPreview": "VGG-like CNN6 中，all-parameter L2 的 post-input-IF absolute-noise 鲁棒性平均低于 weights-only，且在 5 seeds 上复现。",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Heiti SC",
+        "color": "#555B66",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "VGG-like CNN6 中，all-parameter L2 的"
+          },
+          {
+            "index": 2,
+            "text": "post-input-IF absolute-noise 鲁棒性平均低于"
+          },
+          {
+            "index": 3,
+            "text": "weights-only，且在 5 seeds 上复现。"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "VGG-like CNN6 中，all-parameter L2 的 post-input-IF absolute-noise 鲁棒性平均低于 weights-only，且在 5 seeds 上复现。",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Heiti SC",
+            "color": "#555B66",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "VGG-like CNN6 中，all-parameter L2 的 post-input-IF absolute-noise 鲁棒性平均低于 weights-only，且在 5 seeds 上复现。",
+              "fontSize": 20,
+              "typeface": "Heiti SC",
+              "color": "#555B66",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bidgvitg",
+      "id": "8",
+      "bbox": [
+        650,
+        190,
+        70,
+        48
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Heiti SC",
+        "color": "#D55E00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Heiti SC",
+            "color": "#D55E00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 38,
+              "typeface": "Heiti SC",
+              "color": "#D55E00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ah4z2dsv",
+      "id": "9",
+      "bbox": [
+        740,
+        190,
+        440,
+        42
+      ],
+      "geometry": "rect",
+      "text": "机制定位",
+      "textPreview": "机制定位",
+      "resolvedFontSize": 28,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 28,
+        "typeface": "Heiti SC",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "机制定位"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "机制定位",
+          "resolvedTextStyle": {
+            "fontSize": 28,
+            "typeface": "Heiti SC",
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "机制定位",
+              "fontSize": 28,
+              "typeface": "Heiti SC",
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sfedofqh",
+      "id": "10",
+      "bbox": [
+        740,
+        248,
+        470,
+        120
+      ],
+      "geometry": "rect",
+      "text": "直接正则 IF threshold 是最强负面因素；5-seed mean input threshold 从 6.58 降到 4.22。",
+      "textPreview": "直接正则 IF threshold 是最强负面因素；5-seed mean input threshold 从 6.58 降到 4.22。",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Heiti SC",
+        "color": "#555B66",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "直接正则 IF threshold 是最强负面因素；5-seed"
+          },
+          {
+            "index": 2,
+            "text": "mean input threshold 从 6.58 降到 4.22。"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "直接正则 IF threshold 是最强负面因素；5-seed mean input threshold 从 6.58 降到 4.22。",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Heiti SC",
+            "color": "#555B66",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "直接正则 IF threshold 是最强负面因素；5-seed mean input threshold 从 6.58 降到 4.22。",
+              "fontSize": 20,
+              "typeface": "Heiti SC",
+              "color": "#555B66",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tgnehk72",
+      "id": "11",
+      "bbox": [
+        42,
+        420,
+        70,
+        48
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Heiti SC",
+        "color": "#009E73",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Heiti SC",
+            "color": "#009E73",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 38,
+              "typeface": "Heiti SC",
+              "color": "#009E73",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6dwvmp8r",
+      "id": "12",
+      "bbox": [
+        132,
+        420,
+        440,
+        42
+      ],
+      "geometry": "rect",
+      "text": "条件边界",
+      "textPreview": "条件边界",
+      "resolvedFontSize": 28,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 28,
+        "typeface": "Heiti SC",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "条件边界"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "条件边界",
+          "resolvedTextStyle": {
+            "fontSize": 28,
+            "typeface": "Heiti SC",
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "条件边界",
+              "fontSize": 28,
+              "typeface": "Heiti SC",
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/re5wfupc",
+      "id": "13",
+      "bbox": [
+        132,
+        478,
+        470,
+        120
+      ],
+      "geometry": "rect",
+      "text": "阈值/RMS 归一化后 gap 消失或反转；深度和 BN 数量本身不足以解释，结构也会调制结果。",
+      "textPreview": "阈值/RMS 归一化后 gap 消失或反转；深度和 BN 数量本身不足以解释，结构也会调制结果。",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Heiti SC",
+        "color": "#555B66",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "阈值/RMS 归一化后 gap 消失或反转；深度和 BN"
+          },
+          {
+            "index": 2,
+            "text": "数量本身不足以解释，结构也会调制结果。"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "阈值/RMS 归一化后 gap 消失或反转；深度和 BN 数量本身不足以解释，结构也会调制结果。",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Heiti SC",
+            "color": "#555B66",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "阈值/RMS 归一化后 gap 消失或反转；深度和 BN 数量本身不足以解释，结构也会调制结果。",
+              "fontSize": 20,
+              "typeface": "Heiti SC",
+              "color": "#555B66",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4budkfql",
+      "id": "14",
+      "bbox": [
+        650,
+        420,
+        70,
+        48
+      ],
+      "geometry": "rect",
+      "text": "04",
+      "textPreview": "04",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Heiti SC",
+        "color": "#6A3D9A",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "04"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "04",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Heiti SC",
+            "color": "#6A3D9A",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "04",
+              "fontSize": 38,
+              "typeface": "Heiti SC",
+              "color": "#6A3D9A",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5cnedk76",
+      "id": "15",
+      "bbox": [
+        740,
+        420,
+        440,
+        42
+      ],
+      "geometry": "rect",
+      "text": "对 MNE-L2 的含义",
+      "textPreview": "对 MNE-L2 的含义",
+      "resolvedFontSize": 28,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 28,
+        "typeface": "Heiti SC",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "对 MNE-L2 的含义"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "对 MNE-L2 的含义",
+          "resolvedTextStyle": {
+            "fontSize": 28,
+            "typeface": "Heiti SC",
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "对 MNE-L2 的含义",
+              "fontSize": 28,
+              "typeface": "Heiti SC",
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i9cvi58f",
+      "id": "16",
+      "bbox": [
+        740,
+        478,
+        470,
+        120
+      ],
+      "geometry": "rect",
+      "text": "MNE-L2 应与 tuned weights-only L2、Orthogonal 和 No Reg 比较。当前证据支持它避开失败模式，不支持其稳健性独一无二。",
+      "textPreview": "MNE-L2 应与 tuned weights-only L2、Orthogonal 和 No Reg 比较。当前证据支持它避开失败模式，不支持其稳健性独一无二。",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Heiti SC",
+        "color": "#555B66",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "MNE-L2 应与 tuned weights-only L2、Orthogonal"
+          },
+          {
+            "index": 2,
+            "text": "和 No Reg"
+          },
+          {
+            "index": 3,
+            "text": "比较。当前证据支持它避开失败模式，不支持其稳健"
+          },
+          {
+            "index": 4,
+            "text": "性独一无二。"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "MNE-L2 应与 tuned weights-only L2、Orthogonal 和 No Reg 比较。当前证据支持它避开失败模式，不支持其稳健性独一无二。",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Heiti SC",
+            "color": "#555B66",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "MNE-L2 应与 tuned weights-only L2、Orthogonal 和 No Reg 比较。当前证据支持它避开失败模式，不支持其稳健性独一无二。",
+              "fontSize": 20,
+              "typeface": "Heiti SC",
+              "color": "#555B66",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jalwbap0",
+      "id": "17",
+      "bbox": [
+        42,
+        625,
+        1160,
+        34
+      ],
+      "geometry": "rect",
+      "text": "下一步：把 causal scopes 的关键两组扩展到 5 seeds，并在 CIFAR VGG 上用相同 parameter scope 与 scale-normalized protocol 复现。",
+      "textPreview": "下一步：把 causal scopes 的关键两组扩展到 5 seeds，并在 CIFAR VGG 上用相同 parameter scope 与 scale-normalized protocol 复现。",
+      "resolvedFontSize": 18.33,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Heiti SC",
+        "color": "#000000",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.83,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "下一步：把 causal scopes 的关键两组扩展到 5 seeds，并在 CIFAR VGG 上用相同 parameter scope 与 scale-normalized protocol 复现。"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "下一步：把 causal scopes 的关键两组扩展到 5 seeds，并在 CIFAR VGG 上用相同 parameter scope 与 scale-normalized protocol 复现。",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Heiti SC",
+            "color": "#000000",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "下一步：把 causal scopes 的关键两组扩展到 5 seeds，并在 CIFAR VGG 上用相同 parameter scope 与 scale-normalized protocol 复现。",
+              "fontSize": 22,
+              "typeface": "Heiti SC",
+              "color": "#000000",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

@@ -16,15 +16,15 @@ from robustness_metrics import derivative_robustness_score
 ROOT = Path(__file__).resolve().parent
 OUT_DIR = ROOT / "drs_results" / "plots"
 
-METHODS = ["weight_decay", "mne_l2", "no_regularization"]
+METHODS = ["mne_l2", "weight_decay", "no_regularization"]
 METHOD_LABELS = {
+    "mne_l2": "MNE-L2 (Ours)",
     "weight_decay": "L2",
-    "mne_l2": "MNE-L2",
     "no_regularization": "No Reg",
 }
 METHOD_COLORS = {
-    "weight_decay": "#ff7f0e",
-    "mne_l2": "#1f77b4",
+    "mne_l2": "#ff7f0e",
+    "weight_decay": "#1f77b4",
     "no_regularization": "#2ca02c",
 }
 
@@ -126,12 +126,14 @@ def grouped_bar(
     with_sem: bool = True,
     method_field: str = "method",
     no_caption: bool = False,
+    ylim: tuple[float, float] | None = None,
 ) -> None:
     setup_style(16)
     x = np.arange(len(arch_keys))
     width = 0.24
     fig, ax = plt.subplots(figsize=(max(10.0, len(arch_keys) * 2.2), 6.8), dpi=220)
     all_means = []
+    value_labels = []
 
     for idx, method in enumerate(METHODS):
         means, errs = [], []
@@ -163,8 +165,9 @@ def grouped_bar(
         for b, v in zip(bars, means):
             if np.isnan(v):
                 continue
-            ax.text(b.get_x() + b.get_width() / 2, v + 0.008, f"{v:.3f}",
-                    ha="center", va="bottom", fontsize=9)
+            label = ax.text(b.get_x() + b.get_width() / 2, v + 0.008, f"{v:.3f}",
+                            ha="center", va="bottom", fontsize=9)
+            value_labels.append(label)
 
     ax.set_xticks(x)
     ax.set_xticklabels(arch_labels)
@@ -173,7 +176,18 @@ def grouped_bar(
     if not no_caption:
         ax.set_title(title)
     if all_means:
-        ax.set_ylim(max(0.0, min(all_means) - 0.1), min(1.05, max(all_means) + 0.1))
+        spread = max(all_means) - min(all_means)
+        pad = max(0.016, 0.20 * spread)
+        if ylim is None:
+            ax.set_ylim(max(0.0, min(all_means) - pad), min(1.05, max(all_means) + pad))
+        else:
+            ax.set_ylim(*ylim)
+        top = ax.get_ylim()[1]
+        for label in value_labels:
+            x_pos, y_pos = label.get_position()
+            if y_pos > top - 0.003:
+                label.set_position((x_pos, top - 0.003))
+                label.set_va("top")
     ax.grid(axis="y", alpha=0.25)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.14), ncol=3, frameon=False)
     fig.tight_layout()
@@ -222,7 +236,9 @@ def single_dataset_bar(
         ax.set_title(title)
     valid = [m for m in means if not np.isnan(m)]
     if valid:
-        ax.set_ylim(max(0.0, min(valid) - 0.12), min(1.08, max(valid) + 0.12))
+        spread = max(valid) - min(valid)
+        pad = max(0.03, 0.20 * spread)
+        ax.set_ylim(max(0.0, min(valid) - pad), min(1.08, max(valid) + pad))
     ax.grid(axis="y", alpha=0.24)
     fig.tight_layout()
 
@@ -246,6 +262,7 @@ def plot_fc3rev_h8_h16_h32(out_dir: Path, *, no_caption: bool = False) -> list[d
         xlabel="Hidden size",
         out_stem="fc3rev_h8_h16_h32_drs_bar",
         no_caption=no_caption,
+        ylim=(0.96, 1.00610416),
     )
     return subset
 
@@ -307,8 +324,8 @@ def plot_imagenet(out_dir: Path, *, no_caption: bool = False) -> list[dict]:
             no_reg.append(float(r["acc"]))
 
     rows = [
-        {"method": "weight_decay", "DRS_mean": derivative_robustness_score(sigmas, l2), "DRS_sem": 0.0},
         {"method": "mne_l2", "DRS_mean": derivative_robustness_score(sigmas, mne), "DRS_sem": 0.0},
+        {"method": "weight_decay", "DRS_mean": derivative_robustness_score(sigmas, l2), "DRS_sem": 0.0},
         {"method": "no_regularization", "DRS_mean": derivative_robustness_score(sigmas_nr, no_reg), "DRS_sem": 0.0},
     ]
     single_dataset_bar(

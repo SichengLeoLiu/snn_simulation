@@ -1,0 +1,192 @@
+{"kind":"deck","id":"pr/xvvfhg","name":"Deck"}
+{"kind":"layout","layoutId":"c1276067-eec7-492a-92ed-d900e6a58e92","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"f530bfe6-d6bc-4a6d-988d-6f997ed135f1","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/moyuri","slide":1,"title":"REPRESENTATION STABILITY","textShapes":4}
+{"kind":"textbox","id":"sh/3mpor6p4","slide":1,"text":"REPRESENTATION STABILITY","textPreview":"REPRESENTATION STABILITY","textChars":24,"textLines":1,"bbox":[42,38,500,34]}
+{"kind":"textbox","id":"sh/onypkbqp","slide":1,"text":"为什么 all-parameter L2\n会损害 SNN 鲁棒性？","textPreview":"为什么 all-parameter L2 | 会损害 SNN 鲁棒性？","textChars":33,"textLines":2,"bbox":[42,180,1030,235]}
+{"kind":"shape","id":"sh/p876tw7a","slide":1,"bbox":[42,454,170,8]}
+{"kind":"textbox","id":"sh/ehwneh8n","slide":1,"text":"从 MNE-L2 对比到参数范围、尺度敏感性与结构交互","textPreview":"从 MNE-L2 对比到参数范围、尺度敏感性与结构交互","textChars":27,"textLines":1,"bbox":[42,500,930,64]}
+{"kind":"textbox","id":"sh/fi5onm9s","slide":1,"text":"Fashion-MNIST | ANN T=0 -> SNN T=16 | 2026-08-03","textPreview":"Fashion-MNIST | ANN T=0 -> SNN T=16 | 2026-08-03","textChars":48,"textLines":1,"bbox":[42,630,720,28]}
+{"kind":"notes","id":"nt/moyuri","slide":1,"text":"这次汇报不再问哪一种正则化看起来最稳健，而是追问为什么 optimizer weight decay 在某些 ANN 到 SNN 转换中会失去鲁棒性。我们把统计复现、参数范围、尺度归一化、逐层传播和结构因素串成一条因果链。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/README.md"}
+{"kind":"slide","id":"sl/hlcc67","slide":2,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":13}
+{"kind":"textbox","id":"sh/xsjyp8zq","slide":2,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/apsfutgf","slide":2,"text":"MNE-L2 不是唯一稳健方法","textPreview":"MNE-L2 不是唯一稳健方法","textChars":15,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/bq1wnyh0","slide":2,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/onqxsjy9","slide":2,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"textbox","id":"sh/9ozelozu","slide":2,"text":"前期 5-seed 小模型结果表明，MNE-L2 的确优于 optimizer L2，但 Orthogonal 与它几乎重合，No Reg 也保持较强。","textPreview":"前期 5-seed 小模型结果表明，MNE-L2 的确优于 optimizer L2，但 Orthogonal 与它几乎重合，No Reg 也保持较强。","textChars":76,"textLines":1,"bbox":[42,176,1160,64]}
+{"kind":"shape","id":"sh/ml8fqt03","slide":2,"bbox":[42,275,270,300]}
+{"kind":"shape","id":"sh/nmhwjeho","slide":2,"bbox":[42,275,7,300]}
+{"kind":"textbox","id":"sh/8jux4nyd","slide":2,"text":"55.19%","textPreview":"55.19%","textChars":6,"textLines":1,"bbox":[66,297,224,96]}
+{"kind":"textbox","id":"sh/tk3yxszy","slide":2,"text":"MNE-L2\nT=16, sigma=0.5\nclean 82.61%","textPreview":"MNE-L2 | T=16, sigma=0.5 | clean 82.61%","textChars":35,"textLines":3,"bbox":[66,390,224,173]}
+{"kind":"shape","id":"sh/lg3i9kj6","slide":2,"bbox":[340,275,270,300]}
+{"kind":"shape","id":"sh/kfu10f2l","slide":2,"bbox":[340,275,7,300]}
+{"kind":"textbox","id":"sh/jel07a1g","slide":2,"text":"55.12%","textPreview":"55.12%","textChars":6,"textLines":1,"bbox":[364,297,224,96]}
+{"kind":"textbox","id":"sh/ydcjy5kv","slide":2,"text":"Orthogonal\nT=16, sigma=0.5\nclean 82.96%","textPreview":"Orthogonal | T=16, sigma=0.5 | clean 82.96%","textChars":39,"textLines":3,"bbox":[364,390,224,173]}
+{"kind":"shape","id":"sh/xc3i5kja","slide":2,"bbox":[638,275,270,300]}
+{"kind":"shape","id":"sh/wbu1wf2p","slide":2,"bbox":[638,275,7,300]}
+{"kind":"textbox","id":"sh/bal03a14","slide":2,"text":"51.64%","textPreview":"51.64%","textChars":6,"textLines":1,"bbox":[662,297,224,96]}
+{"kind":"textbox","id":"sh/a9sju5kj","slide":2,"text":"No Reg\nT=16, sigma=0.5\nclean 82.80%","textPreview":"No Reg | T=16, sigma=0.5 | clean 82.80%","textChars":35,"textLines":3,"bbox":[662,390,224,173]}
+{"kind":"shape","id":"sh/h8n2h4je","slide":2,"bbox":[936,275,270,300]}
+{"kind":"shape","id":"sh/g7e18z2t","slide":2,"bbox":[936,275,7,300]}
+{"kind":"textbox","id":"sh/0bml43q5","slide":2,"text":"38.06%","textPreview":"38.06%","textChars":6,"textLines":1,"bbox":[960,297,224,96]}
+{"kind":"textbox","id":"sh/1cvmd8rq","slide":2,"text":"Optimizer L2\nT=16, sigma=0.5\nclean 83.15%","textPreview":"Optimizer L2 | T=16, sigma=0.5 | clean 83.15%","textChars":41,"textLines":3,"bbox":[960,390,224,173]}
+{"kind":"textbox","id":"sh/e9432d8z","slide":2,"text":"研究问题因此转向：MNE-L2 的优势有多少来自目标函数本身，有多少来自对照组 weight decay 的参数范围？","textPreview":"研究问题因此转向：MNE-L2 的优势有多少来自目标函数本身，有多少来自对照组 weight decay 的参数范围？","textChars":59,"textLines":1,"bbox":[42,600,1130,44]}
+{"kind":"notes","id":"nt/hlcc67","slide":2,"text":"这里先主动削弱一个过强叙事。MNE-L2 在 Fashion-MNIST 的低延迟转换中比 optimizer L2 更稳健，但 Orthogonal 基本相同，No Reg 也不差。因此不能把结果写成 MNE-L2 独有的稳健性，只能说它避开了某类 L2 训练产生的失败模式。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/mne_adv_5seed/c2c4_fashion_mnist_mnist_T4_T8_T16_summary.csv"}
+{"kind":"slide","id":"sl/dfiy3e","slide":3,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":11}
+{"kind":"textbox","id":"sh/u1w3qh8v","slide":3,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/h4nmlwr6","slide":3,"text":"实现形式不是主要矛盾，parameter scope 才是","textPreview":"实现形式不是主要矛盾，parameter scope 才是","textChars":29,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/g3elsrql","slide":3,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/3qp4nm9c","slide":3,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"shape","id":"sh/i5w3uh8r","slide":3,"bbox":[42,205,570,175]}
+{"kind":"shape","id":"sh/5s7mpwri","slide":3,"bbox":[42,205,8,175]}
+{"kind":"textbox","id":"sh/4rylwrqx","slide":3,"text":"同一 scope","textPreview":"同一 scope","textChars":8,"textLines":1,"bbox":[68,227,500,38]}
+{"kind":"textbox","id":"sh/rup4r69o","slide":3,"text":"WD weights-only 与 explicit L2 weights-only 的 checkpoint 最大差为 0。\n\n数学等价在代码中得到验证。","textPreview":"WD weights-only 与 explicit L2 weights-only 的 checkpoint 最大差为 0。 |  | 数学等价在代码中得到验证。","textChars":78,"textLines":3,"bbox":[68,275,505,85]}
+{"kind":"shape","id":"sh/qtg3y183","slide":3,"bbox":[650,205,570,175]}
+{"kind":"shape","id":"sh/sv29wnil","slide":3,"bbox":[650,205,8,175]}
+{"kind":"textbox","id":"sh/twbapsz6","slide":3,"text":"同一 scope","textPreview":"同一 scope","textChars":8,"textLines":1,"bbox":[676,227,500,38]}
+{"kind":"textbox","id":"sh/6tkrux0v","slide":3,"text":"WD all-params 与 explicit L2 all-params 的 checkpoint 最大差同样为 0。\n\n不是 optimizer API 本身造成差异。","textPreview":"WD all-params 与 explicit L2 all-params 的 checkpoint 最大差同样为 0。 |  | 不是 optimizer API 本身造成差异。","textChars":87,"textLines":3,"bbox":[676,275,505,85]}
+{"kind":"shape","id":"sh/rutsn2hg","slide":3,"bbox":[42,430,570,175]}
+{"kind":"shape","id":"sh/gzmt07ix","slide":3,"bbox":[42,430,8,175]}
+{"kind":"textbox","id":"sh/10vatczi","slide":3,"text":"Weights only","textPreview":"Weights only","textChars":12,"textLines":1,"bbox":[68,452,500,38]}
+{"kind":"textbox","id":"sh/exkbyx0r","slide":3,"text":"只约束 Conv/Linear weight。\n不衰减 BN gamma/beta、IF threshold 与 bias。","textPreview":"只约束 Conv/Linear weight。 | 不衰减 BN gamma/beta、IF threshold 与 bias。","textChars":62,"textLines":2,"bbox":[68,500,505,85]}
+{"kind":"shape","id":"sh/fytsr2hc","slide":3,"bbox":[650,430,570,175]}
+{"kind":"shape","id":"sh/onmt47it","slide":3,"bbox":[650,430,8,175]}
+{"kind":"textbox","id":"sh/povaxcze","slide":3,"text":"All parameters","textPreview":"All parameters","textChars":14,"textLines":1,"bbox":[676,452,500,38]}
+{"kind":"textbox","id":"sh/d8ri1snm","slide":3,"text":"同时衰减 BN affine、IF threshold 与 bias。\nANN 可通过重参数化维持 clean accuracy。","textPreview":"同时衰减 BN affine、IF threshold 与 bias。 | ANN 可通过重参数化维持 clean accuracy。","textChars":65,"textLines":2,"bbox":[676,500,505,85]}
+{"kind":"notes","id":"nt/dfiy3e","slide":3,"text":"这一步排除了一个常见混淆。只要参数集合一致，SGD 的 coupled weight decay 与 loss 中的二次惩罚给出相同 checkpoint。真正发生变化的是 all-parameter 设置额外压缩了 BN、IF threshold 和 bias。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/manual_l2_vs_wd_pilot/fashion_c2c4_T16_post_input_if/matched_current_summary.csv"}
+{"kind":"slide","id":"sl/uey6xh","slide":4,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":8}
+{"kind":"textbox","id":"sh/pore5sbi","slide":4,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/2l0vuxsr","slide":4,"text":"深度不构成单调解释，VGG-like 结构才放大差距","textPreview":"深度不构成单调解释，VGG-like 结构才放大差距","textChars":26,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/3m9c3itc","slide":4,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/gjidsnal","slide":4,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"shape","id":"sh/ehgvqdsv","slide":4,"bbox":[855,190,350,185]}
+{"kind":"shape","id":"sh/fipczitg","slide":4,"bbox":[855,190,7,185]}
+{"kind":"textbox","id":"sh/svydo3up","slide":4,"text":"+11.49 pp","textPreview":"+11.49 pp","textChars":9,"textLines":1,"bbox":[879,212,304,83.25]}
+{"kind":"textbox","id":"sh/tw7ux8ba","slide":4,"text":"VGG-like CNN6\nsigma=1 raw gap","textPreview":"VGG-like CNN6 | sigma=1 raw gap","textChars":29,"textLines":2,"bbox":[879,305,304,58]}
+{"kind":"shape","id":"sh/pgjipcri","slide":4,"bbox":[855,405,350,185]}
+{"kind":"shape","id":"sh/4fa1g7ax","slide":4,"bbox":[855,405,7,185]}
+{"kind":"textbox","id":"sh/3u10n29c","slide":4,"text":"+0.59 pp","textPreview":"+0.59 pp","textChars":8,"textLines":1,"bbox":[879,427,304,83.25]}
+{"kind":"textbox","id":"sh/2tszexsr","slide":4,"text":"Narrow CNN6\nsigma=1 raw gap","textPreview":"Narrow CNN6 | sigma=1 raw gap","textChars":27,"textLines":2,"bbox":[879,520,304,58]}
+{"kind":"textbox","id":"sh/hsjilsr6","slide":4,"text":"Protocol: ANN T=0 training, SNN T=L=16, rate_uniform, post-input-IF Gaussian noise","textPreview":"Protocol: ANN T=0 training, SNN T=L=16, rate_uniform, post-input-IF Gaussian noise","textChars":82,"textLines":1,"bbox":[42,662,1050,22]}
+{"kind":"image","id":"im/kjyxknex","slide":4,"name":"","geometry":"rect","alt":"Narrow and VGG-like CNN6 robustness curves","bbox":[42,174,780,445]}
+{"kind":"notes","id":"nt/uey6xh","slide":4,"text":"把 CNN 从 2 层加深到 10 层没有产生单调差距。相同的六个 Conv-BN-IF 层，在窄网络中差异很小，在分阶段加宽的 VGG-like 结构中却达到 11.49 个百分点。因此 BN 层数不是充分解释，宽度、pooling 位置与表示 margin 必须一起考虑。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_deep_l2_scope_seed42/l2_scope_delta_by_depth.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_vgglike_l2_scope_seed42/cnn6_architecture_scope_comparison.csv"}
+{"kind":"slide","id":"sl/ltki09","slide":5,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":16}
+{"kind":"textbox","id":"sh/76pk3qt4","slide":5,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/87ylcbup","slide":5,"text":"后续实验把统计复现与机制定位分开","textPreview":"后续实验把统计复现与机制定位分开","textChars":16,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/t87m5gba","slide":5,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/yhw361cn","slide":5,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"shape","id":"sh/jipkz6ts","slide":5,"bbox":[115,374,1048,3]}
+{"kind":"shape","id":"sh/kjyl8bud","slide":5,"bbox":[100,346,24,24]}
+{"kind":"textbox","id":"sh/lk721gby","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[42,218,120,48]}
+{"kind":"textbox","id":"sh/adw321cb","slide":5,"text":"5 training seeds","textPreview":"5 training seeds","textChars":16,"textLines":1,"bbox":[42,280,260,46]}
+{"kind":"textbox","id":"sh/be5kv6tw","slide":5,"text":"复现 weights-only 与 all-params 的 VGG-like 差距","textPreview":"复现 weights-only 与 all-params 的 VGG-like 差距","textChars":42,"textLines":1,"bbox":[42,415,260,120]}
+{"kind":"shape","id":"sh/za98zydk","slide":5,"bbox":[404,346,24,24]}
+{"kind":"textbox","id":"sh/e90rqtwz","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[346,218,120,48]}
+{"kind":"textbox","id":"sh/1wra18va","slide":5,"text":"Parameter scope","textPreview":"Parameter scope","textChars":15,"textLines":1,"bbox":[346,280,260,46]}
+{"kind":"textbox","id":"sh/0bi9s3e5","slide":5,"text":"拆分 W+BN、W+IF、W+BN+IF，定位参数家族","textPreview":"拆分 W+BN、W+IF、W+BN+IF，定位参数家族","textChars":27,"textLines":1,"bbox":[346,415,260,120]}
+{"kind":"shape","id":"sh/ny9s3idg","slide":5,"bbox":[708,346,24,24]}
+{"kind":"textbox","id":"sh/mx0rudwv","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[650,218,120,48]}
+{"kind":"textbox","id":"sh/90ba5svm","slide":5,"text":"Scale controls","textPreview":"Scale controls","textChars":14,"textLines":1,"bbox":[650,280,260,46]}
+{"kind":"textbox","id":"sh/ozi9wne1","slide":5,"text":"比较绝对噪声、按阈值归一化与按 RMS 归一化噪声","textPreview":"比较绝对噪声、按阈值归一化与按 RMS 归一化噪声","textChars":25,"textLines":1,"bbox":[650,415,260,120]}
+{"kind":"shape","id":"sh/32p8rexc","slide":5,"bbox":[1012,346,24,24]}
+{"kind":"textbox","id":"sh/21gri9wr","slide":5,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[954,218,120,48]}
+{"kind":"textbox","id":"sh/6x4bqhgf","slide":5,"text":"Mechanism + structure","textPreview":"Mechanism + structure","textChars":21,"textLines":1,"bbox":[954,280,260,46]}
+{"kind":"textbox","id":"sh/7ydczmx0","slide":5,"text":"逐层扰动、margin，以及 width x pooling 的 2 x 2 对照","textPreview":"逐层扰动、margin，以及 width x pooling 的 2 x 2 对照","textChars":41,"textLines":1,"bbox":[954,415,260,120]}
+{"kind":"textbox","id":"sh/sz6dsry5","slide":5,"text":"所有新增实验仍限定为 post-input-IF fixed Gaussian noise，不代表 raw-image noise。","textPreview":"所有新增实验仍限定为 post-input-IF fixed Gaussian noise，不代表 raw-image noise。","textChars":66,"textLines":1,"bbox":[42,590,1100,42]}
+{"kind":"notes","id":"nt/ltki09","slide":5,"text":"实验顺序很重要。先用五个训练种子确认主现象，再用单种子的参数范围拆分定位原因。尺度归一化检查 fixed absolute noise 是否构成关键条件，最后用逐层指标和结构对照解释为什么相同参数缩放只在某些网络中传到输出。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/QCFS_simulation/noise3_exp/RUN_fashion_l2_scope_followup.sh"}
+{"kind":"slide","id":"sl/ivmmj7","slide":6,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":8}
+{"kind":"textbox","id":"sh/4fi90j2d","slide":6,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/je9s7y1s","slide":6,"text":"VGG-like 鲁棒性差距在 5 个训练 seed 上复现","textPreview":"VGG-like 鲁棒性差距在 5 个训练 seed 上复现","textChars":30,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/id0rytk7","slide":6,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/hsra5oj2","slide":6,"text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"shape","id":"sh/vq9s3e1w","slide":6,"bbox":[860,185,345,190]}
+{"kind":"shape","id":"sh/upgru9kb","slide":6,"bbox":[860,185,7,190]}
+{"kind":"textbox","id":"sh/1obah8j6","slide":6,"text":"44.77%","textPreview":"44.77%","textChars":6,"textLines":1,"bbox":[884,207,299,85.5]}
+{"kind":"textbox","id":"sh/0n2t8n2l","slide":6,"text":"Weights only at sigma=1\nstd 5.53 pp","textPreview":"Weights only at sigma=1 | std 5.53 pp","textChars":35,"textLines":2,"bbox":[884,300,299,63]}
+{"kind":"shape","id":"sh/m5kvm9or","slide":6,"bbox":[860,400,345,190]}
+{"kind":"shape","id":"sh/nqtwve5c","slide":6,"bbox":[860,400,7,190]}
+{"kind":"textbox","id":"sh/8r2dojmx","slide":6,"text":"36.91%","textPreview":"36.91%","textChars":6,"textLines":1,"bbox":[884,422,299,85.5]}
+{"kind":"textbox","id":"sh/9sbex4ni","slide":6,"text":"All params at sigma=1\nstd 6.76 pp","textPreview":"All params at sigma=1 | std 6.76 pp","textChars":33,"textLines":2,"bbox":[884,515,299,63]}
+{"kind":"textbox","id":"sh/y1kvipov","slide":6,"text":"Paired gap at sigma=1: +7.85 +/- 5.79 pp; clean-adjusted +8.88 pp","textPreview":"Paired gap at sigma=1: +7.85 +/- 5.79 pp; clean-adjusted +8.88 pp","textChars":65,"textLines":1,"bbox":[42,625,1120,30]}
+{"kind":"image","id":"im/pcvy50re","slide":6,"name":"","geometry":"rect","alt":"Five-seed absolute-noise comparison","bbox":[42,172,790,455]}
+{"kind":"notes","id":"nt/ivmmj7","slide":6,"text":"五个训练种子确认了主现象。sigma 等于 1 时，weights-only 平均为 44.77%，all-params 为 36.91%，paired gap 为 +7.85 个百分点。clean-adjusted gap 仍为 +8.88，所以不是 clean 起点造成。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/multiseed_summary.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/multiseed_paired_delta.csv"}
+{"kind":"slide","id":"sl/j3ejw1","slide":7,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":9}
+{"kind":"textbox","id":"sh/ut8bulcv","slide":7,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/hwjup0v6","slide":7,"text":"IF threshold 还是 BN：谁在造成损失？","textPreview":"IF threshold 还是 BN：谁在造成损失？","textChars":26,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/gvqtwvul","slide":7,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/3y1crqdc","slide":7,"text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"textbox","id":"sh/50jut0vi","slide":7,"text":"Weights only\n48.25%","textPreview":"Weights only | 48.25%","textChars":19,"textLines":2,"bbox":[895,175,310,67]}
+{"kind":"textbox","id":"sh/4zat0vux","slide":7,"text":"Weights + BN\n42.24%","textPreview":"Weights + BN | 42.24%","textChars":19,"textLines":2,"bbox":[895,262,310,67]}
+{"kind":"textbox","id":"sh/rm1cvad8","slide":7,"text":"Weights + IF\n33.08%","textPreview":"Weights + IF | 33.08%","textChars":19,"textLines":2,"bbox":[895,349,310,67]}
+{"kind":"textbox","id":"sh/qlsb25cn","slide":7,"text":"Weights + BN + IF\n35.80%","textPreview":"Weights + BN + IF | 35.80%","textChars":24,"textLines":2,"bbox":[895,436,310,67]}
+{"kind":"textbox","id":"sh/gf6t4jix","slide":7,"text":"All parameters\n37.07%","textPreview":"All parameters | 37.07%","textChars":21,"textLines":2,"bbox":[895,523,310,67]}
+{"kind":"textbox","id":"sh/hgfaxozi","slide":7,"text":"Numbers: SNN accuracy at absolute sigma=1","textPreview":"Numbers: SNN accuracy at absolute sigma=1","textChars":41,"textLines":1,"bbox":[895,622,310,24]}
+{"kind":"image","id":"im/zylozy1s","slide":7,"name":"","geometry":"rect","alt":"Selective L2 parameter-scope curves","bbox":[42,165,820,455]}
+{"kind":"notes","id":"nt/j3ejw1","slide":7,"text":"参数范围拆分给出直接定位。sigma 等于 1 时，W+BN 为 42.24%，W+IF 为 33.08%，W+BN+IF 为 35.80%，all-params 为 37.07%。直接惩罚 IF threshold 的 W+IF 最差，BN 单独加入也造成约 6 个百分点损失。非单调排序说明 BN、IF、bias 之间存在补偿，不能把它们解释为简单相加。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/parameter_scope_summary.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/parameter_scale_summary.csv"}
+{"kind":"slide","id":"sl/b6wyv4","slide":8,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":10}
+{"kind":"textbox","id":"sh/cv614fqx","slide":8,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/bux0bapc","slide":8,"text":"固定绝对噪声是否放大了低阈值模型的劣势？","textPreview":"固定绝对噪声是否放大了低阈值模型的劣势？","textChars":20,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/atoj2p8r","slide":8,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/lkz2h47e","slide":8,"text":"8","textPreview":"8","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"shape","id":"sh/zyhkfup8","slide":8,"bbox":[965,180,250,125]}
+{"kind":"shape","id":"sh/yx8j6p8n","slide":8,"bbox":[965,180,7,125]}
+{"kind":"textbox","id":"sh/1ovi507a","slide":8,"text":"+11.18","textPreview":"+11.18","textChars":6,"textLines":1,"bbox":[989,194,204,48]}
+{"kind":"textbox","id":"sh/03m1cvqp","slide":8,"text":"Absolute end gap","textPreview":"Absolute end gap","textChars":16,"textLines":1,"bbox":[989,250,204,43]}
+{"kind":"shape","id":"sh/ax4z2psv","slide":8,"bbox":[965,325,250,125]}
+{"kind":"shape","id":"sh/vydgbutg","slide":8,"bbox":[965,325,7,125]}
+{"kind":"textbox","id":"sh/wz6h4zal","slide":8,"text":"-7.76","textPreview":"-7.76","textChars":5,"textLines":1,"bbox":[989,339,204,48]}
+{"kind":"textbox","id":"sh/x0fydkb6","slide":8,"text":"Threshold-normalized","textPreview":"Threshold-normalized","textChars":20,"textLines":1,"bbox":[989,395,204,43]}
+{"kind":"shape","id":"sh/i1oz6psr","slide":8,"bbox":[965,470,250,125]}
+{"kind":"shape","id":"sh/j2xgfutc","slide":8,"bbox":[965,470,7,125]}
+{"kind":"textbox","id":"sh/436h8zax","slide":8,"text":"-1.82","textPreview":"-1.82","textChars":5,"textLines":1,"bbox":[989,484,204,48]}
+{"kind":"textbox","id":"sh/54fyh4bi","slide":8,"text":"RMS-normalized","textPreview":"RMS-normalized","textChars":14,"textLines":1,"bbox":[989,540,204,43]}
+{"kind":"textbox","id":"sh/65oza9s3","slide":8,"text":"Input threshold: weights 6.58 vs all 4.22 (5-seed means)","textPreview":"Input threshold: weights 6.58 vs all 4.22 (5-seed means)","textChars":56,"textLines":1,"bbox":[42,615,900,30]}
+{"kind":"image","id":"im/t0jadsji","slide":8,"name":"","geometry":"rect","alt":"Absolute versus scale-normalized noise curves","bbox":[42,170,900,435]}
+{"kind":"notes","id":"nt/b6wyv4","slide":8,"text":"All-params 把 5-seed mean input threshold 从 6.58 压到 4.22。绝对噪声末端 gap 为 +11.18，按 threshold 归一化后反转为 -7.76，按 clean activation RMS 归一化后接近持平并为 -1.82。因此当前结论应写成 fixed-absolute-noise scale sensitivity，而不是无条件的内在不稳定。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/absolute_vs_relative_summary.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/parameter_scale_multiseed_summary.csv"}
+{"kind":"slide","id":"sl/gtoz8i","slide":9,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":8}
+{"kind":"textbox","id":"sh/ton29oja","slide":9,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/6lwjy90j","slide":9,"text":"逐层扰动最终表现为分类 margin 损失","textPreview":"逐层扰动最终表现为分类 margin 损失","textChars":21,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/7m5k7e14","slide":9,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/gbe14ji1","slide":9,"text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"shape","id":"sh/upwj2t0v","slide":9,"bbox":[875,185,330,185]}
+{"kind":"shape","id":"sh/fa5kbe1g","slide":9,"bbox":[875,185,7,185]}
+{"kind":"textbox","id":"sh/4fy183ix","slide":9,"text":"0.89","textPreview":"0.89","textChars":4,"textLines":1,"bbox":[899,207,284,83.25]}
+{"kind":"textbox","id":"sh/pg72h8zi","slide":9,"text":"Weights only\nIF6 relative L2 at sigma=1","textPreview":"Weights only | IF6 relative L2 at sigma=1","textChars":39,"textLines":2,"bbox":[899,300,284,58]}
+{"kind":"shape","id":"sh/l8fqh4zy","slide":9,"bbox":[875,395,330,185]}
+{"kind":"shape","id":"sh/k7mpozyd","slide":9,"bbox":[875,395,7,185]}
+{"kind":"textbox","id":"sh/j6d8fuhs","slide":9,"text":"0.92","textPreview":"0.92","textChars":4,"textLines":1,"bbox":[899,417,284,83.25]}
+{"kind":"textbox","id":"sh/y547mpg7","slide":9,"text":"All parameters\nIF6 relative L2 at sigma=1","textPreview":"All parameters | IF6 relative L2 at sigma=1","textChars":41,"textLines":2,"bbox":[899,510,284,58]}
+{"kind":"textbox","id":"sh/tcfql4zu","slide":9,"text":"IF6 spike mismatch: 10.75% vs 13.82%; prediction flips: 50.22% vs 63.26%","textPreview":"IF6 spike mismatch: 10.75% vs 13.82%; prediction flips: 50.22% vs 63.26%","textChars":72,"textLines":1,"bbox":[42,620,1160,35]}
+{"kind":"image","id":"im/03q14vep","slide":9,"name":"","geometry":"rect","alt":"Layerwise relative representation perturbation","bbox":[42,170,805,455]}
+{"kind":"notes","id":"nt/gtoz8i","slide":9,"text":"逐层曲线说明差距不是只存在于参数统计。sigma 等于 1 时，IF6 的相对扰动只从 0.89 增到 0.92，但 spike mismatch 从 10.75% 增到 13.82%，预测翻转率从 50.22% 增到 63.26%。这说明单一表示范数不能概括失效，量化决策与分类 margin 同样关键。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/layerwise_mechanism_mean_std.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/output_margin_mean_std.csv"}
+{"kind":"slide","id":"sl/4huqqv","slide":10,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":8}
+{"kind":"textbox","id":"sh/x0rqdc72","slide":10,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/ax07ix8b","slide":10,"text":"宽度与 pooling 位置共同决定差距是否暴露","textPreview":"宽度与 pooling 位置共同决定差距是否暴露","textChars":24,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/by98b2pw","slide":10,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/ovipg7q5","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"textbox","id":"sh/mtg7ex8f","slide":10,"text":"Narrow, early pool\n+0.59 pp","textPreview":"Narrow, early pool | +0.59 pp","textChars":27,"textLines":2,"bbox":[965,175,245,80]}
+{"kind":"textbox","id":"sh/nup872p0","slide":10,"text":"Narrow, staged pool\n+5.88 pp","textPreview":"Narrow, staged pool | +5.88 pp","textChars":28,"textLines":2,"bbox":[965,283,245,80]}
+{"kind":"textbox","id":"sh/07ypcnq9","slide":10,"text":"Wide, early pool\n+7.00 pp","textPreview":"Wide, early pool | +7.00 pp","textChars":25,"textLines":2,"bbox":[965,391,245,80]}
+{"kind":"textbox","id":"sh/1s7q5s7u","slide":10,"text":"Wide, staged pool\n+11.49 pp","textPreview":"Wide, staged pool | +11.49 pp","textChars":27,"textLines":2,"bbox":[965,499,245,80]}
+{"kind":"textbox","id":"sh/5wjqx03q","slide":10,"text":"Displayed value: weights-only minus all-params at sigma=1","textPreview":"Displayed value: weights-only minus all-params at sigma=1","textChars":57,"textLines":1,"bbox":[965,610,250,40]}
+{"kind":"image","id":"im/8butgbmd","slide":10,"name":"","geometry":"rect","alt":"Six-layer width and pooling two-by-two control","bbox":[42,165,890,470]}
+{"kind":"notes","id":"nt/4huqqv","slide":10,"text":"六层网络的 2 x 2 对照把通道宽度与 pooling 位置拆开。窄加早池化的 gap 只有 0.59，窄加分阶段池化为 5.88，宽加早池化为 7.00，宽加分阶段池化达到 11.49 个百分点。因此宽度和 pooling 位置都在放大差距，而不是 BN 层数本身。这里仍是 seed 42，结构效应还需要更多训练种子。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/architecture_2x2_summary.csv"}
+{"kind":"slide","id":"sl/jkn15e","slide":11,"title":"FASHION-MNIST / QCFS ANN-to-SNN","textShapes":16}
+{"kind":"textbox","id":"sh/m9ozaxs3","slide":11,"text":"FASHION-MNIST / QCFS ANN-to-SNN","textPreview":"FASHION-MNIST / QCFS ANN-to-SNN","textChars":31,"textLines":1,"bbox":[42,28,500,30]}
+{"kind":"textbox","id":"sh/9cfy5cbu","slide":11,"text":"可辩护的结论更窄，也更强","textPreview":"可辩护的结论更窄，也更强","textChars":12,"textLines":1,"bbox":[42,67,1196,78]}
+{"kind":"shape","id":"sh/8b6hc7a9","slide":11,"bbox":[42,154,1196,1]}
+{"kind":"textbox","id":"sh/zmdgzits","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1184,668,54,20]}
+{"kind":"textbox","id":"sh/yl4z6xs7","slide":11,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[42,190,70,48]}
+{"kind":"textbox","id":"sh/lovy1sbi","slide":11,"text":"已确认","textPreview":"已确认","textChars":3,"textLines":1,"bbox":[132,190,440,42]}
+{"kind":"textbox","id":"sh/knmh8nad","slide":11,"text":"VGG-like CNN6 中，all-parameter L2 的 post-input-IF absolute-noise 鲁棒性平均低于 weights-only，且在 5 seeds 上复现。","textPreview":"VGG-like CNN6 中，all-parameter L2 的 post-input-IF absolute-noise 鲁棒性平均低于 weights-only，且在 5 seeds 上复现。","textChars":100,"textLines":1,"bbox":[132,248,470,120]}
+{"kind":"textbox","id":"sh/bidgvitg","slide":11,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[650,190,70,48]}
+{"kind":"textbox","id":"sh/ah4z2dsv","slide":11,"text":"机制定位","textPreview":"机制定位","textChars":4,"textLines":1,"bbox":[740,190,440,42]}
+{"kind":"textbox","id":"sh/sfedofqh","slide":11,"text":"直接正则 IF threshold 是最强负面因素；5-seed mean input threshold 从 6.58 降到 4.22。","textPreview":"直接正则 IF threshold 是最强负面因素；5-seed mean input threshold 从 6.58 降到 4.22。","textChars":69,"textLines":1,"bbox":[740,248,470,120]}
+{"kind":"textbox","id":"sh/tgnehk72","slide":11,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[42,420,70,48]}
+{"kind":"textbox","id":"sh/6dwvmp8r","slide":11,"text":"条件边界","textPreview":"条件边界","textChars":4,"textLines":1,"bbox":[132,420,440,42]}
+{"kind":"textbox","id":"sh/re5wfupc","slide":11,"text":"阈值/RMS 归一化后 gap 消失或反转；深度和 BN 数量本身不足以解释，结构也会调制结果。","textPreview":"阈值/RMS 归一化后 gap 消失或反转；深度和 BN 数量本身不足以解释，结构也会调制结果。","textChars":48,"textLines":1,"bbox":[132,478,470,120]}
+{"kind":"textbox","id":"sh/4budkfql","slide":11,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[650,420,70,48]}
+{"kind":"textbox","id":"sh/5cnedk76","slide":11,"text":"对 MNE-L2 的含义","textPreview":"对 MNE-L2 的含义","textChars":12,"textLines":1,"bbox":[740,420,440,42]}
+{"kind":"textbox","id":"sh/i9cvi58f","slide":11,"text":"MNE-L2 应与 tuned weights-only L2、Orthogonal 和 No Reg 比较。当前证据支持它避开失败模式，不支持其稳健性独一无二。","textPreview":"MNE-L2 应与 tuned weights-only L2、Orthogonal 和 No Reg 比较。当前证据支持它避开失败模式，不支持其稳健性独一无二。","textChars":81,"textLines":1,"bbox":[740,478,470,120]}
+{"kind":"textbox","id":"sh/jalwbap0","slide":11,"text":"下一步：把 causal scopes 的关键两组扩展到 5 seeds，并在 CIFAR VGG 上用相同 parameter scope 与 scale-normalized protocol 复现。","textPreview":"下一步：把 causal scopes 的关键两组扩展到 5 seeds，并在 CIFAR VGG 上用相同 parameter scope 与 scale-normalized protocol 复现。","textChars":102,"textLines":1,"bbox":[42,625,1160,34]}
+{"kind":"notes","id":"nt/jkn15e","slide":11,"text":"最终结论需要保持边界。我们确认的是特定转换和噪声协议下的参数范围效应，不是 raw-image robustness，也不是所有深网络的普遍定律。对论文最有价值的下一步，是用 weights-only L2 作为公平基线重新评价 MNE-L2，并把最关键的 causal scope 在 CIFAR 上复现。\n\n[Sources]\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/multiseed_summary.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/parameter_scope_summary.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/absolute_vs_relative_summary.csv\n- /Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_l2_scope_followup/architecture_2x2_summary.csv"}

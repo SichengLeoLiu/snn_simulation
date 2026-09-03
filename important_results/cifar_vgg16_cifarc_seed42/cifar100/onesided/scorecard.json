@@ -1,0 +1,33 @@
+{
+  "dataset": "cifar100",
+  "method": "onesided",
+  "label": "One-sided",
+  "arch": "vgg16",
+  "seed": 42,
+  "checkpoint": "/scratch/gs14/sl9144/snn_results/cifar_vgg16_onesided_q_assignment_ablation_seed42/cifar100/qabl_risk_a4_tau0.5_b0.0005_rmax8/checkpoints/vgg16_L[16]_qabl_risk_a4_tau0.5_b0.0005_rmax8_seed42_L16_trainT0.pth",
+  "clean": 60.85,
+  "mCA": 43.00999999999999,
+  "n_corrupt_evals": 75,
+  "severity_1": 53.67933333333333,
+  "severity_2": 48.48533333333333,
+  "severity_3": 44.042666666666676,
+  "severity_4": 38.29866666666667,
+  "severity_5": 30.544000000000004,
+  "per_corruption": {
+    "gaussian_noise": 27.766000000000002,
+    "shot_noise": 34.378,
+    "impulse_noise": 39.556,
+    "defocus_blur": 49.1,
+    "glass_blur": 23.838,
+    "motion_blur": 42.732000000000006,
+    "zoom_blur": 45.5,
+    "snow": 44.236000000000004,
+    "frost": 39.870000000000005,
+    "fog": 50.17,
+    "brightness": 58.672000000000004,
+    "contrast": 44.221999999999994,
+    "elastic_transform": 49.653999999999996,
+    "pixelate": 43.732,
+    "jpeg_compression": 51.724000000000004
+  }
+}

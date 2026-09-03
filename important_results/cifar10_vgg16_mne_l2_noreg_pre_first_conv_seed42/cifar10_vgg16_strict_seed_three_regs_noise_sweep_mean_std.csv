@@ -1,0 +1,106 @@
+method,label,sigma,acc_mean,acc_std,n_seeds
+no_regularization,no regularization,0.00,89.820000,0.000000,1
+no_regularization,no regularization,0.05,89.800000,0.000000,1
+no_regularization,no regularization,0.10,89.660000,0.000000,1
+no_regularization,no regularization,0.15,89.620000,0.000000,1
+no_regularization,no regularization,0.20,89.350000,0.000000,1
+no_regularization,no regularization,0.25,88.900000,0.000000,1
+no_regularization,no regularization,0.30,88.530000,0.000000,1
+no_regularization,no regularization,0.35,87.460000,0.000000,1
+no_regularization,no regularization,0.40,86.550000,0.000000,1
+no_regularization,no regularization,0.45,85.320000,0.000000,1
+no_regularization,no regularization,0.50,83.920000,0.000000,1
+no_regularization,no regularization,0.55,81.760000,0.000000,1
+no_regularization,no regularization,0.60,79.920000,0.000000,1
+no_regularization,no regularization,0.65,77.750000,0.000000,1
+no_regularization,no regularization,0.70,75.460000,0.000000,1
+no_regularization,no regularization,0.75,72.780000,0.000000,1
+no_regularization,no regularization,0.80,70.230000,0.000000,1
+no_regularization,no regularization,0.85,67.670000,0.000000,1
+no_regularization,no regularization,0.90,64.630000,0.000000,1
+no_regularization,no regularization,0.95,61.770000,0.000000,1
+no_regularization,no regularization,1.00,58.740000,0.000000,1
+weight_decay,weight_decay,0.00,90.500000,0.000000,1
+weight_decay,weight_decay,0.05,90.400000,0.000000,1
+weight_decay,weight_decay,0.10,90.400000,0.000000,1
+weight_decay,weight_decay,0.15,90.320000,0.000000,1
+weight_decay,weight_decay,0.20,90.130000,0.000000,1
+weight_decay,weight_decay,0.25,89.850000,0.000000,1
+weight_decay,weight_decay,0.30,89.450000,0.000000,1
+weight_decay,weight_decay,0.35,89.180000,0.000000,1
+weight_decay,weight_decay,0.40,88.620000,0.000000,1
+weight_decay,weight_decay,0.45,88.000000,0.000000,1
+weight_decay,weight_decay,0.50,87.250000,0.000000,1
+weight_decay,weight_decay,0.55,86.470000,0.000000,1
+weight_decay,weight_decay,0.60,85.470000,0.000000,1
+weight_decay,weight_decay,0.65,84.020000,0.000000,1
+weight_decay,weight_decay,0.70,83.340000,0.000000,1
+weight_decay,weight_decay,0.75,82.090000,0.000000,1
+weight_decay,weight_decay,0.80,80.470000,0.000000,1
+weight_decay,weight_decay,0.85,79.000000,0.000000,1
+weight_decay,weight_decay,0.90,77.680000,0.000000,1
+weight_decay,weight_decay,0.95,76.080000,0.000000,1
+weight_decay,weight_decay,1.00,74.400000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.00,91.170000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.05,91.140000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.10,91.090000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.15,91.000000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.20,90.760000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.25,90.320000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.30,90.070000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.35,89.530000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.40,89.010000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.45,88.190000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.50,87.350000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.55,86.160000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.60,84.880000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.65,84.040000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.70,82.880000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.75,81.130000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.80,80.260000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.85,78.670000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.90,76.960000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,0.95,75.440000,0.000000,1
+weight_decay_weights_only,weight_decay_weights_only,1.00,73.900000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.00,90.500000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.05,90.440000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.10,90.470000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.15,90.260000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.20,90.110000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.25,89.750000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.30,89.650000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.35,89.060000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.40,88.210000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.45,87.440000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.50,86.460000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.55,85.570000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.60,83.740000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.65,82.370000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.70,80.570000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.75,78.840000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.80,76.790000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.85,74.660000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.90,72.290000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,0.95,70.360000,0.000000,1
+mne_l2,mne_l2 rc=1e-4,1.00,67.680000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.00,89.550000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.05,89.430000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.10,89.420000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.15,89.390000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.20,89.200000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.25,88.990000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.30,88.960000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.35,88.410000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.40,88.230000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.45,87.560000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.50,86.780000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.55,86.120000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.60,85.100000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.65,84.040000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.70,82.960000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.75,81.390000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.80,79.780000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.85,78.320000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.90,76.280000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,0.95,74.370000,0.000000,1
+mne_l2_all,mne_l2_all rc=1e-4,1.00,72.070000,0.000000,1

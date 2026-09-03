@@ -1,0 +1,9 @@
+arch,hidden_size,regularizer,if_mode,L,T,acc_mean,acc_std,n_seeds
+fc3rev_h4,4,weight_decay,rate_uniform,4,0,85.602000,2.662765,5
+fc3rev_h4,4,weight_decay,rate_uniform,4,16,86.448000,2.613947,5
+fc3rev_h4,4,weight_decay,rate_uniform,16,0,68.786000,32.152072,5
+fc3rev_h4,4,weight_decay,rate_uniform,16,16,68.786000,32.152072,5
+fc3rev_h8,8,weight_decay,rate_uniform,4,0,93.638000,0.952323,5
+fc3rev_h8,8,weight_decay,rate_uniform,4,16,94.154000,1.028703,5
+fc3rev_h8,8,weight_decay,rate_uniform,16,0,93.758000,0.892816,5
+fc3rev_h8,8,weight_decay,rate_uniform,16,16,93.758000,0.892816,5

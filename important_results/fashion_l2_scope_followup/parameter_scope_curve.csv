@@ -1,0 +1,26 @@
+method,method_label,sigma,n_noise_draws,accuracy_mean,accuracy_std
+manual_l2_all,All parameters,0.0,1,88.29,0.0
+manual_l2_all,All parameters,0.25,5,79.41,0.17930421077041225
+manual_l2_all,All parameters,0.5,5,62.958,0.17838161340227887
+manual_l2_all,All parameters,0.75,5,48.026,0.2617823523463711
+manual_l2_all,All parameters,1.0,5,37.066,0.18338484124921425
+manual_l2_w_bn,Weights + BN,0.0,1,88.37,0.0
+manual_l2_w_bn,Weights + BN,0.25,5,84.322,0.16634301909007435
+manual_l2_w_bn,Weights + BN,0.5,5,73.638,0.137186005117143
+manual_l2_w_bn,Weights + BN,0.75,5,55.632,0.31059620087824547
+manual_l2_w_bn,Weights + BN,1.0,5,42.236,0.2776328510821442
+manual_l2_w_bn_if,Weights + BN + IF,0.0,1,87.55,0.0
+manual_l2_w_bn_if,Weights + BN + IF,0.25,5,83.442,0.21614809737770038
+manual_l2_w_bn_if,Weights + BN + IF,0.5,5,68.536,0.28728035087697723
+manual_l2_w_bn_if,Weights + BN + IF,0.75,5,49.364,0.22423202269078352
+manual_l2_w_bn_if,Weights + BN + IF,1.0,5,35.798,0.23188359148503748
+manual_l2_w_if,Weights + IF,0.0,1,88.06,0.0
+manual_l2_w_if,Weights + IF,0.25,5,78.684,0.1453616180427304
+manual_l2_w_if,Weights + IF,0.5,5,56.226,0.10064790112068993
+manual_l2_w_if,Weights + IF,0.75,5,42.368,0.32236625133534147
+manual_l2_w_if,Weights + IF,1.0,5,33.078,0.3213564998564679
+wd_weight_only,Weights only,0.0,1,87.49,0.0
+wd_weight_only,Weights only,0.25,5,83.19800000000001,0.22576536492562596
+wd_weight_only,Weights only,0.5,5,74.048,0.23657979626333545
+wd_weight_only,Weights only,0.75,5,60.932,0.35954137453150153
+wd_weight_only,Weights only,1.0,5,48.25,0.46238512086787537

@@ -1,0 +1,5 @@
+site,method,method_label,sigma_scale,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,88.290000,1,37.066000,51.224000,0.419821,63.268000,0.716593
+post_input_if,mne_global_wd_all,MNE-L2 + WD (all params),absolute,88.070000,1,40.876000,47.194000,0.464131,66.514750,0.755249
+post_input_if,mne_scale_trainable,MNE-L2 (BN/IF trainable),absolute,86.550000,1,44.664000,41.886000,0.516049,68.471250,0.791118
+post_input_if,old_detach,MNE-L2,absolute,87.260000,1,42.576000,44.684000,0.487921,68.508000,0.785102

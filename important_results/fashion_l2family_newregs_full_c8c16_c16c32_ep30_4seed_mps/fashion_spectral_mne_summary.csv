@@ -1,0 +1,5 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cnn2_c16_c32,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0,88.220000,0.287402,1,50.955000,8.181485,37.265000,0.577590
+cnn2_c16_c32,threshold_l2,threshold_l2_rc0p0001,threshold_l2,0p0001,0,88.090000,0.329242,1,50.205000,7.270362,37.885000,0.569928
+cnn2_c8_c16,l2_sp,l2_sp_rc0p01,l2_sp,0p01,0,87.010000,0.453064,1,62.152500,9.595306,24.857500,0.714314
+cnn2_c8_c16,threshold_l2,threshold_l2_rc0p0001,threshold_l2,0p0001,0,87.125000,0.477598,1,60.517500,8.138281,26.607500,0.694605

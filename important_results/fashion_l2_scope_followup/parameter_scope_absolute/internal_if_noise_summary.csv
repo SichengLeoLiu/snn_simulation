@@ -1,0 +1,6 @@
+site,method,method_label,sigma_scale,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,88.290000,1,37.066000,51.224000,0.419821,63.268000,0.716593
+post_input_if,manual_l2_w_bn,L2 (weights + BN),absolute,88.370000,1,42.236000,46.134000,0.477945,69.723750,0.788998
+post_input_if,manual_l2_w_bn_if,L2 (weights + BN + IF),absolute,87.550000,1,35.798000,51.752000,0.408886,65.754000,0.751045
+post_input_if,manual_l2_w_if,L2 (weights + IF),absolute,88.060000,1,33.078000,54.982000,0.375630,59.461750,0.675241
+post_input_if,wd_weight_only,WD (weights only),absolute,87.490000,1,48.250000,39.240000,0.551492,71.512000,0.817373

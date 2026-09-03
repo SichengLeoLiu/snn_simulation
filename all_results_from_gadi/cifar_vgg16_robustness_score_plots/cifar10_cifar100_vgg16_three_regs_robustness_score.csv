@@ -1,0 +1,7 @@
+dataset,method,method_label,RS_mean,RS_std,RS_sem,n_seeds
+cifar10,weight_decay,L2,0.814650,0.027532,0.012313,5
+cifar10,mne_l2,MNE-L2,0.998852,0.000365,0.000163,5
+cifar10,no_regularization,No Reg,0.999638,0.000749,0.000335,5
+cifar100,weight_decay,L2,0.799610,0.026584,0.011889,5
+cifar100,mne_l2,MNE-L2,0.999152,0.001551,0.000694,5
+cifar100,no_regularization,No Reg,1.001267,0.002759,0.001593,3

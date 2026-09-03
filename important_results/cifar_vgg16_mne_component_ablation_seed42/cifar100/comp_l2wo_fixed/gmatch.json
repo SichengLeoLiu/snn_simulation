@@ -1,0 +1,12 @@
+{
+  "dataset": "cifar100",
+  "seed": 42,
+  "quant_level": 16,
+  "mne_rc": 0.0001,
+  "mne_weight_grad_norm": 2.494915723800659,
+  "target_coeff_grad_norm": 0.00024949157238006594,
+  "l2wo_weight_l2": 100.9614486694336,
+  "fixed_weight_decay": 0.0005,
+  "gmatch_weight_decay": 2.4711568194405307e-06,
+  "gmatch_scale_vs_fixed_wd": 0.004942313638881061
+}

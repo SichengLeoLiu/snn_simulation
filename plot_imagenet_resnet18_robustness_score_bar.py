@@ -13,8 +13,8 @@ OUT_CSV = ROOT / "imagenet_resnet18_three_regs_drs.csv"
 OUT_BASE = ROOT / "imagenet_resnet18_three_regs_drs_bar"
 
 METHODS = [
-    ("L2", "acc_l2_weight_decay", "#ff7f0e"),
-    ("MNE-L2", "acc_mne_l2_rc1e-4", "#1f77b4"),
+    ("MNE-L2 (Ours)", "acc_mne_l2_rc1e-4", "#ff7f0e"),
+    ("L2", "acc_l2_weight_decay", "#1f77b4"),
     ("No Reg", None, "#2ca02c"),
 ]
 
@@ -35,7 +35,7 @@ def load_curves():
 
     return {
         "L2": (sigmas, l2),
-        "MNE-L2": (sigmas, mne),
+        "MNE-L2 (Ours)": (sigmas, mne),
         "No Reg": (sigmas_nr, no_reg),
     }
 
@@ -109,7 +109,9 @@ def plot_bar(rows):
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_ylabel("Derivative Robustness Score (DRS)")
-    ax.set_ylim(max(0.0, min(values) - 0.08), min(1.08, max(values) + 0.08))
+    spread = max(values) - min(values)
+    pad = max(0.02, 0.18 * spread)
+    ax.set_ylim(max(0.0, min(values) - pad), min(1.08, max(values) + pad))
     ax.grid(axis="y", alpha=0.24, linewidth=0.9)
     fig.tight_layout()
 

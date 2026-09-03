@@ -1,0 +1,7 @@
+noise_position,method,n_seeds,clean_acc_mean,sigma1_acc_mean,sigma1_acc_std,absolute_drop
+pre_input_if,MNE-L2,5,90.378000,90.156000,0.215708,0.222000
+pre_input_if,Weight decay,5,90.594000,83.216000,0.666543,7.378000
+pre_input_if,L1,5,89.874000,89.184000,0.292968,0.690000
+post_input_if,MNE-L2,5,90.378000,90.120000,0.183303,0.258000
+post_input_if,Weight decay,5,90.594000,23.200000,6.438979,67.394000
+post_input_if,L1,5,89.874000,89.508000,0.194859,0.366000

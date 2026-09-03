@@ -1,0 +1,7 @@
+sigma_scale,method,method_label,clean_accuracy,end_sigma,end_accuracy,absolute_drop,curve_auc
+absolute,manual_l2_all,All parameters,88.29,1.0,37.066,51.224000000000004,63.268
+absolute,wd_weight_only,Weights only,87.49,1.0,48.25,39.239999999999995,71.512
+input_if_threshold,manual_l2_all,All parameters,88.29,0.2,43.43,44.86000000000001,67.539
+input_if_threshold,wd_weight_only,Weights only,87.49,0.2,35.67,51.81999999999999,64.232
+post_input_if_rms,manual_l2_all,All parameters,88.29,1.0,27.01,61.28,54.573
+post_input_if_rms,wd_weight_only,Weights only,87.49,1.0,25.192,62.297999999999995,56.07175

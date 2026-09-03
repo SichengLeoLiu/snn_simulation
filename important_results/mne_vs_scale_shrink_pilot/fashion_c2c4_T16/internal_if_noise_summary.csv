@@ -1,0 +1,15 @@
+site,method,method_label,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+both,elastic_net_all,Elastic Net (all params),81.590000,1,14.266667,67.323333,0.174858,37.712917,0.462225
+both,l1_all,L1 (all params),81.190000,1,22.776667,58.413333,0.280535,51.133750,0.629804
+both,no_reg_current,No Reg,82.070000,1,21.306667,60.763333,0.259616,48.091250,0.585978
+both,old_detach_current,MNE-L2,81.940000,1,20.820000,61.120000,0.254088,44.105417,0.538265
+both,scale_l2,Scale-L2 diagnostic,82.210000,1,16.610000,65.600000,0.202044,41.214167,0.501328
+both,wd_all_current,WD (all params),81.710000,1,15.883333,65.826667,0.194387,40.170000,0.491617
+both,wd_weight_only,WD (weights only),82.190000,1,17.070000,65.120000,0.207689,44.675833,0.543568
+post_input_if,elastic_net_all,Elastic Net (all params),81.590000,1,37.480000,44.110000,0.459370,61.839167,0.757926
+post_input_if,l1_all,L1 (all params),81.190000,1,49.140000,32.050000,0.605247,69.765000,0.859281
+post_input_if,no_reg_current,No Reg,82.070000,1,45.580000,36.490000,0.555380,65.627917,0.799658
+post_input_if,old_detach_current,MNE-L2,81.940000,1,44.750000,37.190000,0.546131,62.053750,0.757307
+post_input_if,scale_l2,Scale-L2 diagnostic,82.210000,1,39.973333,42.236667,0.486234,63.762500,0.775605
+post_input_if,wd_all_current,WD (all params),81.710000,1,40.520000,41.190000,0.495900,63.602500,0.778393
+post_input_if,wd_weight_only,WD (weights only),82.190000,1,42.116667,40.073333,0.512431,65.715000,0.799550

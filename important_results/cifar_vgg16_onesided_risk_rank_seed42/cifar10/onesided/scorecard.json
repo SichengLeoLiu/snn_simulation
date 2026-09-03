@@ -1,0 +1,522 @@
+{
+  "dataset": "cifar10",
+  "method": "onesided",
+  "seed": 42,
+  "checkpoint": "/scratch/gs14/sl9144/snn_results/cifar_vgg16_onesided_q_assignment_ablation_seed42/cifar10/qabl_risk_a4_tau0.5_b0.0005_rmax8/checkpoints/vgg16_L[16]_qabl_risk_a4_tau0.5_b0.0005_rmax8_seed42_L16_trainT0.pth",
+  "n_images": 2000,
+  "n_noise": 5,
+  "sigmas": [
+    0.25,
+    0.5,
+    1.0
+  ],
+  "n_scored_channels": 14,
+  "paired": {
+    "0.25": {
+      "delta_logit_rms": 0.17925385202491267,
+      "delta_logit_rms_over_sqrtK": 0.0801647596712786,
+      "delta_margin": 0.002448712480068207,
+      "clean_acc": 92.5,
+      "noisy_acc": 92.61,
+      "n": 10000.0
+    },
+    "0.5": {
+      "delta_logit_rms": 0.22506046290748272,
+      "delta_logit_rms_over_sqrtK": 0.10065009882174025,
+      "delta_margin": 0.0033277411341667176,
+      "clean_acc": 92.5,
+      "noisy_acc": 92.54,
+      "n": 10000.0
+    },
+    "1.0": {
+      "delta_logit_rms": 0.3515407088922542,
+      "delta_logit_rms_over_sqrtK": 0.15721378438830902,
+      "delta_margin": 0.00786064429283142,
+      "clean_acc": 92.5,
+      "noisy_acc": 92.59,
+      "n": 10000.0
+    }
+  },
+  "spearman": [
+    {
+      "predictor": "r",
+      "outcome": "A",
+      "global_rho": -0.4069322817359124,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.4623581022193928,
+        -0.40441048641635857
+      ],
+      "layer_rho": 0.24835164835164836,
+      "within_layer_rho_mean": 0.675938174306824,
+      "within_layer_rho_median": 0.8129189954885063,
+      "ranknorm_rho": 0.5894702662648548,
+      "perm_null_median": 0.03702120205810326,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "r",
+      "outcome": "p_cross",
+      "global_rho": -0.4383733766659588,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.4947281013862264,
+        -0.4381902519858782
+      ],
+      "layer_rho": 0.01098901098901099,
+      "within_layer_rho_mean": -0.1642722542705329,
+      "within_layer_rho_median": -0.3315396521486825,
+      "ranknorm_rho": 0.3909164433581018,
+      "perm_null_median": 0.039022508046583124,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "m",
+      "outcome": "p_cross",
+      "global_rho": 0.7593063434816965,
+      "global_mae": NaN,
+      "global_ci95": [
+        0.7471064731305201,
+        0.7870494366765313
+      ],
+      "layer_rho": 0.5472527472527472,
+      "within_layer_rho_mean": 0.15037768547468475,
+      "within_layer_rho_median": 0.10428222561254734,
+      "ranknorm_rho": 0.589469985820764,
+      "perm_null_median": 0.0036989496619310087,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "q",
+      "outcome": "p_cross",
+      "global_rho": -0.44653785518048406,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.50279906548999,
+        -0.44265163604300983
+      ],
+      "layer_rho": 0.02857142857142857,
+      "within_layer_rho_mean": -0.12021038389966972,
+      "within_layer_rho_median": -0.09968198155686711,
+      "ranknorm_rho": 0.3901571088807857,
+      "perm_null_median": 0.03788786596494656,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "r",
+      "outcome": "D",
+      "global_rho": -0.3858534878619151,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.44473574845403435,
+        -0.38180446236884436
+      ],
+      "layer_rho": 0.6615384615384616,
+      "within_layer_rho_mean": -0.5717047972804516,
+      "within_layer_rho_median": -0.5778539275620154,
+      "ranknorm_rho": 0.23459588069774248,
+      "perm_null_median": 0.03531330065316997,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "m",
+      "outcome": "I_output",
+      "global_rho": 0.8054306371938337,
+      "global_mae": NaN,
+      "global_ci95": [
+        0.7923966104852677,
+        0.8351298898964614
+      ],
+      "layer_rho": 0.8725274725274725,
+      "within_layer_rho_mean": 0.44115679131819135,
+      "within_layer_rho_median": 0.46901919403320863,
+      "ranknorm_rho": 0.6571699726429697,
+      "perm_null_median": 0.016196683437061724,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "p_bound",
+      "outcome": "p_cross",
+      "global_rho": 0.9962512779367864,
+      "global_mae": 0.012452813326262788,
+      "global_ci95": [
+        0.9019306012758944,
+        0.9963156163053758
+      ],
+      "layer_rho": 0.9780219780219781,
+      "within_layer_rho_mean": 0.9444892698810973,
+      "within_layer_rho_median": 0.9555391864075808,
+      "ranknorm_rho": 0.9723242333737366,
+      "perm_null_median": 0.14552545847230702,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "p_bound_D",
+      "outcome": "I_output",
+      "global_rho": 0.9651807649915494,
+      "global_mae": 1.268298822934129e-09,
+      "global_ci95": [
+        0.8564322013718925,
+        0.9666305664674514
+      ],
+      "layer_rho": 0.745054945054945,
+      "within_layer_rho_mean": 0.6862627249759675,
+      "within_layer_rho_median": 0.8268196532999165,
+      "ranknorm_rho": 0.917591841003203,
+      "perm_null_median": 0.1909369156340897,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.25
+    },
+    {
+      "predictor": "r",
+      "outcome": "A",
+      "global_rho": -0.4080308654239327,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.46489613945053115,
+        -0.40462507695588845
+      ],
+      "layer_rho": 0.3010989010989011,
+      "within_layer_rho_mean": 0.6595146947259952,
+      "within_layer_rho_median": 0.7947991671621939,
+      "ranknorm_rho": 0.583322885925505,
+      "perm_null_median": 0.03553904485718587,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "r",
+      "outcome": "p_cross",
+      "global_rho": -0.43678956891532733,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.49278962976781715,
+        -0.4335976383913357
+      ],
+      "layer_rho": 0.03736263736263736,
+      "within_layer_rho_mean": -0.18333563621413276,
+      "within_layer_rho_median": -0.3458571986070393,
+      "ranknorm_rho": 0.38648448374848715,
+      "perm_null_median": 0.04029867520418283,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "m",
+      "outcome": "p_cross",
+      "global_rho": 0.7633949253740219,
+      "global_mae": NaN,
+      "global_ci95": [
+        0.7519788097246045,
+        0.791457740820729
+      ],
+      "layer_rho": 0.6,
+      "within_layer_rho_mean": 0.13129200733769147,
+      "within_layer_rho_median": 0.09413351264863072,
+      "ranknorm_rho": 0.5840531038138982,
+      "perm_null_median": 0.004873194679743748,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "q",
+      "outcome": "p_cross",
+      "global_rho": -0.4447808695075165,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.5033444122896056,
+        -0.44303714887187595
+      ],
+      "layer_rho": 0.04615384615384615,
+      "within_layer_rho_mean": -0.12941104055622943,
+      "within_layer_rho_median": -0.10584527364535604,
+      "ranknorm_rho": 0.3893941067324358,
+      "perm_null_median": 0.03319481484899302,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "r",
+      "outcome": "D",
+      "global_rho": -0.3858534878619151,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.4416070343167582,
+        -0.38026892780424754
+      ],
+      "layer_rho": 0.6615384615384616,
+      "within_layer_rho_mean": -0.5717047972804516,
+      "within_layer_rho_median": -0.5778539275620154,
+      "ranknorm_rho": 0.23459588069774248,
+      "perm_null_median": 0.03369380162751191,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "m",
+      "outcome": "I_output",
+      "global_rho": 0.8052846572606565,
+      "global_mae": NaN,
+      "global_ci95": [
+        0.7920756211938322,
+        0.834939081353618
+      ],
+      "layer_rho": 0.9032967032967033,
+      "within_layer_rho_mean": 0.42627066463598223,
+      "within_layer_rho_median": 0.4467207765720651,
+      "ranknorm_rho": 0.6519166104582327,
+      "perm_null_median": 0.017288003914128276,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "p_bound",
+      "outcome": "p_cross",
+      "global_rho": 0.9963997078636186,
+      "global_mae": 0.016080173861009333,
+      "global_ci95": [
+        0.9023748904081507,
+        0.9965708588757003
+      ],
+      "layer_rho": 0.9692307692307693,
+      "within_layer_rho_mean": 0.9394414186180097,
+      "within_layer_rho_median": 0.954044861223637,
+      "ranknorm_rho": 0.9700439669172283,
+      "perm_null_median": 0.1469897135209068,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "p_bound_D",
+      "outcome": "I_output",
+      "global_rho": 0.965864224190853,
+      "global_mae": 3.0830613671991995e-09,
+      "global_ci95": [
+        0.8592424997419704,
+        0.9671154803441447
+      ],
+      "layer_rho": 0.7538461538461538,
+      "within_layer_rho_mean": 0.6910362373580314,
+      "within_layer_rho_median": 0.8295270854075829,
+      "ranknorm_rho": 0.9194377748590041,
+      "perm_null_median": 0.18128678209766647,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 0.5
+    },
+    {
+      "predictor": "r",
+      "outcome": "A",
+      "global_rho": -0.40920903798982394,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.4640623692528043,
+        -0.40642796851254087
+      ],
+      "layer_rho": 0.2967032967032967,
+      "within_layer_rho_mean": 0.6256161100281867,
+      "within_layer_rho_median": 0.7286263396895021,
+      "ranknorm_rho": 0.570717905975995,
+      "perm_null_median": 0.03349686065468685,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    },
+    {
+      "predictor": "r",
+      "outcome": "p_cross",
+      "global_rho": -0.43815166264149186,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.49734148571946474,
+        -0.4344354940428663
+      ],
+      "layer_rho": 0.032967032967032975,
+      "within_layer_rho_mean": -0.23404298122448922,
+      "within_layer_rho_median": -0.40372382193473777,
+      "ranknorm_rho": 0.37457558607060254,
+      "perm_null_median": 0.04188791942046963,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    },
+    {
+      "predictor": "m",
+      "outcome": "p_cross",
+      "global_rho": 0.7611844329016959,
+      "global_mae": NaN,
+      "global_ci95": [
+        0.7489015780280209,
+        0.789014208555777
+      ],
+      "layer_rho": 0.5472527472527472,
+      "within_layer_rho_mean": 0.07980111874861552,
+      "within_layer_rho_median": 0.05761809274899577,
+      "ranknorm_rho": 0.5697339591762587,
+      "perm_null_median": 0.004785776481382356,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    },
+    {
+      "predictor": "q",
+      "outcome": "p_cross",
+      "global_rho": -0.4459710596850021,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.5031809799135584,
+        -0.44256700461349596
+      ],
+      "layer_rho": 0.04615384615384615,
+      "within_layer_rho_mean": -0.15062049997519095,
+      "within_layer_rho_median": -0.1077097180271965,
+      "ranknorm_rho": 0.3875849241186379,
+      "perm_null_median": 0.03984189993506195,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    },
+    {
+      "predictor": "r",
+      "outcome": "D",
+      "global_rho": -0.3858534878619151,
+      "global_mae": NaN,
+      "global_ci95": [
+        -0.44205519596464404,
+        -0.38484315421598836
+      ],
+      "layer_rho": 0.6615384615384616,
+      "within_layer_rho_mean": -0.5717047972804516,
+      "within_layer_rho_median": -0.5778539275620154,
+      "ranknorm_rho": 0.23459588069774248,
+      "perm_null_median": 0.034887843694363194,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    },
+    {
+      "predictor": "m",
+      "outcome": "I_output",
+      "global_rho": 0.8048988602017395,
+      "global_mae": NaN,
+      "global_ci95": [
+        0.7925210472155688,
+        0.8335482471389659
+      ],
+      "layer_rho": 0.8857142857142857,
+      "within_layer_rho_mean": 0.3980227453589759,
+      "within_layer_rho_median": 0.3930237558890017,
+      "ranknorm_rho": 0.6416056478885168,
+      "perm_null_median": 0.017685988698944492,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    },
+    {
+      "predictor": "p_bound",
+      "outcome": "p_cross",
+      "global_rho": 0.9964307681530163,
+      "global_mae": 0.025128551214322364,
+      "global_ci95": [
+        0.9059001913441815,
+        0.996747221707488
+      ],
+      "layer_rho": 0.9824175824175824,
+      "within_layer_rho_mean": 0.9374455906512777,
+      "within_layer_rho_median": 0.9529590505401939,
+      "ranknorm_rho": 0.9682608641711752,
+      "perm_null_median": 0.1498256135873236,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    },
+    {
+      "predictor": "p_bound_D",
+      "outcome": "I_output",
+      "global_rho": 0.9669332904999861,
+      "global_mae": 1.0143975583848427e-08,
+      "global_ci95": [
+        0.8591418066122912,
+        0.9681680656298837
+      ],
+      "layer_rho": 0.7406593406593407,
+      "within_layer_rho_mean": 0.6973151864047011,
+      "within_layer_rho_median": 0.8363319650438883,
+      "ranknorm_rho": 0.9223987824618708,
+      "perm_null_median": 0.1867028501143334,
+      "n_channels": 12352,
+      "n_layers": 14,
+      "dataset": "cifar10",
+      "method": "onesided",
+      "sigma": 1.0
+    }
+  ]
+}

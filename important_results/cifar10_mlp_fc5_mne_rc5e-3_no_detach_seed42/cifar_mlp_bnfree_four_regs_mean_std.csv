@@ -1,0 +1,12 @@
+dataset,method,method_label,sigma,n,acc_mean,acc_std
+cifar10,old_no_detach,MNE-standard (lambda trainable),0,1,49.530000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.1,1,49.390000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.2,1,49.320000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.3,1,49.310000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.4,1,49.200000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.5,1,48.830000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.6,1,49.160000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.7,1,48.760000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.8,1,48.130000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),0.9,1,48.670000,0.000000
+cifar10,old_no_detach,MNE-standard (lambda trainable),1,1,47.940000,0.000000

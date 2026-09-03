@@ -1,0 +1,5 @@
+method,method_label,clean_sigma,clean_acc_mean,end_sigma,end_acc_mean,absolute_drop,relative_retention
+calibrated_mne_a0p1,Calibrated MNE (α=0.1),0,87.760000,3,25.570000,62.190000,0.291363
+old_detach,Old MNE (detach λ),0,87.580000,3,25.060000,62.520000,0.286138
+weight_decay,L2-all (all params),0,87.860000,3,24.460000,63.400000,0.278397
+weight_decay_weights_only,L2-wo (weights only),0,87.770000,3,24.710000,63.060000,0.281531

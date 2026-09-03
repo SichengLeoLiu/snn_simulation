@@ -1,0 +1,5 @@
+architecture,scope,input_if_threshold,hidden_if_threshold_mean,bn_gamma_abs_mean,folded_gain_geomean,folded_gain_product
+narrow_cnn6,weights_only,6.555785,7.318934,1.930650,0.223544,0.000124790019244
+narrow_cnn6,all_params,4.544950,5.037336,1.504619,0.317265,0.001019842504820
+vgglike_cnn6,weights_only,6.585082,7.504211,1.237914,0.196120,0.000056902124944
+vgglike_cnn6,all_params,4.211753,5.114724,0.940539,0.285672,0.000543508171294

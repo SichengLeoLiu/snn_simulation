@@ -1,0 +1,2 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+fc3_h8,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em06,0,73.290000,0.000000,0,73.290000,0.000000,0.000000,1.000000

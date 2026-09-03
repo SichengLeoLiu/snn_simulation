@@ -1,0 +1,5 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cnn2_c16_c32,group_lasso,group_lasso_rc1em05,group_lasso,1em05,0,88.095000,0.397366,1,52.342500,9.294039,35.752500,0.594160
+cnn2_c16_c32,spectral_norm,spectral_norm_rc0p0001,spectral_norm,0p0001,0,88.167500,0.249182,1,49.407500,5.975279,38.760000,0.560382
+cnn2_c8_c16,group_lasso,group_lasso_rc1em05,group_lasso,1em05,0,87.037500,0.478496,1,60.735000,7.147869,26.302500,0.697803
+cnn2_c8_c16,spectral_norm,spectral_norm_rc0p0001,spectral_norm,0p0001,0,86.992500,0.449027,1,60.965000,5.720259,26.027500,0.700808

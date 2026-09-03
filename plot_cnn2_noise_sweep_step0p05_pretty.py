@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parent
 GADI = ROOT / "all_results_from_gadi"
 ARCHES = ["cnn2_c2_c4", "cnn2_c4_c8", "cnn2_c8_c16", "cnn2_c16_c32"]
-METHODS = ["weight_decay", "mne_l2", "no_regularization"]
+METHODS = ["mne_l2", "weight_decay", "no_regularization"]
 
 LINE_STYLES = {
-    "weight_decay": {"color": "#ff7f0e", "label": "L2"},
-    "mne_l2": {"color": "#1f77b4", "label": "MNE L2"},
-    "no_regularization": {"color": "#2ca02c", "label": "No reg"},
+    "mne_l2": {"color": "#ff7f0e", "label": "MNE-L2 (Ours)"},
+    "weight_decay": {"color": "#1f77b4", "label": "L2"},
+    "no_regularization": {"color": "#2ca02c", "label": "No Reg"},
 }
 
 

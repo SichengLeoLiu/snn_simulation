@@ -1,0 +1,5 @@
+arch,hidden_size,regularizer,if_mode,L,T,acc_mean,acc_std,n_seeds
+fc3rev_h4,4,weight_decay,normal,4,0,85.602000,2.662765,5
+fc3rev_h4,4,weight_decay,normal,4,16,86.442000,2.627217,5
+fc3rev_h4,4,weight_decay,normal,16,0,68.786000,32.152072,5
+fc3rev_h4,4,weight_decay,normal,16,16,68.870000,32.197307,5

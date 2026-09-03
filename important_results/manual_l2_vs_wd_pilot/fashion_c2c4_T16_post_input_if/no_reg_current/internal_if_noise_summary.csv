@@ -1,0 +1,2 @@
+site,method,method_label,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+post_input_if,no_reg_current,No Reg,82.070000,1,45.580000,36.490000,0.555380,65.627917,0.799658

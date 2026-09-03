@@ -1,0 +1,127 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{davies2018loihi}
+\citation{rueckauer2017conversion,sengupta2019going}
+\citation{bu2022optimal}
+\citation{hu2023fast,bu2022optimal}
+\citation{ding2024robust,ozdenizci2024adversarial}
+\citation{ioffe2015batch}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\citation{bohte2002error,fang2021deep,guo2023direct}
+\citation{rueckauer2017conversion,sengupta2019going}
+\citation{diehl2015fast,rueckauer2017conversion}
+\citation{bu2022potential}
+\citation{li2021free}
+\citation{hao2023residual,hao2023bridging}
+\citation{bojkovic2025temporal}
+\citation{hu2023fast,bu2022optimal}
+\citation{liu2022spikeconverter,liu2025efficient,yang2025neubridge}
+\citation{vanlaarhoven2017l2}
+\citation{kim2024gamma}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces CIFAR-10 VGG16 parameter-scope ablation with Gaussian noise applied independently at each SNN timestep. At $\sigma =1$, including BN-$\gamma $, with or without BN-$\beta $, causes a sharp accuracy collapse.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:bn-scope}{{1}{2}{CIFAR-10 VGG16 parameter-scope ablation with Gaussian noise applied independently at each SNN timestep. At $\sigma =1$, including BN-$\gamma $, with or without BN-$\beta $, causes a sharp accuracy collapse}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Low-latency ANN-to-SNN conversion.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Regularization scope in normalized networks.}{2}{section*.2}\protected@file@percent }
+\citation{rahnama2020robust}
+\citation{ding2024robust}
+\citation{araya2026random}
+\citation{ozdenizci2024adversarial}
+\citation{bu2022optimal}
+\@writefile{toc}{\contentsline {paragraph}{Stability and noise sensitivity.}{3}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Method}{3}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Low-latency QCFS conversion}{3}{subsection.3.1}\protected@file@percent }
+\newlabel{eq:qcfs}{{1}{3}{Low-latency QCFS conversion}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Local noise-to-margin analysis}{3}{subsection.3.2}\protected@file@percent }
+\newlabel{eq:crossing-bound}{{2}{3}{Local noise-to-margin analysis}{equation.2}{}}
+\newlabel{eq:diagnostics}{{3}{3}{Local noise-to-margin analysis}{equation.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Margin-aware weight regularization}{3}{subsection.3.3}\protected@file@percent }
+\newlabel{eq:effective-weight}{{4}{3}{Margin-aware weight regularization}{equation.4}{}}
+\newlabel{eq:mne}{{5}{3}{Margin-aware weight regularization}{equation.5}{}}
+\citation{krizhevsky2009learning}
+\citation{deng2009imagenet}
+\citation{he2016deep}
+\citation{ozdenizci2024adversarial}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{4}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Setup}{4}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}BN gain distinguishes the unstable scope settings}{4}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}MNE-L2 across CIFAR and ImageNet}{4}{subsection.4.3}\protected@file@percent }
+\citation{horowitz2014computing}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Per-timestep Gaussian-noise sweeps at $L=T=16$. (a,b) CIFAR VGG16 curves are five-seed means; bands show sample standard deviations across seeds 40--44. (c) ImageNet ResNet-18 uses one seed-42 checkpoint and therefore has no uncertainty band. MNE-L2 is highlighted in red and all data points use circular markers.}}{5}{figure.2}\protected@file@percent }
+\newlabel{fig:robustness-benchmarks}{{2}{5}{Per-timestep Gaussian-noise sweeps at $L=T=16$. (a,b) CIFAR VGG16 curves are five-seed means; bands show sample standard deviations across seeds 40--44. (c) ImageNet ResNet-18 uses one seed-42 checkpoint and therefore has no uncertainty band. MNE-L2 is highlighted in red and all data points use circular markers}{figure.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Five-seed CIFAR VGG16 robustness--activity summary at $T=16$ (mean $\pm $ sample standard deviation; 10,000 test images per seed). Accuracy is measured under per-timestep Gaussian noise at $\sigma =5$; firing density and arithmetic energy use clean inference. The best value in each dataset and metric is bold, and the second-best is underlined. Clean accuracy and full activity distributions appear in Appendix~\ref {app:cifar-tables}.}}{5}{table.1}\protected@file@percent }
+\newlabel{tab:cifar-deployment-main}{{1}{5}{Five-seed CIFAR VGG16 robustness--activity summary at $T=16$ (mean $\pm $ sample standard deviation; 10,000 test images per seed). Accuracy is measured under per-timestep Gaussian noise at $\sigma =5$; firing density and arithmetic energy use clean inference. The best value in each dataset and metric is bold, and the second-best is underlined. Clean accuracy and full activity distributions appear in Appendix~\ref {app:cifar-tables}}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Clean sparsity, robustness, and estimated energy}{5}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Implications, Limitations, and Conclusion}{5}{section.5}\protected@file@percent }
+\bibstyle{unsrtnat}
+\bibdata{reference}
+\bibcite{davies2018loihi}{{1}{2018}{{Davies et~al.}}{{Davies, Srinivasa, Lin, Chinya, Cao, Choday, Dimou, Joshi, Imam, Jain, et~al.}}}
+\bibcite{rueckauer2017conversion}{{2}{2017}{{Rueckauer et~al.}}{{Rueckauer, Lungu, Hu, Pfeiffer, and Liu}}}
+\bibcite{sengupta2019going}{{3}{2019}{{Sengupta et~al.}}{{Sengupta, Ye, Wang, Liu, and Roy}}}
+\bibcite{bu2022optimal}{{4}{2022{}}{{Bu et~al.}}{{Bu, Fang, Ding, Dai, Yu, and Huang}}}
+\bibcite{hu2023fast}{{5}{2023}{{Hu et~al.}}{{Hu, Zheng, Jiang, and Pan}}}
+\bibcite{ding2024robust}{{6}{2024}{{Ding et~al.}}{{Ding, Pan, Liu, Yu, and Huang}}}
+\bibcite{ozdenizci2024adversarial}{{7}{2024}{{{\"O}zdenizci and Legenstein}}{{}}}
+\bibcite{ioffe2015batch}{{8}{2015}{{Ioffe and Szegedy}}{{}}}
+\bibcite{bohte2002error}{{9}{2002}{{Bohte et~al.}}{{Bohte, Kok, and La~Poutre}}}
+\bibcite{fang2021deep}{{10}{2021}{{Fang et~al.}}{{Fang, Yu, Chen, Huang, Masquelier, and Tian}}}
+\bibcite{guo2023direct}{{11}{2023}{{Guo et~al.}}{{Guo, Huang, and Ma}}}
+\bibcite{diehl2015fast}{{12}{2015}{{Diehl et~al.}}{{Diehl, Neil, Binas, Cook, Liu, and Pfeiffer}}}
+\bibcite{bu2022potential}{{13}{2022{}}{{Bu et~al.}}{{Bu, Ding, Yu, and Huang}}}
+\bibcite{li2021free}{{14}{2021}{{Li et~al.}}{{Li, Deng, Dong, Gong, and Gu}}}
+\bibcite{hao2023residual}{{15}{2023{}}{{Hao et~al.}}{{Hao, Bu, Ding, Huang, and Yu}}}
+\bibcite{hao2023bridging}{{16}{2023{}}{{Hao et~al.}}{{Hao, Ding, Bu, Huang, and Yu}}}
+\bibcite{bojkovic2025temporal}{{17}{2025}{{Bojkovic et~al.}}{{Bojkovic, Wu, and Gu}}}
+\bibcite{liu2022spikeconverter}{{18}{2022}{{Liu et~al.}}{{Liu, Zhao, Chen, Wang, and Jiang}}}
+\bibcite{liu2025efficient}{{19}{2025}{{Liu et~al.}}{{Liu, Shen, Ran, Xu, Xu, Xu, and Pan}}}
+\bibcite{yang2025neubridge}{{20}{2025}{{Yang et~al.}}{{Yang, Liu, Yu, Yang, Wang, and Wang}}}
+\bibcite{vanlaarhoven2017l2}{{21}{2017}{{van Laarhoven}}{{}}}
+\bibcite{kim2024gamma}{{22}{2024}{{Kim et~al.}}{{Kim, Choi, Jang, and Kim}}}
+\bibcite{rahnama2020robust}{{23}{2020}{{Rahnama et~al.}}{{Rahnama, Nguyen, and Raff}}}
+\bibcite{araya2026random}{{24}{2026}{{Araya et~al.}}{{Araya, Datres, and Kutyniok}}}
+\bibcite{krizhevsky2009learning}{{25}{2009}{{Krizhevsky}}{{}}}
+\bibcite{deng2009imagenet}{{26}{2009}{{Deng et~al.}}{{Deng, Dong, Socher, Li, Li, and Fei-Fei}}}
+\bibcite{he2016deep}{{27}{2016}{{He et~al.}}{{He, Zhang, Ren, and Sun}}}
+\bibcite{horowitz2014computing}{{28}{2014}{{Horowitz}}{{}}}
+\bibcite{lecun1998gradient}{{29}{1998}{{LeCun et~al.}}{{LeCun, Bottou, Bengio, and Haffner}}}
+\bibcite{xiao2017fashion}{{30}{2017}{{Xiao et~al.}}{{Xiao, Rasul, and Vollgraf}}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}A Local Precision--Width--Time Model}{7}{appendix.A}\protected@file@percent }
+\newlabel{app:local-model}{{A}{7}{A Local Precision--Width--Time Model}{appendix.A}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Five-seed clean MNIST conversion at $T=4$ (mean $\pm $ standard deviation, no injected noise). $\Delta $ is $L{=}16$ minus $L{=}4$ SNN accuracy.}}{8}{table.2}\protected@file@percent }
+\newlabel{tab:precision}{{2}{8}{Five-seed clean MNIST conversion at $T=4$ (mean $\pm $ standard deviation, no injected noise). $\Delta $ is $L{=}16$ minus $L{=}4$ SNN accuracy}{table.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Layerwise CIFAR-10 VGG16 diagnostics at fixed $\sigma =1$. All-parameter L2 and weights+BN-$\gamma $ checkpoints develop small margin-to-noise ratios and high bin-crossing probability in later blocks.}}{8}{figure.3}\protected@file@percent }
+\newlabel{fig:layerwise}{{3}{8}{Layerwise CIFAR-10 VGG16 diagnostics at fixed $\sigma =1$. All-parameter L2 and weights+BN-$\gamma $ checkpoints develop small margin-to-noise ratios and high bin-crossing probability in later blocks}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Compact precision--width control}{8}{subsection.A.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}Layerwise Diagnostics}{8}{appendix.B}\protected@file@percent }
+\newlabel{app:layerwise}{{B}{8}{Layerwise Diagnostics}{appendix.B}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Top-1 accuracy under per-timestep Gaussian noise at $\sigma =1$ (mean $\pm $ sample standard deviation across seeds 40--44).}}{9}{table.3}\protected@file@percent }
+\newlabel{tab:cifar-sigma-one}{{3}{9}{Top-1 accuracy under per-timestep Gaussian noise at $\sigma =1$ (mean $\pm $ sample standard deviation across seeds 40--44)}{table.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Full clean SNN top-1 accuracy (mean $\pm $ sample standard deviation across seeds 40--44).}}{9}{table.4}\protected@file@percent }
+\newlabel{tab:cifar-accuracy-full}{{4}{9}{Full clean SNN top-1 accuracy (mean $\pm $ sample standard deviation across seeds 40--44)}{table.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {C}Additional Experimental Details}{9}{appendix.C}\protected@file@percent }
+\newlabel{eq:energy}{{9}{9}{Additional Experimental Details}{equation.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.1}Full CIFAR robustness and energy statistics}{9}{subsection.C.1}\protected@file@percent }
+\newlabel{app:cifar-tables}{{C.1}{9}{Full CIFAR robustness and energy statistics}{subsection.C.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Full clean CIFAR VGG16 arithmetic-energy estimates (mean $\pm $ sample standard deviation across seeds 40--44). ANN energy is $1.5277$ mJ on CIFAR-10 and $1.5294$ mJ on CIFAR-100. ``Ratio'' is ANN energy divided by estimated SNN energy.}}{10}{table.5}\protected@file@percent }
+\newlabel{tab:cifar-energy-full}{{5}{10}{Full clean CIFAR VGG16 arithmetic-energy estimates (mean $\pm $ sample standard deviation across seeds 40--44). ANN energy is $1.5277$ mJ on CIFAR-10 and $1.5294$ mJ on CIFAR-100. ``Ratio'' is ANN energy divided by estimated SNN energy}{table.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Clean activity distribution, clean arithmetic energy, and $\sigma =1$ robustness at $T=16$. Within each seed, firing density is the fraction of nonzero entries across all IF outputs and is summarized over 10,000 samples by its mean, median, and 95th percentile; entries report the mean $\pm $ sample standard deviation of these statistics across seeds 40--44. Energy uses clean mean activity only.}}{10}{table.6}\protected@file@percent }
+\newlabel{tab:cifar-activity-full}{{6}{10}{Clean activity distribution, clean arithmetic energy, and $\sigma =1$ robustness at $T=16$. Within each seed, firing density is the fraction of nonzero entries across all IF outputs and is summarized over 10,000 samples by its mean, median, and 95th percentile; entries report the mean $\pm $ sample standard deviation of these statistics across seeds 40--44. Energy uses clean mean activity only}{table.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.2}Depth transfer across VGG13 and VGG19}{10}{subsection.C.2}\protected@file@percent }
+\newlabel{app:depth-transfer}{{C.2}{10}{Depth transfer across VGG13 and VGG19}{subsection.C.2}{}}
+\citation{lecun1998gradient}
+\citation{xiao2017fashion}
+\citation{davies2018loihi,horowitz2014computing}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Depth-transfer robustness at $L=T=16$ under Gaussian noise applied independently at each SNN timestep. Curves are five-seed means and bands show sample standard deviations. MNE-L2 is highlighted in red; Calibrated MNE is included only as an appendix control.}}{11}{figure.4}\protected@file@percent }
+\newlabel{fig:vgg-depth-transfer}{{4}{11}{Depth-transfer robustness at $L=T=16$ under Gaussian noise applied independently at each SNN timestep. Curves are five-seed means and bands show sample standard deviations. MNE-L2 is highlighted in red; Calibrated MNE is included only as an appendix control}{figure.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Additional-depth accuracy endpoints (mean $\pm $ sample standard deviation across seeds 40--44). The best value within each architecture, dataset, and noise condition is bold.}}{11}{table.7}\protected@file@percent }
+\newlabel{tab:vgg-depth-endpoints}{{7}{11}{Additional-depth accuracy endpoints (mean $\pm $ sample standard deviation across seeds 40--44). The best value within each architecture, dataset, and noise condition is bold}{table.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.3}Compact MNIST-family controls}{11}{subsection.C.3}\protected@file@percent }
+\newlabel{app:compact}{{C.3}{11}{Compact MNIST-family controls}{subsection.C.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Appendix compact-model control. Top: five-seed accuracy under two-site Gaussian noise with $\sigma =0.5$. Bottom: event-driven synaptic-operation proxy relative to one dense ANN MAC pass; the dashed line marks ratio 1. Error bars are standard deviations across training seeds.}}{12}{figure.5}\protected@file@percent }
+\newlabel{fig:latency}{{5}{12}{Appendix compact-model control. Top: five-seed accuracy under two-site Gaussian noise with $\sigma =0.5$. Bottom: event-driven synaptic-operation proxy relative to one dense ANN MAC pass; the dashed line marks ratio 1. Error bars are standard deviations across training seeds}{figure.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Full five-seed accuracy at $\sigma =0.5$ (mean $\pm $ standard deviation across training seeds). Noise is injected after both the input IF and first hidden IF.}}{12}{table.8}\protected@file@percent }
+\newlabel{tab:full-accuracy}{{8}{12}{Full five-seed accuracy at $\sigma =0.5$ (mean $\pm $ standard deviation across training seeds). Noise is injected after both the input IF and first hidden IF}{table.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Reproducibility Notes}{12}{appendix.D}\protected@file@percent }
+\gdef \@abspage@last{19}

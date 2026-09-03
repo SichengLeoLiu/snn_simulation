@@ -1,0 +1,4 @@
+model,method,A0,DRS
+resnet18,MNE-L2,59.892000,0.819477
+resnet18,L2,55.338000,0.217329
+resnet18,No Reg,58.474000,0.763005

@@ -1,0 +1,223 @@
+\begin{thebibliography}{30}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Davies et~al.(2018)Davies, Srinivasa, Lin, Chinya, Cao, Choday, Dimou,
+  Joshi, Imam, Jain, et~al.]{davies2018loihi}
+Mike Davies, Narayan Srinivasa, Tsung-Han Lin, Gautham Chinya, Yongqiang Cao,
+  Sri~Harsha Choday, Georgios Dimou, Prasad Joshi, Nabil Imam, Shweta Jain,
+  et~al.
+\newblock {Loihi}: A neuromorphic manycore processor with on-chip learning.
+\newblock \emph{IEEE Micro}, 38\penalty0 (1):\penalty0 82--99, 2018.
+\newblock \doi{10.1109/MM.2018.112130359}.
+
+\bibitem[Rueckauer et~al.(2017)Rueckauer, Lungu, Hu, Pfeiffer, and
+  Liu]{rueckauer2017conversion}
+Bodo Rueckauer, Iulia-Alexandra Lungu, Yuhuang Hu, Michael Pfeiffer, and
+  Shih-Chii Liu.
+\newblock Conversion of continuous-valued deep networks to efficient
+  event-driven networks for image classification.
+\newblock \emph{Frontiers in Neuroscience}, 11:\penalty0 682, 2017.
+\newblock \doi{10.3389/fnins.2017.00682}.
+
+\bibitem[Sengupta et~al.(2019)Sengupta, Ye, Wang, Liu, and
+  Roy]{sengupta2019going}
+Abhronil Sengupta, Yuting Ye, Robert Wang, Chiao Liu, and Kaushik Roy.
+\newblock Going deeper in spiking neural networks: {VGG} and residual
+  architectures.
+\newblock \emph{Frontiers in Neuroscience}, 13:\penalty0 95, 2019.
+\newblock \doi{10.3389/fnins.2019.00095}.
+
+\bibitem[Bu et~al.(2022{\natexlab{a}})Bu, Fang, Ding, Dai, Yu, and
+  Huang]{bu2022optimal}
+Tong Bu, Wei Fang, Jianhao Ding, PengLin Dai, Zhaofei Yu, and Tiejun Huang.
+\newblock Optimal {ANN-SNN} conversion for high-accuracy and ultra-low-latency
+  spiking neural networks.
+\newblock In \emph{International Conference on Learning Representations},
+  2022{\natexlab{a}}.
+\newblock URL \url{https://openreview.net/forum?id=7B3IJMM1k_M}.
+
+\bibitem[Hu et~al.(2023)Hu, Zheng, Jiang, and Pan]{hu2023fast}
+Yangfan Hu, Qian Zheng, Xudong Jiang, and Gang Pan.
+\newblock Fast-{SNN}: Fast spiking neural network by converting quantized
+  {ANN}.
+\newblock \emph{IEEE Transactions on Pattern Analysis and Machine
+  Intelligence}, 45\penalty0 (12):\penalty0 14546--14562, 2023.
+
+\bibitem[Ding et~al.(2024)Ding, Pan, Liu, Yu, and Huang]{ding2024robust}
+Jianhao Ding, Zhiyu Pan, Yujia Liu, Zhaofei Yu, and Tiejun Huang.
+\newblock Robust stable spiking neural networks.
+\newblock In \emph{Proceedings of the 41st International Conference on Machine
+  Learning}, pages 11016--11029, 2024.
+
+\bibitem[{\"O}zdenizci and Legenstein(2024)]{ozdenizci2024adversarial}
+Ozan {\"O}zdenizci and Robert Legenstein.
+\newblock Adversarially robust spiking neural networks through conversion.
+\newblock \emph{Transactions on Machine Learning Research}, 2024.
+\newblock URL \url{https://openreview.net/forum?id=I8FMYa2BdP}.
+
+\bibitem[Ioffe and Szegedy(2015)]{ioffe2015batch}
+Sergey Ioffe and Christian Szegedy.
+\newblock Batch normalization: Accelerating deep network training by reducing
+  internal covariate shift.
+\newblock In \emph{International Conference on Machine Learning}, pages
+  448--456, 2015.
+
+\bibitem[Bohte et~al.(2002)Bohte, Kok, and La~Poutre]{bohte2002error}
+Sander~M. Bohte, Joost~N. Kok, and Han La~Poutre.
+\newblock Error-backpropagation in temporally encoded networks of spiking
+  neurons.
+\newblock \emph{Neurocomputing}, 48\penalty0 (1--4):\penalty0 17--37, 2002.
+
+\bibitem[Fang et~al.(2021)Fang, Yu, Chen, Huang, Masquelier, and
+  Tian]{fang2021deep}
+Wei Fang, Zhaofei Yu, Yanqi Chen, Tiejun Huang, Timoth{\'e}e Masquelier, and
+  Yonghong Tian.
+\newblock Deep residual learning in spiking neural networks.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~34, pages 21056--21069, 2021.
+
+\bibitem[Guo et~al.(2023)Guo, Huang, and Ma]{guo2023direct}
+Yufei Guo, Xuhui Huang, and Zhe Ma.
+\newblock Direct learning-based deep spiking neural networks: A review.
+\newblock \emph{Frontiers in Neuroscience}, 17:\penalty0 1209795, 2023.
+
+\bibitem[Diehl et~al.(2015)Diehl, Neil, Binas, Cook, Liu, and
+  Pfeiffer]{diehl2015fast}
+Peter~U. Diehl, Daniel Neil, Jonathan Binas, Matthew Cook, Shih-Chii Liu, and
+  Michael Pfeiffer.
+\newblock Fast-classifying, high-accuracy spiking deep networks through weight
+  and threshold balancing.
+\newblock In \emph{International Joint Conference on Neural Networks}, pages
+  1--8, 2015.
+
+\bibitem[Bu et~al.(2022{\natexlab{b}})Bu, Ding, Yu, and Huang]{bu2022potential}
+Tong Bu, Jianhao Ding, Zhaofei Yu, and Tiejun Huang.
+\newblock Optimized potential initialization for low-latency spiking neural
+  networks.
+\newblock In \emph{Proceedings of the AAAI Conference on Artificial
+  Intelligence}, volume~36, pages 11--20, 2022{\natexlab{b}}.
+
+\bibitem[Li et~al.(2021)Li, Deng, Dong, Gong, and Gu]{li2021free}
+Yuhang Li, Shikuang Deng, Xin Dong, Ruihao Gong, and Shi Gu.
+\newblock A free lunch from {ANN}: Towards efficient, accurate spiking neural
+  networks calibration.
+\newblock In \emph{International Conference on Machine Learning}, pages
+  6316--6325, 2021.
+
+\bibitem[Hao et~al.(2023{\natexlab{a}})Hao, Bu, Ding, Huang, and
+  Yu]{hao2023residual}
+Zecheng Hao, Tong Bu, Jianhao Ding, Tiejun Huang, and Zhaofei Yu.
+\newblock Reducing {ANN-SNN} conversion error through residual membrane
+  potential.
+\newblock In \emph{Proceedings of the AAAI Conference on Artificial
+  Intelligence}, volume~37, pages 11--21, 2023{\natexlab{a}}.
+
+\bibitem[Hao et~al.(2023{\natexlab{b}})Hao, Ding, Bu, Huang, and
+  Yu]{hao2023bridging}
+Zecheng Hao, Jianhao Ding, Tong Bu, Tiejun Huang, and Zhaofei Yu.
+\newblock Bridging the gap between {ANNs} and {SNNs} by calibrating offset
+  spikes.
+\newblock In \emph{International Conference on Learning Representations},
+  2023{\natexlab{b}}.
+\newblock URL \url{https://openreview.net/forum?id=PFbzoWZyZRX}.
+
+\bibitem[Bojkovic et~al.(2025)Bojkovic, Wu, and Gu]{bojkovic2025temporal}
+Velibor Bojkovic, Xiaofeng Wu, and Bin Gu.
+\newblock Temporal misalignment in {ANN-SNN} conversion and its mitigation via
+  probabilistic spiking neurons.
+\newblock In \emph{International Conference on Machine Learning}, 2025.
+\newblock URL \url{https://openreview.net/forum?id=Kip4avTjth}.
+
+\bibitem[Liu et~al.(2022)Liu, Zhao, Chen, Wang, and
+  Jiang]{liu2022spikeconverter}
+Fangxin Liu, Wenbo Zhao, Yongbiao Chen, Zongwu Wang, and Li~Jiang.
+\newblock {SpikeConverter}: An efficient conversion framework zipping the gap
+  between artificial neural networks and spiking neural networks.
+\newblock In \emph{Proceedings of the AAAI Conference on Artificial
+  Intelligence}, volume~36, pages 1692--1701, 2022.
+
+\bibitem[Liu et~al.(2025)Liu, Shen, Ran, Xu, Xu, Xu, and Pan]{liu2025efficient}
+Chang Liu, Jiangrong Shen, Xuming Ran, Mingkun Xu, Qi~Xu, Yi~Xu, and Gang Pan.
+\newblock Efficient {ANN-SNN} conversion with error compensation learning.
+\newblock In \emph{International Conference on Machine Learning}, 2025.
+
+\bibitem[Yang et~al.(2025)Yang, Liu, Yu, Yang, Wang, and
+  Wang]{yang2025neubridge}
+Yuchen Yang, Jingcheng Liu, Chengting Yu, Chengyi Yang, Gaoang Wang, and Aili
+  Wang.
+\newblock {NeuBridge}: Bridging quantized activations and spiking neurons for
+  {ANN-SNN} conversion.
+\newblock \emph{Neuromorphic Computing and Engineering}, 5\penalty0
+  (2):\penalty0 024018, 2025.
+
+\bibitem[van Laarhoven(2017)]{vanlaarhoven2017l2}
+Twan van Laarhoven.
+\newblock {L2} regularization versus batch and weight normalization.
+\newblock \emph{CoRR}, abs/1706.05350, 2017.
+\newblock URL \url{https://arxiv.org/abs/1706.05350}.
+
+\bibitem[Kim et~al.(2024)Kim, Choi, Jang, and Kim]{kim2024gamma}
+Bum~Jun Kim, Hyeyeon Choi, Hyeonah Jang, and Sang~Woo Kim.
+\newblock Guidelines for the regularization of gammas in batch normalization
+  for deep residual networks.
+\newblock \emph{ACM Transactions on Intelligent Systems and Technology},
+  15\penalty0 (3):\penalty0 44:1--44:20, 2024.
+\newblock \doi{10.1145/3643860}.
+\newblock URL \url{https://doi.org/10.1145/3643860}.
+
+\bibitem[Rahnama et~al.(2020)Rahnama, Nguyen, and Raff]{rahnama2020robust}
+Arash Rahnama, Andre~T. Nguyen, and Edward Raff.
+\newblock Robust design of deep neural networks against adversarial attacks
+  based on lyapunov theory.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+  and Pattern Recognition}, pages 8178--8187, 2020.
+
+\bibitem[Araya et~al.(2026)Araya, Datres, and Kutyniok]{araya2026random}
+Ernesto Araya, Massimiliano Datres, and Gitta Kutyniok.
+\newblock Random spiking neural networks are stable and spectrally simple.
+\newblock In \emph{International Conference on Learning Representations}, 2026.
+
+\bibitem[Krizhevsky(2009)]{krizhevsky2009learning}
+Alex Krizhevsky.
+\newblock Learning multiple layers of features from tiny images.
+\newblock Technical report, University of Toronto, 2009.
+
+\bibitem[Deng et~al.(2009)Deng, Dong, Socher, Li, Li, and
+  Fei-Fei]{deng2009imagenet}
+Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li~Fei-Fei.
+\newblock {ImageNet}: A large-scale hierarchical image database.
+\newblock In \emph{IEEE Conference on Computer Vision and Pattern Recognition},
+  pages 248--255, 2009.
+
+\bibitem[He et~al.(2016)He, Zhang, Ren, and Sun]{he2016deep}
+Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
+\newblock Deep residual learning for image recognition.
+\newblock In \emph{Proceedings of the IEEE Conference on Computer Vision and
+  Pattern Recognition}, pages 770--778, 2016.
+
+\bibitem[Horowitz(2014)]{horowitz2014computing}
+Mark Horowitz.
+\newblock 1.1 computing's energy problem (and what we can do about it).
+\newblock In \emph{IEEE International Solid-State Circuits Conference Digest of
+  Technical Papers}, pages 10--14, 2014.
+\newblock \doi{10.1109/ISSCC.2014.6757323}.
+
+\bibitem[LeCun et~al.(1998)LeCun, Bottou, Bengio, and
+  Haffner]{lecun1998gradient}
+Yann LeCun, L{\'e}on Bottou, Yoshua Bengio, and Patrick Haffner.
+\newblock Gradient-based learning applied to document recognition.
+\newblock \emph{Proceedings of the IEEE}, 86\penalty0 (11):\penalty0
+  2278--2324, 1998.
+\newblock \doi{10.1109/5.726791}.
+
+\bibitem[Xiao et~al.(2017)Xiao, Rasul, and Vollgraf]{xiao2017fashion}
+Han Xiao, Kashif Rasul, and Roland Vollgraf.
+\newblock Fashion-{MNIST}: A novel image dataset for benchmarking machine
+  learning algorithms.
+\newblock \emph{arXiv preprint arXiv:1708.07747}, 2017.
+
+\end{thebibliography}

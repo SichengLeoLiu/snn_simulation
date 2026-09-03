@@ -1,0 +1,64 @@
+method,label,sigma,acc_mean,acc_std,n_seeds
+weight_decay,weight_decay,0.0,91.594000,0.098387,5
+weight_decay,weight_decay,0.1,91.602000,0.089833,5
+weight_decay,weight_decay,0.1,91.526000,0.158840,5
+weight_decay,weight_decay,0.1,91.432000,0.153362,5
+weight_decay,weight_decay,0.2,91.280000,0.186145,5
+weight_decay,weight_decay,0.2,90.938000,0.318072,5
+weight_decay,weight_decay,0.3,90.500000,0.283637,5
+weight_decay,weight_decay,0.3,89.690000,0.374700,5
+weight_decay,weight_decay,0.4,88.618000,0.576038,5
+weight_decay,weight_decay,0.5,87.412000,0.897508,5
+weight_decay,weight_decay,0.5,85.520000,1.131503,5
+weight_decay,weight_decay,0.6,83.168000,1.648111,5
+weight_decay,weight_decay,0.6,80.178000,2.382020,5
+weight_decay,weight_decay,0.7,75.936000,3.307874,5
+weight_decay,weight_decay,0.7,71.198000,4.264466,5
+weight_decay,weight_decay,0.8,64.994000,6.077469,5
+weight_decay,weight_decay,0.8,57.950000,7.443504,5
+weight_decay,weight_decay,0.8,50.574000,9.402531,5
+weight_decay,weight_decay,0.9,42.908000,10.578125,5
+weight_decay,weight_decay,0.9,36.398000,10.780170,5
+weight_decay,weight_decay,1.0,30.798000,9.829612,5
+mne_l2,mne_l2 rc=1e-4,0.0,90.112000,0.193959,5
+mne_l2,mne_l2 rc=1e-4,0.1,90.042000,0.224210,5
+mne_l2,mne_l2 rc=1e-4,0.1,90.112000,0.237844,5
+mne_l2,mne_l2 rc=1e-4,0.1,90.082000,0.177961,5
+mne_l2,mne_l2 rc=1e-4,0.2,90.080000,0.221811,5
+mne_l2,mne_l2 rc=1e-4,0.2,90.050000,0.206398,5
+mne_l2,mne_l2 rc=1e-4,0.3,90.046000,0.222666,5
+mne_l2,mne_l2 rc=1e-4,0.3,90.072000,0.238265,5
+mne_l2,mne_l2 rc=1e-4,0.4,90.010000,0.252784,5
+mne_l2,mne_l2 rc=1e-4,0.5,90.052000,0.245092,5
+mne_l2,mne_l2 rc=1e-4,0.5,90.008000,0.213588,5
+mne_l2,mne_l2 rc=1e-4,0.6,89.992000,0.259654,5
+mne_l2,mne_l2 rc=1e-4,0.6,90.010000,0.277399,5
+mne_l2,mne_l2 rc=1e-4,0.7,89.806000,0.271901,5
+mne_l2,mne_l2 rc=1e-4,0.7,89.946000,0.296530,5
+mne_l2,mne_l2 rc=1e-4,0.8,89.956000,0.256184,5
+mne_l2,mne_l2 rc=1e-4,0.8,89.926000,0.205499,5
+mne_l2,mne_l2 rc=1e-4,0.8,89.824000,0.228539,5
+mne_l2,mne_l2 rc=1e-4,0.9,89.786000,0.286671,5
+mne_l2,mne_l2 rc=1e-4,0.9,89.672000,0.222868,5
+mne_l2,mne_l2 rc=1e-4,1.0,89.710000,0.245866,5
+no_regularization,no regularization,0.0,89.876000,0.157575,5
+no_regularization,no regularization,0.1,89.880000,0.117260,5
+no_regularization,no regularization,0.1,89.862000,0.126372,5
+no_regularization,no regularization,0.1,89.864000,0.145705,5
+no_regularization,no regularization,0.2,89.862000,0.100349,5
+no_regularization,no regularization,0.2,89.916000,0.115888,5
+no_regularization,no regularization,0.3,89.882000,0.108028,5
+no_regularization,no regularization,0.3,89.922000,0.101833,5
+no_regularization,no regularization,0.4,89.878000,0.139356,5
+no_regularization,no regularization,0.5,89.816000,0.083845,5
+no_regularization,no regularization,0.5,89.946000,0.186360,5
+no_regularization,no regularization,0.6,89.880000,0.155724,5
+no_regularization,no regularization,0.6,89.930000,0.156844,5
+no_regularization,no regularization,0.7,89.884000,0.141704,5
+no_regularization,no regularization,0.7,89.972000,0.159593,5
+no_regularization,no regularization,0.8,90.032000,0.119666,5
+no_regularization,no regularization,0.8,89.946000,0.093434,5
+no_regularization,no regularization,0.8,89.978000,0.133492,5
+no_regularization,no regularization,0.9,90.036000,0.094763,5
+no_regularization,no regularization,0.9,89.934000,0.102127,5
+no_regularization,no regularization,1.0,89.934000,0.145705,5

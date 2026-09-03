@@ -1,0 +1,41 @@
+{
+  "layer_map": "legacy",
+  "quant_level": 16,
+  "alpha": 4.0,
+  "tau": 0.5,
+  "q_assignment": "risk",
+  "mean_normalize_q": false,
+  "ga_mode": "off",
+  "identity_vs_l2wo_relerr": 0.0,
+  "n_layers": 16,
+  "n_matched": 15,
+  "n_unmatched": 1,
+  "n_body_layers": 13,
+  "n_body_matched": 13,
+  "n_head_layers": 3,
+  "matched_layers_over_total": "15/16",
+  "body_param_ratio": 1.0,
+  "head_params": 19283968,
+  "body_params": 14710464,
+  "unmatched_body": [],
+  "p_gt_tau": 0.6635792525773195,
+  "q_mean": 3.1566122874904345,
+  "q_mean_pre_norm": 3.1566123962402344,
+  "residual_shortcut_pairs": [],
+  "gmatch": {
+    "dataset": "cifar100",
+    "seed": 42,
+    "quant_level": 16,
+    "mne_rc": 0.0001,
+    "mne_weight_grad_norm": 2.494915723800659,
+    "target_coeff_grad_norm": 0.00024949157238006594,
+    "variant_weight_grad_norm": 0.009745764546096325,
+    "gmatch_reg_coeff": 0.0256,
+    "gmatch_scale_vs_fixed_mne_rc": 256.0
+  },
+  "coeff": {
+    "regularizer": "mne_l2",
+    "weight_decay": 0.0,
+    "reg_coeff": 0.0256
+  }
+}

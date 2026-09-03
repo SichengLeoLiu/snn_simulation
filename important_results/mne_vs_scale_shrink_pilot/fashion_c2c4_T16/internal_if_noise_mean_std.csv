@@ -1,0 +1,57 @@
+site,method,method_label,sigma,n,acc_mean,acc_std
+both,elastic_net_all,Elastic Net (all params),0,1,81.590000,0.000000
+both,elastic_net_all,Elastic Net (all params),0.25,1,56.140000,0.000000
+both,elastic_net_all,Elastic Net (all params),0.5,1,26.433333,0.000000
+both,elastic_net_all,Elastic Net (all params),1,1,14.266667,0.000000
+both,l1_all,L1 (all params),0,1,81.190000,0.000000
+both,l1_all,L1 (all params),0.25,1,77.113333,0.000000
+both,l1_all,L1 (all params),0.5,1,42.700000,0.000000
+both,l1_all,L1 (all params),1,1,22.776667,0.000000
+both,no_reg_current,No Reg,0,1,82.070000,0.000000
+both,no_reg_current,No Reg,0.25,1,74.693333,0.000000
+both,no_reg_current,No Reg,0.5,1,36.886667,0.000000
+both,no_reg_current,No Reg,1,1,21.306667,0.000000
+both,old_detach_current,MNE-L2,0,1,81.940000,0.000000
+both,old_detach_current,MNE-L2,0.25,1,61.826667,0.000000
+both,old_detach_current,MNE-L2,0.5,1,35.203333,0.000000
+both,old_detach_current,MNE-L2,1,1,20.820000,0.000000
+both,scale_l2,Scale-L2 diagnostic,0,1,82.210000,0.000000
+both,scale_l2,Scale-L2 diagnostic,0.25,1,63.046667,0.000000
+both,scale_l2,Scale-L2 diagnostic,0.5,1,29.396667,0.000000
+both,scale_l2,Scale-L2 diagnostic,1,1,16.610000,0.000000
+both,wd_all_current,WD (all params),0,1,81.710000,0.000000
+both,wd_all_current,WD (all params),0.25,1,60.976667,0.000000
+both,wd_all_current,WD (all params),0.5,1,28.643333,0.000000
+both,wd_all_current,WD (all params),1,1,15.883333,0.000000
+both,wd_weight_only,WD (weights only),0,1,82.190000,0.000000
+both,wd_weight_only,WD (weights only),0.25,1,72.853333,0.000000
+both,wd_weight_only,WD (weights only),0.5,1,31.790000,0.000000
+both,wd_weight_only,WD (weights only),1,1,17.070000,0.000000
+post_input_if,elastic_net_all,Elastic Net (all params),0,1,81.590000,0.000000
+post_input_if,elastic_net_all,Elastic Net (all params),0.25,1,74.316667,0.000000
+post_input_if,elastic_net_all,Elastic Net (all params),0.5,1,63.176667,0.000000
+post_input_if,elastic_net_all,Elastic Net (all params),1,1,37.480000,0.000000
+post_input_if,l1_all,L1 (all params),0,1,81.190000,0.000000
+post_input_if,l1_all,L1 (all params),0.25,1,81.010000,0.000000
+post_input_if,l1_all,L1 (all params),0.5,1,72.210000,0.000000
+post_input_if,l1_all,L1 (all params),1,1,49.140000,0.000000
+post_input_if,no_reg_current,No Reg,0,1,82.070000,0.000000
+post_input_if,no_reg_current,No Reg,0.25,1,79.526667,0.000000
+post_input_if,no_reg_current,No Reg,0.5,1,64.246667,0.000000
+post_input_if,no_reg_current,No Reg,1,1,45.580000,0.000000
+post_input_if,old_detach_current,MNE-L2,0,1,81.940000,0.000000
+post_input_if,old_detach_current,MNE-L2,0.25,1,69.900000,0.000000
+post_input_if,old_detach_current,MNE-L2,0.5,1,61.730000,0.000000
+post_input_if,old_detach_current,MNE-L2,1,1,44.750000,0.000000
+post_input_if,scale_l2,Scale-L2 diagnostic,0,1,82.210000,0.000000
+post_input_if,scale_l2,Scale-L2 diagnostic,0.25,1,76.326667,0.000000
+post_input_if,scale_l2,Scale-L2 diagnostic,0.5,1,65.096667,0.000000
+post_input_if,scale_l2,Scale-L2 diagnostic,1,1,39.973333,0.000000
+post_input_if,wd_all_current,WD (all params),0,1,81.710000,0.000000
+post_input_if,wd_all_current,WD (all params),0.25,1,75.750000,0.000000
+post_input_if,wd_all_current,WD (all params),0.5,1,64.856667,0.000000
+post_input_if,wd_all_current,WD (all params),1,1,40.520000,0.000000
+post_input_if,wd_weight_only,WD (weights only),0,1,82.190000,0.000000
+post_input_if,wd_weight_only,WD (weights only),0.25,1,79.973333,0.000000
+post_input_if,wd_weight_only,WD (weights only),0.5,1,66.450000,0.000000
+post_input_if,wd_weight_only,WD (weights only),1,1,42.116667,0.000000

@@ -1,0 +1,4 @@
+method,equivalent_manual_method,parameter_scope,manual_reg_coeff,optimizer_weight_decay,sigma_0_acc,sigma_0p25_acc,sigma_0p5_acc,sigma_1_acc,sigma_1_drop,curve_acc_auc,paired_checkpoint_max_diff,seed,noise_repeats
+WD all params,Manual L2 all params,all trainable,0.00025,0.0005,81.710000,75.750000,64.856667,40.520000,41.190000,63.602500,0.0,42,3
+WD weights only,Manual L2 weights only,Conv/Linear weights,0.00025,0.0005,82.190000,79.973333,66.450000,42.116667,40.073333,65.715000,0.0,42,3
+No Reg,,none,0,0,82.070000,79.526667,64.246667,45.580000,36.490000,65.627917,,42,3

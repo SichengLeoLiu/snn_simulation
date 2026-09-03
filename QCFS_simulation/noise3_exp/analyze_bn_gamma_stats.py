@@ -116,6 +116,73 @@ def _plot_distributions(
     plt.close(fig)
 
 
+def _plot_whole_model_distributions(
+    method_values: dict[str, np.ndarray],
+    out_dir: Path,
+) -> None:
+    colors = {
+        "L1 (all params)": "#0072B2",
+        "L1-all": "#0072B2",
+        "MNE-L2 (all params)": "#009E73",
+        "MNE-all": "#009E73",
+        "L2 (all params)": "#D55E00",
+        "L2-all": "#D55E00",
+        "MNE-standard": "#CC79A7",
+    }
+    fallback_colors = plt.get_cmap("tab10").colors
+    epsilon = 1e-6
+
+    all_log_abs = np.concatenate(
+        [np.log10(np.abs(values) + epsilon) for values in method_values.values()]
+    )
+    bins = np.linspace(all_log_abs.min(), all_log_abs.max(), 80)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12.2, 4.7))
+    for method_index, (method, values) in enumerate(method_values.items()):
+        color = colors.get(method, fallback_colors[method_index % len(fallback_colors)])
+        log_abs = np.log10(np.abs(values) + epsilon)
+        axes[0].hist(
+            log_abs,
+            bins=bins,
+            density=True,
+            histtype="step",
+            linewidth=2.0,
+            label=method,
+            color=color,
+        )
+
+        sorted_abs = np.sort(np.abs(values))
+        cdf = np.arange(1, sorted_abs.size + 1) / sorted_abs.size
+        axes[1].step(
+            sorted_abs,
+            cdf,
+            where="post",
+            linewidth=2.2,
+            label=method,
+            color=color,
+        )
+
+    axes[0].set_xlabel(r"$\log_{10}(|\gamma| + 10^{-6})$")
+    axes[0].set_ylabel("Probability density")
+    axes[0].grid(True, alpha=0.25)
+
+    axes[1].set_xscale("symlog", linthresh=1e-3)
+    axes[1].set_xlabel(r"Absolute BN scale $|\gamma|$")
+    axes[1].set_ylabel(r"Cumulative fraction $P(|\gamma_i| \leq x)$")
+    axes[1].set_ylim(0.0, 1.01)
+    axes[1].grid(True, which="both", alpha=0.25)
+    axes[1].legend(frameon=False, fontsize=9)
+
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(
+            out_dir / f"bn_gamma_whole_model_distribution.{suffix}",
+            dpi=300,
+            bbox_inches="tight",
+        )
+    plt.close(fig)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -243,12 +310,21 @@ def main() -> None:
         writer.writerows(value_rows)
 
     _plot_distributions(method_values, layer_values, args.out_dir)
+    _plot_whole_model_distributions(method_values, args.out_dir)
 
     print(f"[DONE] method summary: {method_csv}")
     print(f"[DONE] layer summary:  {layer_csv}")
     print(f"[DONE] raw gamma values: {values_csv}")
     print(f"[DONE] distribution plot: {args.out_dir / 'bn_gamma_distribution.png'}")
     print(f"[DONE] vector plot:       {args.out_dir / 'bn_gamma_distribution.pdf'}")
+    print(
+        f"[DONE] whole-model plot:  "
+        f"{args.out_dir / 'bn_gamma_whole_model_distribution.png'}"
+    )
+    print(
+        f"[DONE] whole-model PDF:   "
+        f"{args.out_dir / 'bn_gamma_whole_model_distribution.pdf'}"
+    )
 
 
 if __name__ == "__main__":

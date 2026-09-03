@@ -1,0 +1,6 @@
+method,method_label,clean_accuracy,end_sigma,end_accuracy,absolute_drop,curve_auc
+manual_l2_all,All parameters,88.29,1.0,37.066,51.224000000000004,63.268
+manual_l2_w_bn,Weights + BN,88.37,1.0,42.236,46.13400000000001,69.72375
+manual_l2_w_bn_if,Weights + BN + IF,87.55,1.0,35.798,51.751999999999995,65.754
+manual_l2_w_if,Weights + IF,88.06,1.0,33.078,54.982,59.461749999999995
+wd_weight_only,Weights only,87.49,1.0,48.25,39.239999999999995,71.512

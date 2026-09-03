@@ -1,0 +1,19 @@
+{
+  "model": "cnn2_c16_c32",
+  "seed": 42,
+  "epochs": 30,
+  "warmup_epochs": 5,
+  "alpha_ramp_epochs": 10,
+  "alpha": 0.1,
+  "risk_min": 0.5,
+  "risk_max": 2.0,
+  "weight_decay": 0.0005,
+  "lr": 0.01,
+  "L": 16,
+  "T": 16,
+  "batch_size": 128,
+  "workers": 2,
+  "device": "mps",
+  "noise_step": 0.1,
+  "out_root": "/Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_calibrated_mne_shared_fork_c16c32_seed42_ep30"
+}

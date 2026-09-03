@@ -1,0 +1,12 @@
+{
+  "schema": "pdf_read_preflight/1",
+  "verdict": "PASS",
+  "file": "/Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/Formatting_Instructions_For_NeurIPS_2026__2__support/output/pdf/Scale_Aware_ANN_SNN_ODI_2026_revised_abstract_intro.pdf",
+  "sha256": "68bb77065cb8791ba2b3e0e4c2da73b3d53988b957a300465445d9f24cbce259",
+  "declared_page_count": 19,
+  "enumerated_page_count": 19,
+  "reader_page_count": 19,
+  "warnings": [],
+  "generated_at": "2026-08-24T11:56:25.144956+00:00",
+  "tool": "pdf_read_preflight/1.0.0"
+}

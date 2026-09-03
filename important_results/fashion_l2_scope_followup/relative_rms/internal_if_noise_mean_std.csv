@@ -1,0 +1,11 @@
+site,method,method_label,sigma_scale,sigma,n,acc_mean,acc_std
+post_input_if,manual_l2_all,Manual L2 (all params),post_input_if_rms,0,1,88.290000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),post_input_if_rms,0.25,1,73.314000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),post_input_if_rms,0.5,1,51.222000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),post_input_if_rms,0.75,1,36.106000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),post_input_if_rms,1,1,27.010000,0.000000
+post_input_if,wd_weight_only,WD (weights only),post_input_if_rms,0,1,87.490000,0.000000
+post_input_if,wd_weight_only,WD (weights only),post_input_if_rms,0.25,1,76.976000,0.000000
+post_input_if,wd_weight_only,WD (weights only),post_input_if_rms,0.5,1,54.730000,0.000000
+post_input_if,wd_weight_only,WD (weights only),post_input_if_rms,0.75,1,36.240000,0.000000
+post_input_if,wd_weight_only,WD (weights only),post_input_if_rms,1,1,25.192000,0.000000

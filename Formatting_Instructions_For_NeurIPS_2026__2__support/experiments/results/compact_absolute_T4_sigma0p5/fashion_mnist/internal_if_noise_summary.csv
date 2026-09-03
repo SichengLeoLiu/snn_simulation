@@ -1,0 +1,5 @@
+site,method,method_label,sigma_scale,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+post_input_if,l2,L2,absolute,75.756000,0.5,48.830000,26.926000,0.644569,62.293000,0.822285
+post_input_if,no_reg,No Reg,absolute,71.414000,0.5,50.528667,20.885333,0.707546,60.971334,0.853773
+post_input_if,old_detach,MNE-L2,absolute,74.712000,0.5,54.468000,20.244000,0.729040,64.590000,0.864520
+post_input_if,orthogonal,Orthogonal,absolute,72.118000,0.5,53.560667,18.557333,0.742681,62.839333,0.871340

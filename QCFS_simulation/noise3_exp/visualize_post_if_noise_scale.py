@@ -234,11 +234,11 @@ def main() -> None:
     for index, sigma in enumerate(sigmas):
         ax_mean = axes[0][index + 1]
         ax_ch = axes[1][index + 1]
-        ax_mean.imshow(noisy_rate_maps[index], cmap="viridis", vmin=vmin, vmax=vmax)
+        ax_mean.imshow(noisy_rate_maps[index], cmap="gray", vmin=vmin, vmax=vmax)
         ax_mean.set_title(rf"mean ch  $\sigma={sigma:g}$", fontsize=10)
         ax_mean.axis("off")
         last_im = ax_ch.imshow(
-            noisy_channel_maps[index], cmap="viridis", vmin=vmin, vmax=vmax
+            noisy_channel_maps[index], cmap="gray", vmin=vmin, vmax=vmax
         )
         ax_ch.set_title(rf"ch {channel}  $\sigma={sigma:g}$", fontsize=10)
         ax_ch.axis("off")

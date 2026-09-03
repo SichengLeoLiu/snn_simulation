@@ -1,0 +1,9 @@
+site,method,method_label,sigma_scale,sigma,n,acc_mean,acc_std
+post_input_if,l2,L2,post_input_if_rms,0,5,75.756000,5.154011
+post_input_if,l2,L2,post_input_if_rms,0.5,5,34.644000,2.373697
+post_input_if,no_reg,No Reg,post_input_if_rms,0,5,71.414000,7.284664
+post_input_if,no_reg,No Reg,post_input_if_rms,0.5,5,31.124000,3.222625
+post_input_if,old_detach,MNE-L2,post_input_if_rms,0,5,74.712000,3.370997
+post_input_if,old_detach,MNE-L2,post_input_if_rms,0.5,5,32.832667,2.248126
+post_input_if,orthogonal,Orthogonal,post_input_if_rms,0,5,72.118000,7.454748
+post_input_if,orthogonal,Orthogonal,post_input_if_rms,0.5,5,33.414000,2.302897

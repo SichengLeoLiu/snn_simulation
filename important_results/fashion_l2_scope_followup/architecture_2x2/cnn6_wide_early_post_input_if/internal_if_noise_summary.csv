@@ -1,0 +1,3 @@
+site,method,method_label,sigma_scale,clean_acc,end_sigma,end_acc,absolute_drop,end_retention,curve_acc_auc,curve_retention_auc
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,86.870000,1,48.503333,38.366667,0.558344,69.909167,0.804756
+post_input_if,wd_weight_only,WD (weights only),absolute,85.730000,1,55.500000,30.230000,0.647381,73.404583,0.856230

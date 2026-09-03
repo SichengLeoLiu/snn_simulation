@@ -1,0 +1,37 @@
+{
+  "methods": [
+    "weights_only",
+    "all_parameters"
+  ],
+  "seed": 42,
+  "split_seed": 2026,
+  "val_size": 10000,
+  "epochs": 30,
+  "batch_size": 256,
+  "workers": 0,
+  "device": "mps",
+  "threads": 8,
+  "lr": 0.01,
+  "reg_coeff": 0.00025,
+  "channels": [
+    8,
+    8,
+    8
+  ],
+  "blocks_per_stage": 4,
+  "stage_blocks": [
+    1,
+    2,
+    197
+  ],
+  "residual_pairs": true,
+  "L": 16,
+  "test_T": 16,
+  "if_mode": "rate_uniform",
+  "noise_repeats": 3,
+  "limit_train": 0,
+  "limit_val": 0,
+  "limit_test": 0,
+  "evaluate_best_only": true,
+  "out_dir": "/Users/S4142196/Documents/Phd_Document/codes/QCFS_simulation_FI/important_results/fashion_residual_depth_l2_scope_to200_seed42/depth_200"
+}

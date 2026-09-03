@@ -239,16 +239,38 @@ def ssd300_priors() -> torch.Tensor:
     return boxes
 
 
+def _load_vgg16_bn_features():
+    """Load VGG-16 BN features, offline-first for compute nodes without internet."""
+    import os
+    from torchvision.models import vgg16_bn
+
+    torch_home = os.environ.get(
+        "TORCH_HOME",
+        os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "torch"),
+    )
+    hub_dir = os.path.join(torch_home, "hub", "checkpoints")
+    candidates = [
+        os.path.join(hub_dir, "vgg16_bn-6c64b313.pth"),
+        os.path.join(torch_home, "checkpoints", "vgg16_bn-6c64b313.pth"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            print(f"[SSD] loading VGG-16 BN from cache: {path}", flush=True)
+            state = torch.load(path, map_location="cpu")
+            model = vgg16_bn()
+            model.load_state_dict(state)
+            return model.features
+    try:
+        from torchvision.models import VGG16_BN_Weights
+
+        return vgg16_bn(weights=VGG16_BN_Weights.IMAGENET1K_V1).features
+    except Exception:
+        return vgg16_bn(pretrained=True).features
+
+
 def load_vgg16_bn_into_ssd(model: SSD300VGG16) -> int:
     """Copy ImageNet VGG-16 BN conv/BN weights into the serial backbone."""
-    try:
-        from torchvision.models import VGG16_BN_Weights, vgg16_bn
-
-        src = vgg16_bn(weights=VGG16_BN_Weights.IMAGENET1K_V1).features
-    except TypeError:
-        from torchvision.models import vgg16_bn
-
-        src = vgg16_bn(pretrained=True).features
+    src = _load_vgg16_bn_features()
     dst_convs = []
     dst_bns = []
     for stage in (model.stage1, model.stage2, model.stage3, model.stage4, model.stage5):

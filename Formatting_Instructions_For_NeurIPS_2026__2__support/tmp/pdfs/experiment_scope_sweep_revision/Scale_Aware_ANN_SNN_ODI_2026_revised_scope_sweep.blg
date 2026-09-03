@@ -1,0 +1,50 @@
+This is BibTeX, Version 0.99d (TeX Live 2025/Homebrew)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: Scale_Aware_ANN_SNN_ODI_2026_revised_scope_sweep.aux
+The style file: unsrtnat.bst
+Database file #1: reference.bib
+Warning--can't use both volume and number fields in hao2023reducing
+Warning--can't use both volume and number fields in liu2022spikeconverter
+Warning--empty journal in krizhevsky2009learning
+You've used 28 entries,
+            2481 wiz_defined-function locations,
+            710 strings with 10425 characters,
+and the built_in function-call counts, 13356 in all, are:
+= -- 1063
+> -- 824
+< -- 20
++ -- 306
+- -- 248
+* -- 1054
+:= -- 2069
+add.period$ -- 92
+call.type$ -- 28
+change.case$ -- 56
+chr.to.int$ -- 26
+cite$ -- 31
+duplicate$ -- 687
+empty$ -- 1171
+format.name$ -- 280
+if$ -- 2902
+int.to.chr$ -- 3
+int.to.str$ -- 29
+missing$ -- 28
+newline$ -- 149
+num.names$ -- 84
+pop$ -- 289
+preamble$ -- 1
+purify$ -- 28
+quote$ -- 0
+skip$ -- 427
+stack$ -- 0
+substring$ -- 579
+swap$ -- 190
+text.length$ -- 16
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 196
+warning$ -- 3
+while$ -- 103
+width$ -- 0
+write$ -- 374
+(There were 3 warnings)

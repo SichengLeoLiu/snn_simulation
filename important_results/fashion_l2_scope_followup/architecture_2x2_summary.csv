@@ -1,0 +1,9 @@
+model,label,width,pooling,method,method_label,clean_accuracy,end_sigma,end_accuracy,absolute_drop,curve_auc
+cnn6,"Narrow, early pool",narrow,early,manual_l2_all,All parameters,80.05,1.0,36.57666666666667,43.47333333333333,54.33166666666666
+cnn6,"Narrow, early pool",narrow,early,wd_weight_only,Weights only,79.23,1.0,37.163333333333334,42.06666666666667,56.71
+cnn6_vgg,"Wide, staged pool",wide,staged,manual_l2_all,All parameters,88.29,1.0,37.03,51.260000000000005,63.275000000000006
+cnn6_vgg,"Wide, staged pool",wide,staged,wd_weight_only,Weights only,87.49,1.0,48.52333333333333,38.96666666666666,71.51166666666667
+cnn6_narrow_staged,"Narrow, staged pool",narrow,staged,manual_l2_all,All parameters,77.76,1.0,24.81,52.95,51.65625
+cnn6_narrow_staged,"Narrow, staged pool",narrow,staged,wd_weight_only,Weights only,77.09,1.0,30.686666666666667,46.403333333333336,53.67458333333333
+cnn6_wide_early,"Wide, early pool",wide,early,manual_l2_all,All parameters,86.87,1.0,48.50333333333334,38.36666666666667,69.90916666666666
+cnn6_wide_early,"Wide, early pool",wide,early,wd_weight_only,Weights only,85.73,1.0,55.5,30.230000000000004,73.40458333333333

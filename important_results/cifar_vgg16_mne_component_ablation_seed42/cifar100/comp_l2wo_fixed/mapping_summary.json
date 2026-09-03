@@ -1,0 +1,42 @@
+{
+  "layer_map": "legacy",
+  "quant_level": 16,
+  "alpha": 4.0,
+  "tau": 0.5,
+  "q_assignment": "risk",
+  "mean_normalize_q": false,
+  "ga_mode": "off",
+  "identity_vs_l2wo_relerr": 0.0,
+  "n_layers": 16,
+  "n_matched": 15,
+  "n_unmatched": 1,
+  "n_body_layers": 13,
+  "n_body_matched": 13,
+  "n_head_layers": 3,
+  "matched_layers_over_total": "15/16",
+  "body_param_ratio": 1.0,
+  "head_params": 19283968,
+  "body_params": 14710464,
+  "unmatched_body": [],
+  "p_gt_tau": 0.7860824742268041,
+  "q_mean": 3.0254788598259665,
+  "q_mean_pre_norm": 3.0254788398742676,
+  "residual_shortcut_pairs": [],
+  "gmatch": {
+    "dataset": "cifar100",
+    "seed": 42,
+    "quant_level": 16,
+    "mne_rc": 0.0001,
+    "mne_weight_grad_norm": 2.494915723800659,
+    "target_coeff_grad_norm": 0.00024949157238006594,
+    "l2wo_weight_l2": 100.9614486694336,
+    "fixed_weight_decay": 0.0005,
+    "gmatch_weight_decay": 2.4711568194405307e-06,
+    "gmatch_scale_vs_fixed_wd": 0.004942313638881061
+  },
+  "coeff": {
+    "regularizer": "weight_decay_weights_only",
+    "weight_decay": 0.0005,
+    "reg_coeff": null
+  }
+}

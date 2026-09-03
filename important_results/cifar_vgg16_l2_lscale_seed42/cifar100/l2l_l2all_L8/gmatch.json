@@ -1,0 +1,8 @@
+{
+  "dataset": "cifar100",
+  "seed": 42,
+  "quant_level": 8,
+  "mne_rc": 0.0001,
+  "mne_weight_grad_norm": 0.6237289309501648,
+  "target_coeff_grad_norm": 6.237289309501648e-05
+}

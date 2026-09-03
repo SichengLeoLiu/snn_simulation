@@ -1,0 +1,21 @@
+site,method,method_label,sigma_scale,sigma,n,acc_mean,acc_std
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0,1,88.290000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0.25,1,79.410000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0.5,1,62.958000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,0.75,1,48.026000,0.000000
+post_input_if,manual_l2_all,Manual L2 (all params),absolute,1,1,37.066000,0.000000
+post_input_if,mne_global_wd_all,MNE-L2 + WD (all params),absolute,0,1,88.070000,0.000000
+post_input_if,mne_global_wd_all,MNE-L2 + WD (all params),absolute,0.25,1,84.028000,0.000000
+post_input_if,mne_global_wd_all,MNE-L2 + WD (all params),absolute,0.5,1,66.572000,0.000000
+post_input_if,mne_global_wd_all,MNE-L2 + WD (all params),absolute,0.75,1,50.986000,0.000000
+post_input_if,mne_global_wd_all,MNE-L2 + WD (all params),absolute,1,1,40.876000,0.000000
+post_input_if,mne_scale_trainable,MNE-L2 (BN/IF trainable),absolute,0,1,86.550000,0.000000
+post_input_if,mne_scale_trainable,MNE-L2 (BN/IF trainable),absolute,0.25,1,81.252000,0.000000
+post_input_if,mne_scale_trainable,MNE-L2 (BN/IF trainable),absolute,0.5,1,70.338000,0.000000
+post_input_if,mne_scale_trainable,MNE-L2 (BN/IF trainable),absolute,0.75,1,56.688000,0.000000
+post_input_if,mne_scale_trainable,MNE-L2 (BN/IF trainable),absolute,1,1,44.664000,0.000000
+post_input_if,old_detach,MNE-L2,absolute,0,1,87.260000,0.000000
+post_input_if,old_detach,MNE-L2,absolute,0.25,1,82.926000,0.000000
+post_input_if,old_detach,MNE-L2,absolute,0.5,1,70.738000,0.000000
+post_input_if,old_detach,MNE-L2,absolute,0.75,1,55.450000,0.000000
+post_input_if,old_detach,MNE-L2,absolute,1,1,42.576000,0.000000

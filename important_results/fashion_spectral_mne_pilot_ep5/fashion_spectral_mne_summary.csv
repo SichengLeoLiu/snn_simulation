@@ -1,0 +1,13 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cnn2,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,81.905000,0.049497,1,62.470000,1.301076,19.435000,0.762713
+cnn2,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em05,0,82.090000,0.749533,1,60.710000,6.180113,21.380000,0.739554
+cnn2,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em06,0,82.315000,0.657609,1,59.090000,7.410479,23.225000,0.717852
+cnn2_c4_c8,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,84.785000,0.205061,1,64.235000,3.005204,20.550000,0.757622
+cnn2_c4_c8,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em05,0,84.545000,0.572756,1,64.180000,2.432447,20.365000,0.759122
+cnn2_c4_c8,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em06,0,84.510000,0.212132,1,64.135000,3.160767,20.375000,0.758904
+fc3_h256,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,84.570000,0.353553,1,82.395000,0.417193,2.175000,0.974282
+fc3_h256,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em05,0,84.545000,0.205061,1,82.410000,0.721249,2.135000,0.974747
+fc3_h256,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em06,0,84.455000,0.346482,1,82.315000,0.742462,2.140000,0.974661
+fc3_h8,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,78.020000,1.484924,1,75.380000,1.824335,2.640000,0.966163
+fc3_h8,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em05,0,77.325000,2.015254,1,74.610000,2.375879,2.715000,0.964888
+fc3_h8,spectral_mne,spectral_mne_detach_lambda,spectral_mne,1em06,0,78.245000,1.138442,1,75.735000,1.562706,2.510000,0.967921

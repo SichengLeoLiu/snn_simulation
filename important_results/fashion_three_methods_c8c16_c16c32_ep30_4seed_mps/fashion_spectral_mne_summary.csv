@@ -1,0 +1,7 @@
+model,method,method_label,regularizer,reg_coeff,clean_sigma,clean_acc_mean,clean_acc_std,end_sigma,end_acc_mean,end_acc_std,absolute_drop,relative_retention
+cnn2_c16_c32,l2,l2_wd0p0005,weight_decay,none,0,88.930000,0.183666,1,45.470000,6.428380,43.460000,0.511301
+cnn2_c16_c32,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,88.160000,0.134412,1,51.112500,7.698742,37.047500,0.579770
+cnn2_c16_c32,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,88.445000,0.205670,1,48.990000,5.457637,39.455000,0.553904
+cnn2_c8_c16,l2,l2_wd0p0005,weight_decay,none,0,87.857500,0.285818,1,52.115000,7.249186,35.742500,0.593176
+cnn2_c8_c16,old_detach,old_mne_detach_lambda,mne_l2,0p0001,0,87.142500,0.311595,1,61.485000,9.043854,25.657500,0.705568
+cnn2_c8_c16,orthogonal,orthogonal_rc0p0001,orthogonal,0p0001,0,87.327500,0.474227,1,57.102500,8.707783,30.225000,0.653889

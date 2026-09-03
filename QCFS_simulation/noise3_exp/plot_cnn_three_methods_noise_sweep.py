@@ -40,12 +40,12 @@ CNN_EXPERIMENTS = [
     },
 ]
 
-METHOD_ORDER = ["weight_decay", "mne_l2", "no_regularization"]
+METHOD_ORDER = ["mne_l2", "weight_decay", "no_regularization"]
 
 LINE_STYLES = {
-    "weight_decay": {"color": "#1f77b4", "label": "weight_decay"},
-    "mne_l2": {"color": "#ff7f0e", "label": "mne_l2"},
-    "no_regularization": {"color": "#2ca02c", "label": "no regularization"},
+    "mne_l2": {"color": "#ff7f0e", "label": "MNE-L2 (Ours)"},
+    "weight_decay": {"color": "#1f77b4", "label": "L2"},
+    "no_regularization": {"color": "#2ca02c", "label": "No Reg"},
 }
 
 

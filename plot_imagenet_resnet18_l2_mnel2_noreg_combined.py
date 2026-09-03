@@ -9,8 +9,8 @@ NO_REG_CSV = ROOT / "imagenet_resnet18_no_reg_noise_sweep.csv"
 SIGMA_STEP = 0.1
 
 STYLES = {
-    "L2": {"color": "#ff7f0e", "label": "L2"},
-    "MNE-L2": {"color": "#1f77b4", "label": "MNE-L2"},
+    "MNE-L2": {"color": "#ff7f0e", "label": "MNE-L2 (Ours)"},
+    "L2": {"color": "#1f77b4", "label": "L2"},
     "No Reg": {"color": "#2ca02c", "label": "No Reg"},
 }
 
@@ -78,8 +78,8 @@ def plot_combined(out_base: Path):
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    plot_line(ax, sigmas, l2, "L2")
     plot_line(ax, sigmas, mne, "MNE-L2")
+    plot_line(ax, sigmas, l2, "L2")
     plot_line(ax, sigmas_nr, no_reg, "No Reg")
 
     ax.set_xlabel("Gaussian noise sigma")
