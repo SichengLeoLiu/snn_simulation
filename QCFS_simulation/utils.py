@@ -239,9 +239,11 @@ def _layer_map_from_model(model, layer_map=None) -> str:
 def _is_classifier_head(layer_name, module) -> bool:
     parts = str(layer_name).split(".")
     last = parts[-1]
+    if parts[0] in ("loc_heads", "conf_heads", "classifier"):
+        return True
     if not isinstance(module, nn.Linear):
         return False
-    return last in ("fc", "classifier") or parts[0] == "classifier"
+    return last in ("fc", "classifier")
 
 
 MNE_LAYER_ROLES = (
@@ -278,7 +280,11 @@ def parse_mne_include_roles(value) -> tuple[str, ...] | None:
 def _weight_layer_role(layer_name: str) -> str:
     parts = str(layer_name).split(".")
     last = parts[-1]
-    if last in ("fc", "classifier") or parts[0] == "classifier":
+    if last in ("fc", "classifier") or parts[0] in (
+        "classifier",
+        "loc_heads",
+        "conf_heads",
+    ):
         return "classifier_head"
     if "shortcut" in parts:
         return "shortcut"
