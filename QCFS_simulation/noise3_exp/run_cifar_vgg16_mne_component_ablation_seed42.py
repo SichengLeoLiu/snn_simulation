@@ -114,8 +114,8 @@ NODETACH_TRAIN_KW = dict(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("component", "lscale"), default="component")
-    parser.add_argument("--variant", choices=COMPONENT_VARIANTS, default=None)
+    parser.add_argument("--suite", choices=("component", "lscale", "l2l"), default="component")
+    parser.add_argument("--variant", choices=(*COMPONENT_VARIANTS, "l2all"), default=None)
     parser.add_argument("--intensity", choices=INTENSITIES, default="fixed")
     parser.add_argument("--lscale-mode", choices=LSCALE_MODES, default=None)
     parser.add_argument("--quant-L", type=int, choices=QUANT_LS, default=16)
@@ -149,21 +149,25 @@ def parse_args() -> argparse.Namespace:
         parser.error("suite=component requires --variant")
     if args.suite == "lscale" and args.lscale_mode is None:
         parser.error("suite=lscale requires --lscale-mode")
+    if args.suite == "l2l" and args.variant not in ("l2wo", "l2all"):
+        parser.error("suite=l2l requires --variant l2wo|l2all")
     return args
 
 
 def config_name(args) -> str:
     if args.suite == "lscale":
         return f"lscale_{args.lscale_mode}_L{int(args.quant_L)}"
+    if args.suite == "l2l":
+        return f"l2l_{args.variant}_L{int(args.quant_L)}"
     return f"comp_{args.variant}_{args.intensity}"
 
 
 def train_L(args) -> int:
-    return int(args.quant_L) if args.suite == "lscale" else LVAL
+    return int(args.quant_L) if args.suite in ("lscale", "l2l") else LVAL
 
 
 def eval_T(args) -> int:
-    return train_L(args) if args.suite == "lscale" else TEST_T
+    return train_L(args) if args.suite in ("lscale", "l2l") else TEST_T
 
 
 def suffix(args) -> str:
@@ -225,6 +229,11 @@ def reuse_ckpt(args) -> Path | None:
         return None
     if args.suite == "lscale" and train_L(args) == LVAL:
         return find_five_regs(args, "old_detach")
+    if args.suite == "l2l" and train_L(args) == LVAL:
+        if args.variant == "l2wo":
+            return find_five_regs(args, "weight_decay_weights_only")
+        if args.variant == "l2all":
+            return find_five_regs(args, "weight_decay")
     return None
 
 
@@ -246,6 +255,8 @@ def mne_kwargs_for(args) -> dict:
 
 
 def extra_train_flags(args) -> list[str]:
+    if args.suite == "l2l":
+        return []
     flags: list[str] = ["--mne_layer_map", "legacy"]
     if args.suite == "lscale":
         flags.append("--mne_detach_lambda")
@@ -342,6 +353,11 @@ def probe_gmatch(args) -> dict:
 
 
 def chosen_coeff(args, gmatch_card: dict) -> dict:
+    if args.suite == "l2l":
+        regularizer = (
+            "weight_decay" if args.variant == "l2all" else "weight_decay_weights_only"
+        )
+        return {"regularizer": regularizer, "weight_decay": L2_WD, "reg_coeff": None}
     if args.suite == "lscale":
         return {"regularizer": "mne_l2", "weight_decay": 0.0, "reg_coeff": LSCALE_RC}
     if args.variant == "l2wo":
@@ -460,7 +476,7 @@ def sweep(model, loader, device, split: str, seed: int, time_steps: int) -> list
 
 
 def make_reg_fn(args):
-    if args.suite == "component" and args.variant == "l2wo":
+    if args.suite == "l2l" or (args.suite == "component" and args.variant == "l2wo"):
         return None
     kw = mne_kwargs_for(args)
     level = train_L(args)
