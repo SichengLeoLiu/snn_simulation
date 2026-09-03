@@ -11,8 +11,8 @@
 #PBS -j oe
 
 # CIFAR VGG-16 seed-42 MNE-L2 L^2 scaling ablation.
-# LSCALE_MODE: scale | noscale
-# QUANT_L: 4 | 8 | 16
+# LSCALE_MODE: scale | noscale | noscale_nd
+# QUANT_L: 4 | 8 | 16 | 32
 # DATASET: cifar10 | cifar100
 # Same rc=0.0256 for every L. L=16 reuses published Old MNE-L2.
 # Train T=0, eval T=QUANT_L. Do not retune rc per L.
@@ -31,8 +31,8 @@
 
 set -euo pipefail
 
-LSCALE_MODE="${LSCALE_MODE:?set LSCALE_MODE=scale|noscale}"
-QUANT_L="${QUANT_L:?set QUANT_L=4|8|16}"
+LSCALE_MODE="${LSCALE_MODE:?set LSCALE_MODE=scale|noscale|noscale_nd}"
+QUANT_L="${QUANT_L:?set QUANT_L=4|8|16|32}"
 DATASET="${DATASET:-cifar10}"
 SEED="${SEED:-42}"
 

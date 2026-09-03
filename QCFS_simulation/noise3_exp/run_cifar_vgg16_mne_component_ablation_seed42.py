@@ -23,7 +23,8 @@ L^2 scaling (suite=lscale)
     R_scale    = (L / 16)^2 * sum M_eff / λ^2
     R_noscale  = sum M_eff / λ^2
     rc         = 1e-4 * 16^2 = 0.0256   so L=16 equals published MNE-L2
-    train/eval L=T in {4, 8, 16}, same rc, no per-L retune.
+    train/eval L=T in {4, 8, 16, 32}, same rc, no per-L retune.
+    noscale_nd = R_noscale, gradients into λ and BN γ (no-detach).
 
 Do not retune α/τ. One-sided q-assignment is a separate already-run experiment.
 """
@@ -80,8 +81,8 @@ CKPT_ROOT_DEFAULT = Path("/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
 
 COMPONENT_VARIANTS = ("l2wo", "effective", "mne", "nodetach")
 INTENSITIES = ("fixed", "gmatch")
-LSCALE_MODES = ("scale", "noscale")
-QUANT_LS = (4, 8, 16)
+LSCALE_MODES = ("scale", "noscale", "noscale_nd")
+QUANT_LS = (4, 8, 16, 32)
 
 MNE_TRAIN_KW = dict(
     detach_lambda=True,
@@ -227,7 +228,7 @@ def reuse_ckpt(args) -> Path | None:
             if path.is_file():
                 return path
         return None
-    if args.suite == "lscale" and train_L(args) == LVAL:
+    if args.suite == "lscale" and train_L(args) == LVAL and args.lscale_mode != "noscale_nd":
         return find_five_regs(args, "old_detach")
     if args.suite == "l2l" and train_L(args) == LVAL:
         if args.variant == "l2wo":
@@ -239,6 +240,11 @@ def reuse_ckpt(args) -> Path | None:
 
 def mne_kwargs_for(args) -> dict:
     if args.suite == "lscale":
+        if args.lscale_mode == "noscale_nd":
+            kw = dict(NODETACH_TRAIN_KW)
+            kw["l_ref"] = None
+            kw["scale_by_l"] = False
+            return kw
         kw = dict(MNE_TRAIN_KW)
         if args.lscale_mode == "scale":
             kw["l_ref"] = L_REF
@@ -259,6 +265,9 @@ def extra_train_flags(args) -> list[str]:
         return []
     flags: list[str] = ["--mne_layer_map", "legacy"]
     if args.suite == "lscale":
+        if args.lscale_mode == "noscale_nd":
+            flags += ["--mne_no_detach_bn_affine", "--mne_no_l_scale"]
+            return flags
         flags.append("--mne_detach_lambda")
         if args.lscale_mode == "scale":
             flags += ["--mne_l_ref", str(int(L_REF))]

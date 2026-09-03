@@ -10,9 +10,9 @@
 #PBS -l wd
 #PBS -j oe
 
-# CIFAR VGG-16 seed-42 L2-wo / L2-all at L=T in {4,8}.
+# CIFAR VGG-16 seed-42 L2-wo / L2-all at L=T in {4,8,32}.
 # VARIANT: l2wo | l2all
-# QUANT_L: 4 | 8 | 16
+# QUANT_L: 4 | 8 | 16 | 32
 # DATASET: cifar10 | cifar100
 # Optimizer WD=5e-4, no per-L retune. Train T=0, eval T=QUANT_L.
 # L=16 reuses five-regs ckpts (eval only). Do not resubmit L=16 unless needed.
@@ -32,7 +32,7 @@
 set -euo pipefail
 
 VARIANT="${VARIANT:?set VARIANT=l2wo|l2all}"
-QUANT_L="${QUANT_L:?set QUANT_L=4|8|16}"
+QUANT_L="${QUANT_L:?set QUANT_L=4|8|16|32}"
 DATASET="${DATASET:-cifar10}"
 SEED="${SEED:-42}"
 
