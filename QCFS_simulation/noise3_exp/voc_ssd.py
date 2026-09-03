@@ -270,20 +270,33 @@ def voc_map(pred_by_image, gt_by_image, num_classes=21, iou_thresh=0.5):
     return mean_ap, aps
 
 
-VOC_URLS = (
+VOC_ARCHIVES = (
     (
         "VOCtrainval_06-Nov-2007.tar",
-        "https://pjreddie.com/media/files/VOCtrainval_06-Nov-2007.tar",
+        (
+            "https://thor.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar",
+            "http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar",
+            "https://pjreddie.com/media/files/VOCtrainval_06-Nov-2007.tar",
+        ),
     ),
     (
         "VOCtest_06-Nov-2007.tar",
-        "https://pjreddie.com/media/files/VOCtest_06-Nov-2007.tar",
+        (
+            "https://thor.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar",
+            "http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar",
+            "https://pjreddie.com/media/files/VOCtest_06-Nov-2007.tar",
+        ),
     ),
     (
         "VOCtrainval_11-May-2012.tar",
-        "https://pjreddie.com/media/files/VOCtrainval_11-May-2012.tar",
+        (
+            "https://thor.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar",
+            "http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar",
+            "https://pjreddie.com/media/files/VOCtrainval_11-May-2012.tar",
+        ),
     ),
 )
+VOC_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
 def voc_is_ready(path: Path) -> bool:
@@ -299,10 +312,68 @@ def voc_is_ready(path: Path) -> bool:
     return all(item.is_file() for item in needed)
 
 
+def _download_one(urls, tar_path: Path) -> None:
+    import shutil
+    import subprocess
+    import urllib.request
+
+    if tar_path.is_file() and tar_path.stat().st_size > 1_000_000:
+        print(f"[VOC] using cached {tar_path}", flush=True)
+        return
+    tar_path.parent.mkdir(parents=True, exist_ok=True)
+    errors = []
+    wget = shutil.which("wget")
+    curl = shutil.which("curl")
+    for url in urls:
+        tmp = tar_path.with_suffix(tar_path.suffix + ".part")
+        print(f"[VOC] downloading {url}", flush=True)
+        try:
+            if wget:
+                subprocess.run(
+                    [
+                        wget,
+                        "-c",
+                        "--tries=3",
+                        f"--user-agent={VOC_USER_AGENT}",
+                        "-O",
+                        str(tmp),
+                        url,
+                    ],
+                    check=True,
+                )
+            elif curl:
+                subprocess.run(
+                    [
+                        curl,
+                        "-L",
+                        "--retry",
+                        "3",
+                        "-A",
+                        VOC_USER_AGENT,
+                        "-o",
+                        str(tmp),
+                        url,
+                    ],
+                    check=True,
+                )
+            else:
+                request = urllib.request.Request(url, headers={"User-Agent": VOC_USER_AGENT})
+                with urllib.request.urlopen(request, timeout=60) as src, tmp.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+            if tmp.is_file() and tmp.stat().st_size > 1_000_000:
+                tmp.replace(tar_path)
+                return
+            errors.append(f"{url}: downloaded file too small")
+        except Exception as exc:
+            errors.append(f"{url}: {exc}")
+            if tmp.exists():
+                tmp.unlink()
+    raise RuntimeError("VOC download failed:\n  " + "\n  ".join(errors))
+
+
 def download_voc(dest: Path) -> Path:
     """Download VOC 2007+2012 into dest/VOCdevkit. Login-node only."""
     import tarfile
-    import urllib.request
 
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
@@ -310,11 +381,9 @@ def download_voc(dest: Path) -> Path:
         return voc_root_from(dest)
     cache = dest / "_voc_tarballs"
     cache.mkdir(parents=True, exist_ok=True)
-    for name, url in VOC_URLS:
+    for name, urls in VOC_ARCHIVES:
         tar_path = cache / name
-        if not tar_path.is_file():
-            print(f"[VOC] downloading {url}", flush=True)
-            urllib.request.urlretrieve(url, tar_path)
+        _download_one(urls, tar_path)
         print(f"[VOC] extracting {tar_path}", flush=True)
         with tarfile.open(tar_path, "r") as handle:
             handle.extractall(path=dest)

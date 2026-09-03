@@ -24,6 +24,16 @@
 #   module use /g/data/dk92/apps/Modules/modulefiles
 #   module load NCI-ai-ml/24.11
 #   python QCFS_simulation/noise3_exp/voc_ssd.py --download --voc-root "${VOC_ROOT}"
+# If pjreddie 403s, the script now uses Oxford thor.robots first + wget User-Agent.
+# Manual fallback:
+#   mkdir -p "${VOC_ROOT}/_voc_tarballs" && cd "${VOC_ROOT}/_voc_tarballs"
+#   UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+#   wget -c --user-agent="$UA" https://thor.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar
+#   wget -c --user-agent="$UA" https://thor.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar
+#   wget -c --user-agent="$UA" https://thor.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
+#   cd "${VOC_ROOT}" && tar -xf _voc_tarballs/VOCtrainval_06-Nov-2007.tar \
+#     && tar -xf _voc_tarballs/VOCtest_06-Nov-2007.tar \
+#     && tar -xf _voc_tarballs/VOCtrainval_11-May-2012.tar
 #
 # Submit (5 jobs):
 #   cd /home/595/sl9144/codes/snn_simulation
