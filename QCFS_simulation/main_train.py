@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import math
 import os
 import torch
@@ -28,6 +29,8 @@ from utils import (
     compute_mne_l2_regularization,
     compute_mne_l2_all_regularization,
     compute_l2_calibrated_mne_regularization,
+    compute_mne_os_bridge_regularization,
+    init_mne_os_bridge_grad_scale,
     compute_stable_mne_l2_regularization,
     compute_hinge_mne_regularization,
     compute_pc_mne_regularization,
@@ -113,6 +116,7 @@ parser.add_argument(
         "mne_l2",
         "mne_l2_all",
         "calibrated_mne_l2",
+        "mne_os_bridge",
         "stable_mne_l2",
         "hinge_mne",
         "pc_mne",
@@ -365,6 +369,41 @@ parser.add_argument(
     default="bn",
     choices=("bn", "gm"),
     help="onesided 风险来源: bn=L^2 γ^2/λ^2 v; gm=p_n D_n m_{e→n}",
+)
+parser.add_argument(
+    "--bridge_risk_transform",
+    default="raw",
+    choices=("uniform", "raw", "normalized", "clipped", "onesided"),
+    help="--regularizer=mne_os_bridge 的 q 变换: uniform|raw|normalized|clipped|onesided",
+)
+parser.add_argument(
+    "--bridge_clip_min",
+    default=0.5,
+    type=float,
+    help="bridge clipped/onesided 的 clip 下界 a（相对 r/r̄）",
+)
+parser.add_argument(
+    "--bridge_clip_max",
+    default=8.0,
+    type=float,
+    help="bridge clipped/onesided 的 clip 上界 b（相对 r/r̄）",
+)
+parser.add_argument(
+    "--bridge_alpha",
+    default=4.0,
+    type=float,
+    help="bridge onesided 的 α；第一轮复现现有配方，不按 test 调",
+)
+parser.add_argument(
+    "--bridge_tau",
+    default=0.5,
+    type=float,
+    help="bridge onesided 的 τ；第一轮复现 0.5，随后应加 τ=1 对照",
+)
+parser.add_argument(
+    "--bridge_match_raw_grad",
+    action="store_true",
+    help="在正则生效的第一个 epoch 计算 s=||∇R_raw||/||∇R_k|| 并冻结",
 )
 parser.add_argument(
     "--gm_os_no_p",
@@ -815,6 +854,17 @@ def main():
             )
 
         reg_loss_fn = _calibrated_mne_reg
+    elif args.regularizer == "mne_os_bridge":
+        reg_loss_fn = lambda m, t, q: compute_mne_os_bridge_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            risk_transform=args.bridge_risk_transform,
+            eps=args.mne_eps,
+            clip_min=args.bridge_clip_min,
+            clip_max=args.bridge_clip_max,
+            alpha=args.bridge_alpha,
+            tau=args.bridge_tau,
+        )
     elif args.regularizer == "stable_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
             m,
@@ -1349,6 +1399,40 @@ def main():
             )
         )
 
+    if args.regularizer == "mne_os_bridge":
+        bridge_card = init_mne_os_bridge_grad_scale(
+            model,
+            quant_level=args.L,
+            risk_transform=args.bridge_risk_transform,
+            eps=args.mne_eps,
+            clip_min=args.bridge_clip_min,
+            clip_max=args.bridge_clip_max,
+            alpha=args.bridge_alpha,
+            tau=args.bridge_tau,
+            match_raw_grad=bool(args.bridge_match_raw_grad),
+        )
+        logger.info(
+            "mne_os_bridge transform=%s raw_vs_mne_relerr=%.3e "
+            "R_raw=%.6g R_mne=%.6g g_raw=%.6g g_k=%.6g scale=%.6g"
+            % (
+                args.bridge_risk_transform,
+                float(bridge_card["raw_vs_mne_relerr"]),
+                float(bridge_card["raw_R"]),
+                float(bridge_card["mne_R"]),
+                float(bridge_card["g_raw"]),
+                float(bridge_card["g_k"]),
+                float(bridge_card["bridge_grad_scale"]),
+            )
+        )
+        if args.mapping_diag_dir.strip():
+            card_path = os.path.join(
+                os.path.abspath(args.mapping_diag_dir.strip()),
+                "bridge_init.json",
+            )
+            with open(card_path, "w", encoding="utf-8") as handle:
+                json.dump(bridge_card, handle, indent=2)
+                handle.write("\n")
+
     extra_save = set()
     if args.save_epochs.strip():
         extra_save = {int(x) for x in args.save_epochs.split(",") if x.strip()}
@@ -1479,32 +1563,47 @@ def main():
                     epoch, args.epochs, loss, acc
                 )
             )
-            if args.regularizer == "calibrated_mne_l2" and hasattr(
+            if args.regularizer in ("calibrated_mne_l2", "mne_os_bridge") and hasattr(
                 model, "_calibrated_mne_stats"
             ):
                 stats = getattr(model, "_calibrated_mne_epoch_stats", None) or model._calibrated_mne_stats
-                logger.info(
-                    "  calibrated_mne: assign=%s q_max=%s alpha=%.4f q_mean=%.6f "
-                    "q_pre=%.6f mean_norm=%s q_std=%.6f q_range=[%.4g, %.4g] "
-                    "p_gt_tau=%.4f p_at_qmax=%.4f"
-                    % (
-                        args.calibrated_mne_q_assignment,
-                        (
-                            "none"
-                            if float(args.calibrated_mne_q_max) <= 0
-                            else ("%.4g" % args.calibrated_mne_q_max)
-                        ),
-                        float(getattr(model, "_calibrated_mne_stats", {}).get("alpha", calibrated_mne_state["alpha"])),
-                        float(stats.get("q_mean", 1.0)),
-                        float(stats.get("q_mean_pre_norm", stats.get("q_mean", 1.0))),
-                        "on" if args.calibrated_mne_mean_normalize_q else "off",
-                        float(stats.get("q_std", 0.0)),
-                        float(stats.get("q_min", 1.0)),
-                        float(stats.get("q_max", 1.0)),
-                        float(stats.get("p_gt_tau", 0.0)),
-                        float(stats.get("p_at_qmax", 0.0)),
+                if args.regularizer == "mne_os_bridge":
+                    logger.info(
+                        "  mne_os_bridge: transform=%s q_mean=%.6f q_std=%.6f "
+                        "q_range=[%.4g, %.4g] p_gt_tau=%.4f scale=%.6g"
+                        % (
+                            args.bridge_risk_transform,
+                            float(stats.get("q_mean", 1.0)),
+                            float(stats.get("q_std", 0.0)),
+                            float(stats.get("q_min", 1.0)),
+                            float(stats.get("q_max", 1.0)),
+                            float(stats.get("p_gt_tau", 0.0)),
+                            float(getattr(model, "_bridge_grad_scale", 1.0)),
+                        )
                     )
-                )
+                else:
+                    logger.info(
+                        "  calibrated_mne: assign=%s q_max=%s alpha=%.4f q_mean=%.6f "
+                        "q_pre=%.6f mean_norm=%s q_std=%.6f q_range=[%.4g, %.4g] "
+                        "p_gt_tau=%.4f p_at_qmax=%.4f"
+                        % (
+                            args.calibrated_mne_q_assignment,
+                            (
+                                "none"
+                                if float(args.calibrated_mne_q_max) <= 0
+                                else ("%.4g" % args.calibrated_mne_q_max)
+                            ),
+                            float(getattr(model, "_calibrated_mne_stats", {}).get("alpha", calibrated_mne_state["alpha"])),
+                            float(stats.get("q_mean", 1.0)),
+                            float(stats.get("q_mean_pre_norm", stats.get("q_mean", 1.0))),
+                            "on" if args.calibrated_mne_mean_normalize_q else "off",
+                            float(stats.get("q_std", 0.0)),
+                            float(stats.get("q_min", 1.0)),
+                            float(stats.get("q_max", 1.0)),
+                            float(stats.get("p_gt_tau", 0.0)),
+                            float(stats.get("p_at_qmax", 0.0)),
+                        )
+                    )
             match_stats = getattr(model, "_mne_grad_match_stats", None)
             if args.regularizer == "mne_l2" and match_stats:
                 logger.info(
@@ -1542,8 +1641,9 @@ def main():
                     epoch, args.epochs, tmp
                 )
             )
-            if args.regularizer in ("calibrated_mne_l2", "mne_l2") and (
-                args.regularizer == "calibrated_mne_l2" or args.epoch_log_csv.strip()
+            if args.regularizer in ("calibrated_mne_l2", "mne_l2", "mne_os_bridge") and (
+                args.regularizer in ("calibrated_mne_l2", "mne_os_bridge")
+                or args.epoch_log_csv.strip()
             ):
                 epoch_stats = getattr(model, "_calibrated_mne_epoch_stats", {})
                 last_stats = getattr(model, "_calibrated_mne_stats", {})
@@ -1554,8 +1654,16 @@ def main():
                 _append_epoch_log(
                     {
                         "epoch": epoch,
-                        "alpha": float(calibrated_mne_state["alpha"]),
-                        "q_assignment": args.calibrated_mne_q_assignment,
+                        "alpha": float(
+                            args.bridge_alpha
+                            if args.regularizer == "mne_os_bridge"
+                            else calibrated_mne_state["alpha"]
+                        ),
+                        "q_assignment": (
+                            args.bridge_risk_transform
+                            if args.regularizer == "mne_os_bridge"
+                            else args.calibrated_mne_q_assignment
+                        ),
                         "q_mean": float(merged.get("q_mean", 1.0)),
                         "q_mean_pre_norm": float(
                             merged.get("q_mean_pre_norm", merged.get("q_mean", 1.0))

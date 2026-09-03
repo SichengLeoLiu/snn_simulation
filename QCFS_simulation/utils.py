@@ -2302,6 +2302,252 @@ def compute_mne_l2_regularization(
     return scale * penalty
 
 
+BRIDGE_TRANSFORMS = ("uniform", "raw", "normalized", "clipped", "onesided")
+
+
+def _bridge_layer_mean(values) -> torch.Tensor:
+    return torch.stack([value.mean() for value in values]).mean()
+
+
+def _bridge_renorm(values, eps: float):
+    scale = _bridge_layer_mean(values).clamp(min=eps)
+    return [value / scale for value in values], scale
+
+
+def _collect_bridge_layers(
+    model,
+    quant_level: int,
+    eps: float,
+    fold_bn: bool,
+    detach_lambda: bool,
+    detach_bn_stats: bool,
+    detach_bn_affine: bool,
+):
+    module_map = dict(model.named_modules())
+    layer_map = _layer_map_from_model(model)
+    layers = []
+    for lname, layer in model.named_modules():
+        if not isinstance(layer, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            continue
+        weight = getattr(layer, "weight", None)
+        if weight is None or not weight.requires_grad:
+            continue
+        bn_mod, if_mod = _resolve_bn_if_for_layer(
+            lname, module_map, layer_map=layer_map
+        )
+        if if_mod is None:
+            continue
+        lam_min = max(float(eps), 1e-3)
+        lam = if_mod.thresh.to(device=weight.device, dtype=weight.dtype).clamp(
+            min=lam_min
+        ).view(-1)[0]
+        if detach_lambda:
+            lam = lam.detach()
+        risk = torch.ones(
+            (weight.shape[0],), device=weight.device, dtype=weight.dtype
+        ) * (float(quant_level) ** 2 / (lam.pow(2) + eps))
+        if fold_bn and bn_mod is not None:
+            bn_eps = float(getattr(bn_mod, "eps", eps))
+            gamma = bn_mod.weight.to(device=weight.device, dtype=weight.dtype)
+            var = bn_mod.running_var.to(device=weight.device, dtype=weight.dtype)
+            if detach_bn_stats:
+                var = var.detach()
+            if detach_bn_affine:
+                gamma = gamma.detach()
+            var = var.clamp(min=bn_eps)
+            risk = risk * gamma.pow(2) / (var + bn_eps)
+        layers.append(
+            {
+                "name": lname,
+                "weight": weight,
+                "risk": risk.detach(),
+                "n_out": int(weight.shape[0]),
+            }
+        )
+    return layers
+
+
+def compute_mne_os_bridge_regularization(
+    model,
+    quant_level: int,
+    risk_transform: str = "raw",
+    eps: float = 1e-6,
+    clip_min: float = 0.5,
+    clip_max: float = 8.0,
+    alpha: float = 4.0,
+    tau: float = 0.5,
+    fold_bn: bool = True,
+    detach_lambda: bool = True,
+    detach_bn_stats: bool = True,
+    detach_bn_affine: bool = True,
+    grad_scale: float = 1.0,
+):
+    """Unified MNE → One-sided bridge with layer-mean reduction.
+
+    r_{l,c} = L^2 γ_{l,c}^2 / (λ_l^2 (v_{l,c}+ε))   (detached λ,γ,v)
+    R(q)    = Σ_l (1/C_l) Σ_c q_{l,c} ||W_{l,c}||_F^2
+
+    This matches published Old MNE-L2 when q=r (no 1/2, no unmatched head).
+    ``risk_transform``:
+      uniform     q=1
+      raw         q=r
+      normalized  q=r / r̄
+      clipped     Renorm(clip(r/r̄, a, b))
+      onesided    Renorm(1 + α[ r̃ − τ ]_+)
+    r̄ and Renorm use equal layer weight: (1/N_L) Σ_l (1/C_l) Σ_c ·
+    """
+    transform = str(risk_transform).strip().lower()
+    if transform not in BRIDGE_TRANSFORMS:
+        raise ValueError(
+            f"risk_transform must be one of {BRIDGE_TRANSFORMS}, got {transform!r}."
+        )
+    layers = _collect_bridge_layers(
+        model,
+        quant_level=quant_level,
+        eps=eps,
+        fold_bn=fold_bn,
+        detach_lambda=detach_lambda,
+        detach_bn_stats=detach_bn_stats,
+        detach_bn_affine=detach_bn_affine,
+    )
+    if not layers:
+        parameter = next(model.parameters(), None)
+        if parameter is None:
+            return torch.tensor(0.0)
+        return torch.zeros((), device=parameter.device, dtype=parameter.dtype)
+
+    risks = [layer["risk"] for layer in layers]
+    r_bar = _bridge_layer_mean(risks).clamp(min=eps)
+    if transform == "uniform":
+        q_values = [torch.ones_like(risk) for risk in risks]
+    elif transform == "raw":
+        q_values = list(risks)
+    elif transform == "normalized":
+        q_values = [risk / r_bar for risk in risks]
+    else:
+        clipped = [(risk / r_bar).clamp(min=clip_min, max=clip_max) for risk in risks]
+        r_tilde, _ = _bridge_renorm(clipped, eps)
+        if transform == "clipped":
+            q_values = r_tilde
+        else:
+            onesided = [
+                1.0 + float(alpha) * torch.relu(value - float(tau)) for value in r_tilde
+            ]
+            q_values, _ = _bridge_renorm(onesided, eps)
+
+    penalty = None
+    contribs = []
+    for layer, q_value in zip(layers, q_values):
+        flat = layer["weight"].reshape(layer["weight"].shape[0], -1)
+        term = (q_value.view(-1) * flat.pow(2).sum(dim=1)).mean()
+        penalty = term if penalty is None else penalty + term
+        contribs.append(float(term.detach()))
+    all_q = torch.cat(q_values)
+    all_r = torch.cat(risks)
+    r_tilde_cat = all_r / r_bar
+    p_gt_tau = (r_tilde_cat > float(tau)).to(all_q.dtype).mean()
+    if transform in ("clipped", "onesided"):
+        clipped = [(risk / r_bar).clamp(min=clip_min, max=clip_max) for risk in risks]
+        r_tilde, _ = _bridge_renorm(clipped, eps)
+        p_gt_tau = (torch.cat(r_tilde) > float(tau)).to(all_q.dtype).mean()
+    scale = float(getattr(model, "_bridge_grad_scale", grad_scale) or grad_scale)
+    stats = {
+        "risk_transform": transform,
+        "r_bar": float(r_bar.detach()),
+        "q_mean": float(_bridge_layer_mean(q_values).detach()),
+        "q_std": float(all_q.std(unbiased=False).detach()),
+        "q_min": float(all_q.min().detach()),
+        "q_max": float(all_q.max().detach()),
+        "p_gt_tau": float(p_gt_tau.detach()),
+        "n_layers": len(layers),
+        "bridge_grad_scale": scale,
+        "layers": [
+            {
+                "name": layer["name"],
+                "n_out": layer["n_out"],
+                "r_mean": float(layer["risk"].mean().detach()),
+                "q_mean": float(q_value.mean().detach()),
+                "reg_contrib": contrib,
+            }
+            for layer, q_value, contrib in zip(layers, q_values, contribs)
+        ],
+    }
+    model._bridge_stats = stats
+    model._calibrated_mne_stats = {
+        "alpha": float(alpha),
+        "tau": float(tau),
+        "q_assignment": transform,
+        "q_mean": stats["q_mean"],
+        "q_std": stats["q_std"],
+        "q_min": stats["q_min"],
+        "q_max": stats["q_max"],
+        "p_gt_tau": stats["p_gt_tau"],
+        "q_mean_pre_norm": stats["q_mean"],
+        "mean_normalize_q": transform != "raw",
+    }
+    return penalty * scale
+
+
+def init_mne_os_bridge_grad_scale(
+    model,
+    quant_level: int,
+    risk_transform: str,
+    eps: float = 1e-6,
+    clip_min: float = 0.5,
+    clip_max: float = 8.0,
+    alpha: float = 4.0,
+    tau: float = 0.5,
+    match_raw_grad: bool = True,
+) -> dict:
+    """One-shot s_k = ||∇R_raw|| / ||∇R_k|| at the first regularized epoch. Frozen after."""
+    kwargs = dict(
+        model=model,
+        quant_level=quant_level,
+        eps=eps,
+        clip_min=clip_min,
+        clip_max=clip_max,
+        alpha=alpha,
+        tau=tau,
+        grad_scale=1.0,
+    )
+    model._bridge_grad_scale = 1.0
+    raw = compute_mne_os_bridge_regularization(risk_transform="raw", **kwargs)
+    mne = compute_mne_l2_regularization(
+        model,
+        quant_level=quant_level,
+        detach_lambda=True,
+        detach_bn_stats=True,
+        detach_bn_affine=True,
+        fold_bn=True,
+    )
+    raw_val = float(raw.detach())
+    mne_val = float(mne.detach())
+    relerr = abs(raw_val - mne_val) / max(abs(mne_val), eps)
+    params = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    g_raw = float(_parameter_grad_norm(raw, params, retain_graph=False).detach())
+    if str(risk_transform) == "raw" or not match_raw_grad:
+        scale = 1.0
+        g_k = g_raw
+    else:
+        other = compute_mne_os_bridge_regularization(
+            risk_transform=risk_transform, **kwargs
+        )
+        g_k = float(_parameter_grad_norm(other, params, retain_graph=False).detach())
+        scale = g_raw / max(g_k, eps)
+    model._bridge_grad_scale = float(scale)
+    card = {
+        "risk_transform": str(risk_transform),
+        "raw_R": raw_val,
+        "mne_R": mne_val,
+        "raw_vs_mne_relerr": relerr,
+        "g_raw": g_raw,
+        "g_k": g_k,
+        "bridge_grad_scale": float(scale),
+    }
+    model._bridge_init_card = card
+    return card
+
+
 def _mne_covered_weight_ids(model) -> set[int]:
     """Conv/Linear weight ids that receive an MNE-L2 term (matched IF required)."""
     module_map = dict(model.named_modules())
