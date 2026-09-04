@@ -16,7 +16,6 @@ from .fc_cifar import fc2_cifar, fc3_cifar, fc5_cifar
 from .toy_diff1d import toy_diff1d
 from .VGG import vgg11, vgg13, vgg16, vgg19, vgg16_wobn, vgg16_inputif
 from .ResNet import resnet18, resnet18_imagenet, resnet34, resnet34_imagenet
-from .FCN import FCNVGG16
 from .SSD import SSD300VGG16
 
 
@@ -157,6 +156,8 @@ def modelpool(model_name, dataset_name="mnist"):
         )
 
     if d in ("voc", "voc2007", "voc0712", "pascalvoc", "voc20072012", "voc2012"):
+        from .FCN import FCNVGG16
+
         if m in ("ssd300", "ssd300_vgg16", "ssd300vgg16"):
             return SSD300VGG16()
         if m in ("fcn", "fcn_vgg16", "fcn32", "fcn32s", "vgg16"):

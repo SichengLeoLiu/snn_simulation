@@ -12,7 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from Models.layer import ExpandTemporalDim, IF, MergeTemporalDim, add_dimention
-from Models.SSD import _load_vgg16_bn_features
 from Models.VGG import (
     NOISE_POSITIONS,
     SPIKE_SCHEDULE_MODES,
@@ -163,6 +162,35 @@ class FCNVGG16(nn.Module):
         x = self.stage5(x)
         logits = self._time_mean(self.decoder(x))
         return F.interpolate(logits, size=(height, width), mode="bilinear", align_corners=False)
+
+
+def _load_vgg16_bn_features():
+    """Load VGG-16 BN features, offline-first for compute nodes without internet."""
+    import os
+    from torchvision.models import vgg16_bn
+
+    torch_home = os.environ.get(
+        "TORCH_HOME",
+        os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "torch"),
+    )
+    hub_dir = os.path.join(torch_home, "hub", "checkpoints")
+    candidates = [
+        os.path.join(hub_dir, "vgg16_bn-6c64b313.pth"),
+        os.path.join(torch_home, "checkpoints", "vgg16_bn-6c64b313.pth"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            print(f"[FCN] loading VGG-16 BN from cache: {path}", flush=True)
+            state = torch.load(path, map_location="cpu")
+            model = vgg16_bn()
+            model.load_state_dict(state)
+            return model.features
+    try:
+        from torchvision.models import VGG16_BN_Weights
+
+        return vgg16_bn(weights=VGG16_BN_Weights.IMAGENET1K_V1).features
+    except Exception:
+        return vgg16_bn(pretrained=True).features
 
 
 def load_vgg16_bn_into_fcn(model: FCNVGG16) -> int:
