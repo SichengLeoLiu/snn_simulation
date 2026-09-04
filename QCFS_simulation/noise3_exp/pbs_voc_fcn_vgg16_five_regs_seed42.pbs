@@ -11,10 +11,10 @@
 #PBS -j oe
 
 # VOC 2012 FCN-VGG16-BN-IF seed-42 five-regularizer noise transfer.
-# METHOD: l2wo | mne | nodetach_lambda | nodetach_gamma | nodetach
+# METHOD: l2wo | l2all | l1wo | mne | nodetach
 # Train T=0, eval T=16, rate_uniform, post_input_if.
-# Coefficients are the CIFAR defaults (do not retune):
-#   mne-family rc=1e-4; l2wo WD=5e-4
+# Coefficients are the CIFAR / SSD defaults (do not retune):
+#   mne-family rc=1e-4; l2wo/l2all WD=5e-4; l1wo rc=1e-5
 # Results/logs on scratch. Do not tee to $HOME.
 #
 # Login node, once (reuse SSD VOC if already downloaded):
@@ -31,10 +31,10 @@
 # ImageNet VGG-16 BN must already be cached (same as SSD):
 #   python ~/cache_vgg.py
 #
-# Submit (5 jobs):
+# Submit remaining L2-all / L1-wo (reuse finished l2wo / mne / nodetach):
 #   cd /home/595/sl9144/codes/snn_simulation
 #   export VOC_ROOT=/home/595/sl9144/datasets
-#   for M in l2wo mne nodetach_lambda nodetach_gamma nodetach; do
+#   for M in l2all l1wo; do
 #     qsub -N "vfcn_${M}" \
 #       -v VOC_ROOT,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_fcn_vgg16_five_regs_seed42 \
 #       QCFS_simulation/noise3_exp/pbs_voc_fcn_vgg16_five_regs_seed42.pbs
@@ -42,7 +42,7 @@
 
 set -euo pipefail
 
-METHOD="${METHOD:?set METHOD=l2wo|mne|nodetach_lambda|nodetach_gamma|nodetach}"
+METHOD="${METHOD:?set METHOD=l2wo|l2all|l1wo|mne|nodetach}"
 SEED="${SEED:-42}"
 
 SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"

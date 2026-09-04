@@ -6,11 +6,12 @@ dense prediction task (per-pixel argmax over spike counts)? No box regression.
 
 Methods (one PBS job each)
 --------------------------
-    l2wo              optimizer WD on Conv/Linear weights, wd=5e-4
-    mne               published Old MNE-L2, detach λ and BN γ, rc=1e-4
-    nodetach_lambda   grads into λ only (BN γ still detached)
-    nodetach_gamma    grads into BN γ only (λ still detached)
-    nodetach          grads into λ and BN γ
+    l2wo       optimizer WD on Conv/Linear weights, wd=5e-4
+    l2all      optimizer WD on all params, wd=5e-4
+    l1wo       explicit L1 on Conv/Linear weights, rc=1e-5
+    mne        published Old MNE-L2, detach λ and BN γ, rc=1e-4
+    nodetach   grads into λ and BN γ
+    nodetach_lambda / nodetach_gamma  kept for already-run ablations, not plotted
 
 Protocol
 --------
@@ -57,6 +58,7 @@ from voc_seg import (  # noqa: E402
 from voc_ssd import voc_is_ready  # noqa: E402
 from utils import (  # noqa: E402
     collect_weight_layer_matches,
+    compute_l1_regularization,
     compute_mne_l2_regularization,
     dump_mne_mapping_report,
     get_torch_device,
@@ -70,13 +72,14 @@ LVAL = 16
 TRAIN_T = 0
 TEST_T = 16
 MNE_RC = 1e-4
+L1_RC = 1e-5
 L2_WD = 5e-4
 EPOCHS = 50
 LR = 1e-3
 MILESTONES = (30, 40)
 SIGMAS = (0.0, 0.5, 1.0, 2.0, 3.0, 5.0)
 HIGH_NOISE_MIN = 3.0
-METHODS = ("l2wo", "mne", "nodetach_lambda", "nodetach_gamma", "nodetach")
+METHODS = ("l2wo", "l2all", "l1wo", "mne", "nodetach", "nodetach_lambda", "nodetach_gamma")
 
 DETACH_BOTH = dict(
     detach_lambda=True,
@@ -137,6 +140,22 @@ def method_spec(method: str) -> dict:
             "regularizer": "weight_decay_weights_only",
             "weight_decay": L2_WD,
             "reg_coeff": None,
+            "mne_kw": None,
+        }
+    if method == "l2all":
+        return {
+            "label": "L2-all",
+            "regularizer": "weight_decay",
+            "weight_decay": L2_WD,
+            "reg_coeff": None,
+            "mne_kw": None,
+        }
+    if method == "l1wo":
+        return {
+            "label": "L1-wo",
+            "regularizer": "l1",
+            "weight_decay": 0.0,
+            "reg_coeff": L1_RC,
             "mne_kw": None,
         }
     table = {
@@ -209,6 +228,8 @@ def optimizer_for(model, spec: dict, lr: float):
 def reg_loss(model, spec: dict):
     if spec["regularizer"] == "mne_l2":
         return compute_mne_l2_regularization(model, quant_level=LVAL, **spec["mne_kw"])
+    if spec["regularizer"] == "l1":
+        return compute_l1_regularization(model)
     return None
 
 
