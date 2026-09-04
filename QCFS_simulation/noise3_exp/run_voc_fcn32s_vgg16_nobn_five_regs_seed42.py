@@ -366,7 +366,7 @@ def evaluate_miou(
         "n_images": n,
         "seconds": f"{time.time() - t0:.1f}",
         "if_firing_density": f"{fire:.6f}",
-        "per_class_iou": [round(float(v), 4) for v in scores["iou"]],
+        "per_class_iou": scores["per_class_iou"],
     }
 
 
