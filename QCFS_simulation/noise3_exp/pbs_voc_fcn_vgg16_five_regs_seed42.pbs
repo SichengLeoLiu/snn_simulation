@@ -1,0 +1,116 @@
+#!/bin/bash
+#PBS -N vfcn5r
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# VOC 2012 FCN-VGG16-BN-IF seed-42 five-regularizer noise transfer.
+# METHOD: l2wo | mne | nodetach_lambda | nodetach_gamma | nodetach
+# Train T=0, eval T=16, rate_uniform, post_input_if.
+# Coefficients are the CIFAR defaults (do not retune):
+#   mne-family rc=1e-4; l2wo WD=5e-4
+# Results/logs on scratch. Do not tee to $HOME.
+#
+# Login node, once (reuse SSD VOC if already downloaded):
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   module purge
+#   module use /g/data/dk92/apps/Modules/modulefiles
+#   module load NCI-ai-ml/24.11
+#   python QCFS_simulation/noise3_exp/voc_ssd.py --download --voc-root "${VOC_ROOT}"
+#   python - <<'PY'
+# from pathlib import Path
+# p = Path("/home/595/sl9144/datasets/VOCdevkit/VOC2012/ImageSets/Segmentation/train.txt")
+# print("seg train", p.is_file(), p.read_text().count("\n") if p.is_file() else 0)
+# PY
+# ImageNet VGG-16 BN must already be cached (same as SSD):
+#   python ~/cache_vgg.py
+#
+# Submit (5 jobs):
+#   cd /home/595/sl9144/codes/snn_simulation
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   for M in l2wo mne nodetach_lambda nodetach_gamma nodetach; do
+#     qsub -N "vfcn_${M}" \
+#       -v VOC_ROOT,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_fcn_vgg16_five_regs_seed42 \
+#       QCFS_simulation/noise3_exp/pbs_voc_fcn_vgg16_five_regs_seed42.pbs
+#   done
+
+set -euo pipefail
+
+METHOD="${METHOD:?set METHOD=l2wo|mne|nodetach_lambda|nodetach_gamma|nodetach}"
+SEED="${SEED:-42}"
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/vfcn_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "METHOD=${METHOD} SEED=${SEED} TEST_ONLY=${TEST_ONLY:-0}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export VOC_ROOT="${VOC_ROOT:-/home/595/sl9144/datasets}"
+export VOC_BATCH="${VOC_BATCH:-8}"
+export VOC_EVAL_BATCH="${VOC_EVAL_BATCH:-1}"
+export VOC_NUM_WORKERS="${VOC_NUM_WORKERS:-8}"
+export VOC_EPOCHS="${VOC_EPOCHS:-50}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+export TORCH_HOME="${TORCH_HOME:-${HOME}/.cache/torch}"
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/voc_fcn_vgg16_five_regs_seed42}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "VOC_ROOT=${VOC_ROOT}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+
+SEG_TRAIN="${VOC_ROOT}/VOC2012/ImageSets/Segmentation/train.txt"
+SEG_TRAIN_KIT="${VOC_ROOT}/VOCdevkit/VOC2012/ImageSets/Segmentation/train.txt"
+if [[ ! -f "${SEG_TRAIN}" && ! -f "${SEG_TRAIN_KIT}" ]]; then
+  echo "ERROR: VOC 2012 segmentation missing under VOC_ROOT=${VOC_ROOT}"
+  echo "Download on a login node:"
+  echo "  python ${ROOT}/noise3_exp/voc_ssd.py --download --voc-root ${VOC_ROOT}"
+  exit 1
+fi
+
+ARGS=(
+  --method "${METHOD}"
+  --seed "${SEED}"
+  --voc-root "${VOC_ROOT}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${VOC_BATCH}"
+  --eval-batch-size "${VOC_EVAL_BATCH}"
+  --workers "${VOC_NUM_WORKERS}"
+  --epochs "${VOC_EPOCHS}"
+)
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+
+python -u noise3_exp/run_voc_fcn_vgg16_five_regs_seed42.py "${ARGS[@]}"
+
+echo "=== ALL DONE $(date) METHOD=${METHOD} SEED=${SEED} ==="
+ls -la "${OUT_DIR}/${METHOD}" || ls -la "${OUT_DIR}"

@@ -16,6 +16,7 @@ from .fc_cifar import fc2_cifar, fc3_cifar, fc5_cifar
 from .toy_diff1d import toy_diff1d
 from .VGG import vgg11, vgg13, vgg16, vgg19, vgg16_wobn, vgg16_inputif
 from .ResNet import resnet18, resnet18_imagenet, resnet34, resnet34_imagenet
+from .FCN import FCNVGG16
 from .SSD import SSD300VGG16
 
 
@@ -155,10 +156,12 @@ def modelpool(model_name, dataset_name="mnist"):
             "MNIST 当前仅支持模型: cnn2/cnn2_avg/cnn4/cnn6/cnn6_vgg/cnn6_narrow_staged/cnn6_wide_early/cnn8/cnn10（可用 _c{n} 指定每层通道）/fc2/fc3/fc3rev"
         )
 
-    if d in ("voc", "voc2007", "voc0712", "pascalvoc", "voc20072012"):
-        if m in ("ssd300", "ssd300_vgg16", "ssd300vgg16", "vgg16"):
+    if d in ("voc", "voc2007", "voc0712", "pascalvoc", "voc20072012", "voc2012"):
+        if m in ("ssd300", "ssd300_vgg16", "ssd300vgg16"):
             return SSD300VGG16()
-        raise ValueError("VOC 当前仅支持模型: ssd300 / ssd300_vgg16，收到: %s" % (model_name,))
+        if m in ("fcn", "fcn_vgg16", "fcn32", "fcn32s", "vgg16"):
+            return FCNVGG16()
+        raise ValueError("VOC 当前仅支持模型: ssd300 / ssd300_vgg16 | fcn / fcn_vgg16，收到: %s" % (model_name,))
 
     if d in ("cifar10", "cifa10"):
         num_classes = 10
