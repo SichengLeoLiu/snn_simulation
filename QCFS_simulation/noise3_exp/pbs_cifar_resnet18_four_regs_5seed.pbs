@@ -10,8 +10,8 @@
 #PBS -l wd
 #PBS -j oe
 
-# CIFAR ResNet-18 4 methods x 5 seeds. One job = one dataset/method/seed.
-# METHOD: l2all | l2wo | mne | onesided
+# CIFAR ResNet-18 methods x 5 seeds. One job = one dataset/method/seed.
+# METHOD: l2all | l2wo | mne | nodetach | onesided
 # DATASET: cifar10 | cifar100
 # SEED: 40–44
 # Logs/results on scratch. Do not tee to $HOME.
@@ -30,7 +30,7 @@
 
 set -euo pipefail
 
-METHOD="${METHOD:?set METHOD=l2all|l2wo|mne|onesided}"
+METHOD="${METHOD:?set METHOD=l2all|l2wo|mne|nodetach|onesided}"
 DATASET="${DATASET:-cifar10}"
 SEED="${SEED:-42}"
 

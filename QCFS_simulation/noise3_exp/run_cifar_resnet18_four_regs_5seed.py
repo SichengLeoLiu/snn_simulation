@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CIFAR ResNet-18 5-seed: L2-all, L2-wo, Old MNE, One-sided MNE.
+"""CIFAR ResNet-18 5-seed: L2-all, L2-wo, Old MNE, no-detach MNE, One-sided.
 
 Protocol matches the VGG envelope/onesided runs:
   ANN train T=0, 300 epochs, lr=0.1, L=16
@@ -9,6 +9,7 @@ Protocol matches the VGG envelope/onesided runs:
 Coefficients (CIFAR VGG five-regs / frozen onesided):
   L2-all / L2-wo : optimizer WD = 5e-4
   Old MNE        : mne_l2, detach λ, rc = 1e-4
+  no-detach MNE  : same formula, grads into λ and BN γ, rc = 1e-4
   One-sided      : α=4, τ=0.5, r_max=8, β=5e-4, warmup 30/50
 """
 from __future__ import annotations
@@ -75,6 +76,13 @@ METHODS = {
         "weight_decay": 0.0,
         "reg_coeff": MNE_RC,
         "extra": ["--mne_detach_lambda"],
+    },
+    "nodetach": {
+        "label": "MNE-L2 no-detach",
+        "regularizer": "mne_l2",
+        "weight_decay": 0.0,
+        "reg_coeff": MNE_RC,
+        "extra": ["--mne_no_detach_bn_affine"],
     },
     "onesided": {
         "label": "One-sided MNE",
@@ -194,7 +202,7 @@ def train(args) -> Path:
     if spec["reg_coeff"] is not None:
         cmd += ["--reg_coeff", str(spec["reg_coeff"])]
     cmd += list(spec["extra"])
-    if args.method == "onesided":
+    if args.method in ("onesided", "nodetach"):
         cmd += ["--epoch_log_csv", str(out / "epoch_log.csv")]
     print(" ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
