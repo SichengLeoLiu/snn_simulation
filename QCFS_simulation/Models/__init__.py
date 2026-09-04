@@ -156,13 +156,17 @@ def modelpool(model_name, dataset_name="mnist"):
         )
 
     if d in ("voc", "voc2007", "voc0712", "pascalvoc", "voc20072012", "voc2012"):
-        from .FCN import FCNVGG16
+        from .FCN import FCN32sVGG16, FCNVGG16
 
         if m in ("ssd300", "ssd300_vgg16", "ssd300vgg16"):
             return SSD300VGG16()
-        if m in ("fcn", "fcn_vgg16", "fcn32", "fcn32s", "vgg16"):
+        if m in ("fcn32s", "fcn32s_vgg16", "fcn32s_nobn"):
+            return FCN32sVGG16()
+        if m in ("fcn", "fcn_vgg16", "fcn32", "vgg16"):
             return FCNVGG16()
-        raise ValueError("VOC 当前仅支持模型: ssd300 / ssd300_vgg16 | fcn / fcn_vgg16，收到: %s" % (model_name,))
+        raise ValueError(
+            "VOC 当前仅支持模型: ssd300 / fcn / fcn_vgg16 / fcn32s，收到: %s" % (model_name,)
+        )
 
     if d in ("cifar10", "cifa10"):
         num_classes = 10

@@ -31,6 +31,13 @@ def voc2012_root_from(path: Path) -> Path:
     )
 
 
+def resolve_train_split(voc_root: Path) -> str:
+    root = voc2012_root_from(Path(voc_root))
+    if (root / "VOC2012" / "ImageSets" / "Segmentation" / "trainaug.txt").is_file():
+        return "trainaug"
+    return "train"
+
+
 def voc2012_seg_is_ready(path: Path) -> bool:
     try:
         root = voc2012_root_from(Path(path))
@@ -52,8 +59,20 @@ class VOCSegSet(Dataset):
             raise FileNotFoundError(id_file)
         self.ids = [line.strip() for line in id_file.read_text().splitlines() if line.strip()]
         self.img_dir = self.root / "VOC2012" / "JPEGImages"
-        self.mask_dir = self.root / "VOC2012" / "SegmentationClass"
+        aug_dir = self.root / "VOC2012" / "SegmentationClassAug"
+        self.mask_dir = aug_dir if aug_dir.is_dir() else self.root / "VOC2012" / "SegmentationClass"
         self.normalize = transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)
+
+    def _mask_path(self, image_id: str) -> Path:
+        for directory in (
+            self.mask_dir,
+            self.root / "VOC2012" / "SegmentationClassAug",
+            self.root / "VOC2012" / "SegmentationClass",
+        ):
+            path = directory / f"{image_id}.png"
+            if path.is_file():
+                return path
+        raise FileNotFoundError(f"mask missing for {image_id}")
 
     def __len__(self):
         return len(self.ids)
@@ -61,7 +80,7 @@ class VOCSegSet(Dataset):
     def __getitem__(self, index):
         image_id = self.ids[index]
         image = Image.open(self.img_dir / f"{image_id}.jpg").convert("RGB")
-        mask = Image.open(self.mask_dir / f"{image_id}.png")
+        mask = Image.open(self._mask_path(image_id))
         if self.train:
             image, mask = _train_pair(image, mask, self.crop)
         image_t = self.normalize(transforms.functional.to_tensor(image))

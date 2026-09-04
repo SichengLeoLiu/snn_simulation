@@ -1,0 +1,129 @@
+#!/bin/bash
+#PBS -N fcn32s
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=48:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# Full FCN-32s VGG-16 no-BN, QCFS/IF hidden, linear score_fr.
+# METHOD: l2wo | l2all | l1wo | mne | nodetach
+# Train T=0 L=16; eval T=16 rate_uniform post_input_if. Seed 42.
+# batch=1, accum=8. IF λ ← 99.9% ReLU activations.
+# Coefficients: mne rc=1e-4; l2 WD=5e-4; l1 rc=1e-5. Do not retune.
+#
+# Login node, once (compute nodes have no internet):
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   module purge
+#   module use /g/data/dk92/apps/Modules/modulefiles
+#   module load NCI-ai-ml/24.11
+#   python - <<'PY'
+# from torchvision.models import vgg16, VGG16_Weights
+# vgg16(weights=VGG16_Weights.IMAGENET1K_V1)
+# print("cached vgg16")
+# PY
+#   python QCFS_simulation/noise3_exp/run_voc_fcn32s_vgg16_nobn_five_regs_seed42.py --self-check
+#
+# Submit (5 jobs):
+#   cd /home/595/sl9144/codes/snn_simulation
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   for M in l2wo l2all l1wo mne nodetach; do
+#     qsub -N "fcn32s_${M}" \
+#       -v VOC_ROOT,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_fcn32s_vgg16_nobn_five_regs_seed42 \
+#       QCFS_simulation/noise3_exp/pbs_voc_fcn32s_vgg16_nobn_five_regs_seed42.pbs
+#   done
+
+set -euo pipefail
+
+METHOD="${METHOD:?set METHOD=l2wo|l2all|l1wo|mne|nodetach}"
+SEED="${SEED:-42}"
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/fcn32s_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "METHOD=${METHOD} SEED=${SEED} TEST_ONLY=${TEST_ONLY:-0} DRY_RUN=${DRY_RUN:-0}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export VOC_ROOT="${VOC_ROOT:-/home/595/sl9144/datasets}"
+export VOC_BATCH="${VOC_BATCH:-1}"
+export VOC_ACCUM="${VOC_ACCUM:-8}"
+export VOC_EVAL_BATCH="${VOC_EVAL_BATCH:-1}"
+export VOC_NUM_WORKERS="${VOC_NUM_WORKERS:-4}"
+export VOC_EPOCHS="${VOC_EPOCHS:-50}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+export TORCH_HOME="${TORCH_HOME:-${HOME}/.cache/torch}"
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/voc_fcn32s_vgg16_nobn_five_regs_seed42}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "VOC_ROOT=${VOC_ROOT}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+
+SEG_TRAIN="${VOC_ROOT}/VOC2012/ImageSets/Segmentation/train.txt"
+SEG_TRAIN_KIT="${VOC_ROOT}/VOCdevkit/VOC2012/ImageSets/Segmentation/train.txt"
+if [[ ! -f "${SEG_TRAIN}" && ! -f "${SEG_TRAIN_KIT}" ]]; then
+  echo "ERROR: VOC 2012 segmentation missing under VOC_ROOT=${VOC_ROOT}"
+  exit 1
+fi
+
+VGG_CKPT="${TORCH_HOME}/hub/checkpoints/vgg16-397923af.pth"
+if [[ ! -f "${VGG_CKPT}" ]]; then
+  ALT=$(ls "${TORCH_HOME}/hub/checkpoints"/vgg16-*.pth 2>/dev/null | grep -v bn | head -1 || true)
+  if [[ -n "${ALT}" ]]; then
+    echo "VGG-16 cache: ${ALT}"
+  else
+    echo "ERROR: VGG-16 (no BN) cache missing under ${TORCH_HOME}/hub/checkpoints/"
+    echo "On a login node:"
+    echo "  python -c 'from torchvision.models import vgg16, VGG16_Weights; vgg16(weights=VGG16_Weights.IMAGENET1K_V1)'"
+    exit 1
+  fi
+fi
+
+ARGS=(
+  --method "${METHOD}"
+  --seed "${SEED}"
+  --voc-root "${VOC_ROOT}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${VOC_BATCH}"
+  --accum "${VOC_ACCUM}"
+  --eval-batch-size "${VOC_EVAL_BATCH}"
+  --workers "${VOC_NUM_WORKERS}"
+  --epochs "${VOC_EPOCHS}"
+)
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  ARGS+=(--dry-run)
+fi
+
+python -u noise3_exp/run_voc_fcn32s_vgg16_nobn_five_regs_seed42.py "${ARGS[@]}"
+
+echo "=== ALL DONE $(date) METHOD=${METHOD} SEED=${SEED} ==="
+ls -la "${OUT_DIR}/${METHOD}" || ls -la "${OUT_DIR}"
