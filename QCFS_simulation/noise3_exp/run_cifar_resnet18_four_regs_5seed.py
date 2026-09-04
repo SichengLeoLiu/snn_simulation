@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CIFAR ResNet-18 5-seed: L2-all, L2-wo, Old MNE, no-detach MNE, One-sided.
+"""CIFAR ResNet-18 5-seed: L2-all, L2-wo, MNE-L2 detach, no-detach, One-sided.
 
 Protocol matches the VGG envelope/onesided runs:
   ANN train T=0, 300 epochs, lr=0.1, L=16
@@ -8,7 +8,7 @@ Protocol matches the VGG envelope/onesided runs:
 
 Coefficients (CIFAR VGG five-regs / frozen onesided):
   L2-all / L2-wo : optimizer WD = 5e-4
-  Old MNE        : mne_l2, detach λ, rc = 1e-4
+  MNE-L2 detach  : mne_l2, detach λ, rc = 1e-4
   no-detach MNE  : same formula, grads into λ and BN γ, rc = 1e-4
   One-sided      : α=4, τ=0.5, r_max=8, β=5e-4, warmup 30/50
 """
@@ -71,7 +71,7 @@ METHODS = {
         "extra": [],
     },
     "mne": {
-        "label": "Old MNE",
+        "label": "MNE-L2 detach",
         "regularizer": "mne_l2",
         "weight_decay": 0.0,
         "reg_coeff": MNE_RC,
