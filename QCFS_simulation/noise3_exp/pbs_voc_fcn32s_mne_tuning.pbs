@@ -1,0 +1,48 @@
+#!/bin/bash
+#PBS -N fcn_mne_tune
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=48:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+set -euo pipefail
+METHOD="${METHOD:?set METHOD=l2wo|mne|nodetach}"
+STAGE="${STAGE:-tune}"
+OUT_DIR="${OUT_DIR:?set a new output directory}"
+VOC_ROOT="${VOC_ROOT:?set VOC_ROOT}"
+SEED="${SEED:-42}"
+REPO="${PBS_O_WORKDIR:?submit from the repository root}"
+SCRIPT="${REPO}/QCFS_simulation/noise3_exp/run_voc_fcn32s_mne_tuning.py"
+[[ -f "${SCRIPT}" ]] || { echo "Submit from the repository root"; exit 1; }
+[[ -f "${OUT_DIR}/split.json" ]] || { echo "Run prepare first"; exit 1; }
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+export TORCH_HOME="${TORCH_HOME:-${HOME}/.cache/torch}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+[[ -f "${TORCH_HOME}/hub/checkpoints/vgg16-397923af.pth" ]] || {
+  echo "Missing cached ImageNet VGG16 weights; reuse the cache from the original FCN jobs"
+  exit 1
+}
+mkdir -p "${OUT_DIR}/logs"
+LOG="${OUT_DIR}/logs/${STAGE}_${METHOD}_s${STRENGTH:-selected}_seed${SEED}.${PBS_JOBID:-manual}.log"
+echo "Live log: ${LOG}"
+exec > "${LOG}" 2>&1
+ARGS=(run --stage "${STAGE}" --method "${METHOD}" --seed "${SEED}"
+      --voc-root "${VOC_ROOT}" --out-root "${OUT_DIR}" --device cuda
+      --epochs "${EPOCHS:-50}" --workers "${WORKERS:-4}")
+if [[ "${STAGE}" == "tune" ]]; then
+  ARGS+=(--strength "${STRENGTH:?set STRENGTH=0.1|1|10}")
+fi
+if [[ "${SMOKE:-0}" == "1" ]]; then
+  ARGS+=(--smoke)
+fi
+echo "method=${METHOD} stage=${STAGE} seed=${SEED} strength=${STRENGTH:-selected}"
+python -u "${SCRIPT}" "${ARGS[@]}"
