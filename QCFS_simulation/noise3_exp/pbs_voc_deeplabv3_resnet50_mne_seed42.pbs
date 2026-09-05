@@ -1,0 +1,133 @@
+#!/bin/bash
+#PBS -N deeplab
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=48:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# DeepLabV3-ResNet50 on VOC2012 val.
+# METHOD: original | l2wo | mne | nodetach
+# original = COCO-VOC weights, IF λ only. Others = 10-ep QCFS FT.
+# mne / nodetach share a frozen β matched to L2-wo at init.
+# Train T=0 L=16; eval T=16 rate_uniform post_input_if. Seed 42.
+# New OUT_DIR; do not reuse voc_fcn32s_mne_tuning_v1.
+#
+# Login node, once (compute nodes have no internet):
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   export TORCH_HOME=${HOME}/.cache/torch
+#   module purge
+#   module use /g/data/dk92/apps/Modules/modulefiles
+#   module load NCI-ai-ml/24.11
+#   python - <<'PY'
+# from torchvision.models.segmentation import deeplabv3_resnet50, DeepLabV3_ResNet50_Weights
+# deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1)
+# print("cached deeplabv3_resnet50")
+# PY
+#   python QCFS_simulation/noise3_exp/run_voc_deeplabv3_resnet50_mne_seed42.py --self-check
+#
+# Submit (4 jobs):
+#   cd /home/595/sl9144/codes/snn_simulation
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   for M in original l2wo mne nodetach; do
+#     qsub -N "dlv3_${M}" \
+#       -v VOC_ROOT,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_mne_seed42 \
+#       QCFS_simulation/noise3_exp/pbs_voc_deeplabv3_resnet50_mne_seed42.pbs
+#   done
+
+set -euo pipefail
+
+METHOD="${METHOD:?set METHOD=original|l2wo|mne|nodetach}"
+SEED="${SEED:-42}"
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/deeplabv3_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "METHOD=${METHOD} SEED=${SEED} TEST_ONLY=${TEST_ONLY:-0} DRY_RUN=${DRY_RUN:-0}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export VOC_ROOT="${VOC_ROOT:-/home/595/sl9144/datasets}"
+export VOC_BATCH="${VOC_BATCH:-1}"
+export VOC_ACCUM="${VOC_ACCUM:-8}"
+export VOC_EVAL_BATCH="${VOC_EVAL_BATCH:-1}"
+export VOC_NUM_WORKERS="${VOC_NUM_WORKERS:-4}"
+export VOC_EPOCHS="${VOC_EPOCHS:-10}"
+export VOC_EVAL_T="${VOC_EVAL_T:-16}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+export TORCH_HOME="${TORCH_HOME:-${HOME}/.cache/torch}"
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_mne_seed42}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "VOC_ROOT=${VOC_ROOT}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+
+SEG_TRAIN="${VOC_ROOT}/VOC2012/ImageSets/Segmentation/train.txt"
+SEG_TRAIN_KIT="${VOC_ROOT}/VOCdevkit/VOC2012/ImageSets/Segmentation/train.txt"
+if [[ ! -f "${SEG_TRAIN}" && ! -f "${SEG_TRAIN_KIT}" ]]; then
+  echo "ERROR: VOC 2012 segmentation missing under VOC_ROOT=${VOC_ROOT}"
+  exit 1
+fi
+
+DL_CKPT="${TORCH_HOME}/hub/checkpoints/deeplabv3_resnet50_coco-cd0a2569.pth"
+if [[ ! -f "${DL_CKPT}" ]]; then
+  ALT=$(ls "${TORCH_HOME}/hub/checkpoints"/deeplabv3_resnet50_coco-*.pth 2>/dev/null | head -1 || true)
+  if [[ -n "${ALT}" ]]; then
+    echo "DeepLab cache: ${ALT}"
+  else
+    echo "ERROR: DeepLabV3-ResNet50 COCO-VOC cache missing under ${TORCH_HOME}/hub/checkpoints/"
+    echo "On a login node:"
+    echo "  python -c 'from torchvision.models.segmentation import deeplabv3_resnet50, DeepLabV3_ResNet50_Weights; deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1)'"
+    exit 1
+  fi
+fi
+
+ARGS=(
+  --method "${METHOD}"
+  --seed "${SEED}"
+  --voc-root "${VOC_ROOT}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${VOC_BATCH}"
+  --accum "${VOC_ACCUM}"
+  --eval-batch-size "${VOC_EVAL_BATCH}"
+  --workers "${VOC_NUM_WORKERS}"
+  --epochs "${VOC_EPOCHS}"
+  --eval-t "${VOC_EVAL_T}"
+)
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+  ARGS+=(--dry-run)
+fi
+
+python -u noise3_exp/run_voc_deeplabv3_resnet50_mne_seed42.py "${ARGS[@]}"
+
+echo "=== ALL DONE $(date) METHOD=${METHOD} SEED=${SEED} ==="
+ls -la "${OUT_DIR}/${METHOD}" || ls -la "${OUT_DIR}"

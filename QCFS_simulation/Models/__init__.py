@@ -164,8 +164,13 @@ def modelpool(model_name, dataset_name="mnist"):
             return FCN32sVGG16()
         if m in ("fcn", "fcn_vgg16", "fcn32", "vgg16"):
             return FCNVGG16()
+        if m in ("deeplabv3", "deeplab", "deeplabv3_resnet50"):
+            from .DeepLab import build_deeplabv3_resnet50_if
+
+            return build_deeplabv3_resnet50_if(load_coco=False)
         raise ValueError(
-            "VOC 当前仅支持模型: ssd300 / fcn / fcn_vgg16 / fcn32s，收到: %s" % (model_name,)
+            "VOC 当前仅支持模型: ssd300 / fcn / fcn_vgg16 / fcn32s / deeplabv3_resnet50，收到: %s"
+            % (model_name,)
         )
 
     if d in ("cifar10", "cifa10"):

@@ -280,19 +280,26 @@ def parse_mne_include_roles(value) -> tuple[str, ...] | None:
 def _weight_layer_role(layer_name: str) -> str:
     parts = str(layer_name).split(".")
     last = parts[-1]
+    in_stage = any(part.startswith("layer") for part in parts)
     if last in ("fc", "classifier") or parts[0] in (
         "classifier",
         "loc_heads",
         "conf_heads",
     ):
         return "classifier_head"
-    if "shortcut" in parts:
+    if "shortcut" in parts or "downsample" in parts:
         return "shortcut"
     if "residual_function" in parts and last.isdigit():
         return "residual_terminal" if int(last) >= 3 else "residual_preact"
+    if last == "conv3":
+        return "residual_terminal"
+    if last in ("conv1", "conv2") and in_stage:
+        return "residual_preact"
     if parts[0] in ("layer1", "layer2", "layer3", "layer4", "layer5") and last.isdigit():
         return parts[0]
     if parts[0].startswith("conv1") or layer_name.startswith("conv1"):
+        return "stem"
+    if last == "conv1" and not in_stage:
         return "stem"
     return "other"
 
@@ -341,6 +348,8 @@ def _resolve_bn_if_for_layer(layer_name, module_map, layer_map="legacy"):
         if token.startswith("conv"):
             bn_names += [_full(token.replace("conv", "bn", 1))]
             if_names += [_full(token.replace("conv", "if", 1))]
+            if token == "conv1":
+                if_names += [_full("relu")]
         elif token.startswith("fc"):
             bn_names += [_full(token.replace("fc", "bn", 1))]
             if_names += [_full(token.replace("fc", "if", 1))]
@@ -377,6 +386,26 @@ def _resolve_bn_if_for_layer(layer_name, module_map, layer_map="legacy"):
             act = module_map.get(f"{block_name}.act" if block_name else "act")
             if isinstance(act, IF):
                 if_mod = act
+        if token in ("conv1", "conv2", "conv3"):
+            idx = token[-1]
+            if bn_mod is None:
+                bn_cand = module_map.get(_full(f"bn{idx}"))
+                if isinstance(bn_cand, nn.modules.batchnorm._BatchNorm):
+                    bn_mod = bn_cand
+            if_cand = module_map.get(_full(f"if{idx}"))
+            if isinstance(if_cand, IF):
+                if_mod = if_cand
+        if parent_kind == "downsample" and token == "0":
+            block_name = ".".join(parts[:-2])
+            if bn_mod is None:
+                bn_cand = module_map.get(f"{block_name}.downsample.1" if block_name else "downsample.1")
+                if isinstance(bn_cand, nn.modules.batchnorm._BatchNorm):
+                    bn_mod = bn_cand
+            post = module_map.get(f"{block_name}.if3" if block_name else "if3")
+            if post is None:
+                post = module_map.get(f"{block_name}.act" if block_name else "act")
+            if isinstance(post, IF):
+                if_mod = post
 
     return bn_mod, if_mod
 
