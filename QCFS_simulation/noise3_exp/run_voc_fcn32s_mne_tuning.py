@@ -144,6 +144,14 @@ def accumulation_divisor(step, n_batches, accum):
     return min(accum, n_batches - (step // accum) * accum)
 
 
+def skip_train_batch(masks, loss):
+    if int((masks != base.IGNORE_INDEX).sum()) == 0:
+        return "all_ignore"
+    if not torch.isfinite(loss):
+        return "nonfinite"
+    return None
+
+
 def protocol(args, manifest):
     source_files = [Path(__file__), Path(base.__file__), base.ROOT / "utils.py",
                     base.ROOT / "Models/FCN.py", base.ROOT / "Models/layer.py", base.ROOT / "Models/VGG.py",
@@ -179,7 +187,15 @@ def run(args):
               "selection_hash": digest(selected) if selected else None}
     stage = "smoke" if args.smoke else args.stage
     out = run_dir(args.out_root, stage, args.method, args.strength, args.seed)
-    immutable_json(out / "config.json", config)
+    locked = out / "config.json"
+    if locked.exists():
+        existing = json.loads(locked.read_text())
+        for key in ("method", "seed", "strength", "stage", "smoke"):
+            if existing.get(key) != config.get(key):
+                raise ValueError(f"Existing {locked} has {key}={existing.get(key)!r}, not {config.get(key)!r}")
+        config = existing
+    else:
+        immutable_json(locked, config)
     if (out / "result.json").exists():
         print(f"Already complete: {out}", flush=True)
         return
@@ -227,13 +243,16 @@ def run(args):
         model.set_first_layer_input_noise_sigma(0)
         opt.zero_grad(set_to_none=True)
         t0, ce_sum, reg_sum = time.time(), 0.0, 0.0
-        for step, (images, masks, _) in enumerate(train_loader):
-            ce = criterion(model(images.to(device)), masks.to(device))
+        for step, (images, masks, ids) in enumerate(train_loader):
+            masks = masks.to(device)
+            ce = criterion(model(images.to(device)), masks)
             extra = base.reg_loss(model, spec)
             penalty = beta * extra if extra is not None else ce.new_zeros(())
             loss = ce + penalty
-            if not torch.isfinite(loss):
-                raise FloatingPointError(f"Nonfinite loss at epoch {epoch}, step {step}")
+            reason = skip_train_batch(masks, loss)
+            if reason:
+                print(f"skip {reason} epoch={epoch} step={step} ids={list(ids)}", flush=True)
+                continue
             (loss / accumulation_divisor(step, len(train_loader), args.accum)).backward()
             if (step + 1) % args.accum == 0 or step + 1 == len(train_loader):
                 opt.step()

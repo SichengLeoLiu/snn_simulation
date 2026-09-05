@@ -109,6 +109,13 @@ class TuningChecks(unittest.TestCase):
     def test_accumulation_tail_has_full_strength(self):
         self.assertEqual([tuning.accumulation_divisor(i, 10, 8) for i in range(10)], [8] * 8 + [2] * 2)
 
+    def test_skip_all_ignore_or_nonfinite_batch(self):
+        ignore = torch.full((1, 4, 4), tuning.base.IGNORE_INDEX)
+        valid = torch.zeros((1, 4, 4), dtype=torch.long)
+        self.assertEqual(tuning.skip_train_batch(ignore, torch.tensor(1.0)), "all_ignore")
+        self.assertEqual(tuning.skip_train_batch(valid, torch.tensor(float("nan"))), "nonfinite")
+        self.assertIsNone(tuning.skip_train_batch(valid, torch.tensor(0.2)))
+
     def test_selection_uses_auc_subject_to_clean_floor(self):
         rows = [{"method": "l2wo", "strength": 1, "clean_miou": 50, "auc_mean_miou": 40},
                 {"method": "mne", "strength": 1, "clean_miou": 49.5, "auc_mean_miou": 42},
@@ -126,6 +133,16 @@ class TuningChecks(unittest.TestCase):
             tuning.immutable_json(path, {"seed": 42})
             with self.assertRaises(ValueError):
                 tuning.immutable_json(path, {"seed": 43})
+
+    def test_resume_keeps_locked_config_when_source_hash_changes(self):
+        locked = {"protocol": {"source_hashes": {"run.py": "old"}}, "method": "l2wo",
+                  "seed": 42, "strength": 0.1, "stage": "tune", "smoke": False,
+                  "selection_hash": None}
+        fresh = dict(locked)
+        fresh["protocol"] = {"source_hashes": {"run.py": "new"}}
+        for key in ("method", "seed", "strength", "stage", "smoke"):
+            self.assertEqual(locked[key], fresh[key])
+        self.assertNotEqual(locked["protocol"], fresh["protocol"])
 
     def test_selection_requires_full_grid_then_confirms_on_full_training_split(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
