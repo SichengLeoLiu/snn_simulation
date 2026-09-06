@@ -77,6 +77,31 @@ def convert_deeplab_relu_to_if(root: nn.Module) -> None:
     _replace_relus(root)
 
 
+def replace_maxpool_with_avgpool(root: nn.Module) -> int:
+    """Swap every MaxPool2d for AvgPool2d with the same window. Stem only in DeepLab-R50."""
+    n = 0
+    for name, child in list(root.named_children()):
+        if isinstance(child, nn.MaxPool2d):
+            setattr(
+                root,
+                name,
+                nn.AvgPool2d(
+                    kernel_size=child.kernel_size,
+                    stride=child.stride,
+                    padding=child.padding,
+                    ceil_mode=child.ceil_mode,
+                ),
+            )
+            n += 1
+        else:
+            n += replace_maxpool_with_avgpool(child)
+    return n
+
+
+def count_maxpool2d(root: nn.Module) -> int:
+    return sum(isinstance(module, nn.MaxPool2d) for module in root.modules())
+
+
 def _hub_dir() -> Path:
     torch_home = os.environ.get(
         "TORCH_HOME",
@@ -133,10 +158,18 @@ def _build_tv_deeplab(load_coco: bool) -> nn.Module:
 
 
 class DeepLabV3ResNet50IF(nn.Module):
-    def __init__(self, tv_model: nn.Module):
+    def __init__(self, tv_model: nn.Module, stem_pool: str = "max"):
         super().__init__()
         tv_model.aux_classifier = None
         convert_deeplab_relu_to_if(tv_model)
+        pool = str(stem_pool).strip().lower()
+        if pool not in ("max", "avg"):
+            raise ValueError(f"stem_pool must be max or avg, got {stem_pool}")
+        if pool == "avg":
+            n_swap = replace_maxpool_with_avgpool(tv_model)
+            if n_swap != 1:
+                raise RuntimeError(f"expected 1 stem MaxPool2d to replace, got {n_swap}")
+        self.stem_pool = pool
         self.backbone = tv_model.backbone
         self.classifier = tv_model.classifier
         self.num_classes = NUM_CLASSES
@@ -227,5 +260,5 @@ class DeepLabV3ResNet50IF(nn.Module):
         return self._time_mean(logits)
 
 
-def build_deeplabv3_resnet50_if(load_coco: bool = True) -> DeepLabV3ResNet50IF:
-    return DeepLabV3ResNet50IF(_build_tv_deeplab(load_coco=load_coco))
+def build_deeplabv3_resnet50_if(load_coco: bool = True, stem_pool: str = "max") -> DeepLabV3ResNet50IF:
+    return DeepLabV3ResNet50IF(_build_tv_deeplab(load_coco=load_coco), stem_pool=stem_pool)

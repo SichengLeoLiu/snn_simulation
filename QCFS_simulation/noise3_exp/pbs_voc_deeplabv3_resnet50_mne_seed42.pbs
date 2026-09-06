@@ -46,6 +46,14 @@
 #       -v VOC_ROOT,VOC_SIGMA_MIN=0,VOC_SIGMA_MAX=1,VOC_SIGMA_STEP=0.1,SWEEP_TAG=s0_1,TEST_ONLY=1,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_mne_seed42 \
 #       QCFS_simulation/noise3_exp/pbs_voc_deeplabv3_resnet50_mne_seed42.pbs
 #   done
+#
+# Stem MaxPool → AvgPool, retrain + σ∈[0,0.3] step 0.05 (new OUT_DIR):
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   for M in original l2wo mne nodetach; do
+#     qsub -N "dlv3avg_${M}" \
+#       -v VOC_ROOT,VOC_STEM_POOL=avg,VOC_SIGMA_MIN=0,VOC_SIGMA_MAX=0.3,VOC_SIGMA_STEP=0.05,SWEEP_TAG=s0_03_step05,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_avgpool_mne_seed42 \
+#       QCFS_simulation/noise3_exp/pbs_voc_deeplabv3_resnet50_mne_seed42.pbs
+#   done
 
 set -euo pipefail
 
@@ -54,10 +62,11 @@ SEED="${SEED:-42}"
 
 SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
 mkdir -p "${SCRATCH_LOG}"
-LIVE_LOG="${SCRATCH_LOG}/deeplabv3_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+STEM_POOL="${VOC_STEM_POOL:-max}"
+LIVE_LOG="${SCRATCH_LOG}/deeplabv3_${STEM_POOL}_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
 exec > "${LIVE_LOG}" 2>&1
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "METHOD=${METHOD} SEED=${SEED} TEST_ONLY=${TEST_ONLY:-0} DRY_RUN=${DRY_RUN:-0} VOC_SIGMAS=${VOC_SIGMAS:-} VOC_SIGMA_MIN=${VOC_SIGMA_MIN:-} VOC_SIGMA_MAX=${VOC_SIGMA_MAX:-} VOC_SIGMA_STEP=${VOC_SIGMA_STEP:-} SWEEP_TAG=${SWEEP_TAG:-}"
+echo "METHOD=${METHOD} SEED=${SEED} STEM_POOL=${STEM_POOL} TEST_ONLY=${TEST_ONLY:-0} DRY_RUN=${DRY_RUN:-0} VOC_SIGMAS=${VOC_SIGMAS:-} VOC_SIGMA_MIN=${VOC_SIGMA_MIN:-} VOC_SIGMA_MAX=${VOC_SIGMA_MAX:-} VOC_SIGMA_STEP=${VOC_SIGMA_STEP:-} SWEEP_TAG=${SWEEP_TAG:-}"
 
 module purge
 module use /g/data/dk92/apps/Modules/modulefiles
@@ -84,7 +93,13 @@ else
 fi
 cd "${ROOT}"
 
-OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_mne_seed42}"
+if [[ -z "${OUT_DIR:-}" ]]; then
+  if [[ "${STEM_POOL}" == "avg" ]]; then
+    OUT_DIR="/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_avgpool_mne_seed42"
+  else
+    OUT_DIR="/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_mne_seed42"
+  fi
+fi
 mkdir -p "${OUT_DIR}"
 
 echo "=== host=$(hostname) date=$(date) ==="
@@ -148,6 +163,9 @@ if [[ -n "${VOC_SIGMA_STEP:-}" ]]; then
 fi
 if [[ -n "${SWEEP_TAG:-}" ]]; then
   ARGS+=(--sweep-tag "${SWEEP_TAG}")
+fi
+if [[ -n "${VOC_STEM_POOL:-}" ]]; then
+  ARGS+=(--stem-pool "${VOC_STEM_POOL}")
 fi
 
 python -u noise3_exp/run_voc_deeplabv3_resnet50_mne_seed42.py "${ARGS[@]}"

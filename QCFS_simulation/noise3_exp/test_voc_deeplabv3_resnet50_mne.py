@@ -13,7 +13,11 @@ for path in (ROOT, EXP):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from Models.DeepLab import convert_bottleneck_relu_to_if  # noqa: E402
+from Models.DeepLab import (  # noqa: E402
+    build_deeplabv3_resnet50_if,
+    convert_bottleneck_relu_to_if,
+    count_maxpool2d,
+)
 from Models.layer import IF  # noqa: E402
 from Models.ResNet import resnet18  # noqa: E402
 import run_voc_deeplabv3_resnet50_mne_seed42 as runner  # noqa: E402
@@ -89,6 +93,20 @@ class DeepLabMNEChecks(unittest.TestCase):
                 self.assertIsNotNone(thresh.grad)
         for left, right in zip(grads[0], grads[1]):
             torch.testing.assert_close(left, right)
+
+    def test_stem_maxpool_replaced_by_avgpool(self):
+        max_model = build_deeplabv3_resnet50_if(load_coco=False, stem_pool="max")
+        avg_model = build_deeplabv3_resnet50_if(load_coco=False, stem_pool="avg")
+        self.assertEqual(count_maxpool2d(max_model), 1)
+        self.assertEqual(count_maxpool2d(avg_model), 0)
+        self.assertEqual(avg_model.stem_pool, "avg")
+        self.assertIsInstance(avg_model.backbone.maxpool, nn.AvgPool2d)
+        max_model.set_L(16)
+        avg_model.set_L(16)
+        max_model.eval()
+        avg_model.eval()
+        x = torch.zeros(1, 3, 128, 128)
+        self.assertEqual(tuple(max_model(x).shape), tuple(avg_model(x).shape))
 
     def test_sigma_grid_zero_to_one(self):
         self.assertEqual(

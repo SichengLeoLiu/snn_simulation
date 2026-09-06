@@ -12,6 +12,7 @@ Protocol
 MNE is a conversion-time weight preparation, not a change to Bu 2025's
 training-free converter. Eval is VOC2012 val (Bu Table 3 DeepLab is COCO).
 Train T=0, L=16; eval T=16 rate_uniform, post_input_if. Seed 42.
+Stem is MaxPool2d unless --stem-pool avg (conversion-time swap, new OUT_DIR).
 """
 from __future__ import annotations
 
@@ -39,6 +40,7 @@ from Models.DeepLab import (  # noqa: E402
     COCO_WEIGHT_NAME,
     build_deeplabv3_resnet50_if,
     cached_deeplab_weight_path,
+    count_maxpool2d,
 )
 from Models.FCN import IGNORE_INDEX, NUM_CLASSES, init_if_thresholds_percentile  # noqa: E402
 from Models.layer import IF  # noqa: E402
@@ -140,6 +142,12 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("SWEEP_TAG", ""),
         help="If set, write val_sweep_<tag>.csv / scorecard_<tag>.json instead of overwriting the default sweep.",
     )
+    parser.add_argument(
+        "--stem-pool",
+        choices=("max", "avg"),
+        default=os.environ.get("VOC_STEM_POOL", "max"),
+        help="ResNet stem pooling. avg replaces the single MaxPool2d (conversion-time, not in pretrained weights).",
+    )
     parser.add_argument("--max-eval-images", type=int, default=0)
     parser.add_argument(
         "--voc-root",
@@ -157,6 +165,7 @@ def parse_args() -> argparse.Namespace:
     args.eval_t = max(0, int(args.eval_t))
     args.sigmas = resolve_sigmas(args.sigmas, args.sigma_min, args.sigma_max, args.sigma_step)
     args.sweep_tag = str(args.sweep_tag or "").strip()
+    args.stem_pool = str(args.stem_pool or "max").strip().lower()
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
     if args.summarize or args.self_check or args.download_voc or args.dry_run:
@@ -253,9 +262,9 @@ def ckpt_path(args) -> Path:
     )
 
 
-def make_model(seed: int, device, load_coco: bool = True):
+def make_model(seed: int, device, load_coco: bool = True, stem_pool: str = "max"):
     seed_all(seed)
-    model = build_deeplabv3_resnet50_if(load_coco=load_coco)
+    model = build_deeplabv3_resnet50_if(load_coco=load_coco, stem_pool=stem_pool)
     model._mne_layer_map = LAYER_MAP
     model.set_L(LVAL)
     model.set_T(TRAIN_T)
@@ -444,6 +453,7 @@ def self_check(device) -> dict:
     assert card["n_matched"] == 60, card
     assert card["n_unmatched"] == 1, card
     assert card["unmatched_body"] == [], card
+    assert count_maxpool2d(model) == 1, mapping_card(model)
     model.set_T(2)
     model.set_mode("rate_uniform")
     logits_t = model(dummy)
@@ -470,8 +480,8 @@ def dry_run(args, device) -> None:
         )
     pin = device.type == "cuda"
     train_loader, val_loader, split, n_train, n_val = voc_loaders(args, pin)
-    model = make_model(args.seed, device, load_coco=True)
-    print(f"[DRY] split={split} n_train={n_train} n_val={n_val} {mapping_card(model)}", flush=True)
+    model = make_model(args.seed, device, load_coco=True, stem_pool=args.stem_pool)
+    print(f"[DRY] split={split} n_train={n_train} n_val={n_val} stem_pool={args.stem_pool} {mapping_card(model)}", flush=True)
     init_if_thresholds_percentile(model, train_loader, device, q=PERCENTILE, max_images=min(8, n_train))
     spec = method_spec("mne")
     spec["reg_coeff"] = matched_weight_beta(model)["beta_match"]
@@ -502,13 +512,21 @@ def train_one(args, spec: dict, device) -> Path:
 
     pin = device.type == "cuda"
     train_loader, _val_loader, split, n_train, n_val = voc_loaders(args, pin)
-    model = make_model(args.seed, device, load_coco=True)
-    print(f"[INIT] COCO-VOC; train={n_train} val={n_val} split={split}", flush=True)
+    model = make_model(args.seed, device, load_coco=True, stem_pool=args.stem_pool)
+    print(
+        f"[INIT] COCO-VOC stem_pool={args.stem_pool} maxpool={count_maxpool2d(model)}; "
+        f"train={n_train} val={n_val} split={split}",
+        flush=True,
+    )
     thresh = init_if_thresholds_percentile(
         model, train_loader, device, q=PERCENTILE, max_images=PERCENTILE_IMAGES
     )
     (out / "if_thresh_init.json").write_text(json.dumps(thresh, indent=2) + "\n")
-    extra = {"method": args.method, "spec": {k: v for k, v in spec.items() if k != "mne_kw"}}
+    extra = {
+        "method": args.method,
+        "stem_pool": args.stem_pool,
+        "spec": {k: v for k, v in spec.items() if k != "mne_kw"},
+    }
     if spec["regularizer"] == "mne_l2":
         report = matched_weight_beta(model)
         spec["reg_coeff"] = report["beta_match"]
@@ -519,7 +537,10 @@ def train_one(args, spec: dict, device) -> Path:
 
     criterion = nn.CrossEntropyLoss(ignore_index=IGNORE_INDEX)
     if spec["regularizer"] is None:
-        torch.save({"state_dict": model.state_dict(), "epoch": 0, "method": args.method}, ckpt)
+        torch.save(
+            {"state_dict": model.state_dict(), "epoch": 0, "method": args.method, "stem_pool": args.stem_pool},
+            ckpt,
+        )
         return ckpt
 
     opt = optimizer_for(model, spec, args.lr)
@@ -574,16 +595,28 @@ def train_one(args, spec: dict, device) -> Path:
                 writer.writeheader()
             writer.writerow(row)
         print(json.dumps(row), flush=True)
-        torch.save({"state_dict": model.state_dict(), "epoch": epoch, "method": args.method, "reg_coeff": spec["reg_coeff"]}, ckpt)
+        torch.save(
+            {
+                "state_dict": model.state_dict(),
+                "epoch": epoch,
+                "method": args.method,
+                "reg_coeff": spec["reg_coeff"],
+                "stem_pool": args.stem_pool,
+            },
+            ckpt,
+        )
     return ckpt
 
 
 def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
     pin = device.type == "cuda"
     _train, val_loader, split, n_train, n_val = voc_loaders(args, pin)
-    model = make_model(args.seed, device, load_coco=False)
+    model = make_model(args.seed, device, load_coco=False, stem_pool=args.stem_pool)
     state = torch.load(ckpt, map_location="cpu")
     if isinstance(state, dict) and "state_dict" in state:
+        saved_pool = str(state.get("stem_pool", "max"))
+        if saved_pool != args.stem_pool:
+            raise ValueError(f"checkpoint stem_pool={saved_pool} != --stem-pool {args.stem_pool}")
         if state.get("reg_coeff") is not None:
             spec["reg_coeff"] = state["reg_coeff"]
         state = state["state_dict"]
@@ -592,7 +625,14 @@ def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
     out = cfg_dir(args)
     out.mkdir(parents=True, exist_ok=True)
     print(
-        json.dumps({"eval_sigmas": list(args.sigmas), "sweep_tag": args.sweep_tag or ""}),
+        json.dumps(
+            {
+                "eval_sigmas": list(args.sigmas),
+                "sweep_tag": args.sweep_tag or "",
+                "stem_pool": args.stem_pool,
+                "n_maxpool": count_maxpool2d(model),
+            }
+        ),
         flush=True,
     )
     ann = evaluate_miou(
@@ -634,6 +674,8 @@ def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
         "method": args.method,
         "label": spec["label"],
         "arch": ARCH,
+        "stem_pool": args.stem_pool,
+        "n_maxpool": count_maxpool2d(model),
         "seed": args.seed,
         "quant_level": LVAL,
         "eval_T": args.eval_t,
