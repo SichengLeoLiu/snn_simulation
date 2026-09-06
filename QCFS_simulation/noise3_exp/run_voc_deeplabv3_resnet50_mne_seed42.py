@@ -112,6 +112,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--summarize", action="store_true")
     parser.add_argument("--download-voc", action="store_true")
+    parser.add_argument(
+        "--sigmas",
+        default=os.environ.get("VOC_SIGMAS", ""),
+        help="Comma-separated noise sigmas. Empty keeps the default 0–5 grid unless --sigma-step is set.",
+    )
+    parser.add_argument(
+        "--sigma-min",
+        type=float,
+        default=_env_float("VOC_SIGMA_MIN"),
+        help="Inclusive lower bound when building a regular sigma grid.",
+    )
+    parser.add_argument(
+        "--sigma-max",
+        type=float,
+        default=_env_float("VOC_SIGMA_MAX"),
+        help="Inclusive upper bound when building a regular sigma grid.",
+    )
+    parser.add_argument(
+        "--sigma-step",
+        type=float,
+        default=_env_float("VOC_SIGMA_STEP"),
+        help="Step size for a regular sigma grid. Preferred on PBS (avoids comma-splitting).",
+    )
+    parser.add_argument(
+        "--sweep-tag",
+        default=os.environ.get("SWEEP_TAG", ""),
+        help="If set, write val_sweep_<tag>.csv / scorecard_<tag>.json instead of overwriting the default sweep.",
+    )
     parser.add_argument("--max-eval-images", type=int, default=0)
     parser.add_argument(
         "--voc-root",
@@ -127,6 +155,8 @@ def parse_args() -> argparse.Namespace:
     args.voc_root = Path(os.path.expanduser(str(args.voc_root)))
     args.accum = max(1, int(args.accum))
     args.eval_t = max(0, int(args.eval_t))
+    args.sigmas = resolve_sigmas(args.sigmas, args.sigma_min, args.sigma_max, args.sigma_step)
+    args.sweep_tag = str(args.sweep_tag or "").strip()
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
     if args.summarize or args.self_check or args.download_voc or args.dry_run:
@@ -134,6 +164,50 @@ def parse_args() -> argparse.Namespace:
     if args.method is None:
         parser.error("--method is required unless --summarize/--self-check/--download-voc/--dry-run")
     return args
+
+
+def _env_float(name: str):
+    text = os.environ.get(name, "").strip()
+    return None if text == "" else float(text)
+
+
+def sigma_grid(lo: float, hi: float, step: float) -> tuple:
+    if step <= 0 or hi < lo:
+        raise ValueError(f"invalid sigma grid: min={lo} max={hi} step={step}")
+    n = int(round((hi - lo) / step))
+    vals = [round(lo + i * step, 10) for i in range(n + 1)]
+    if abs(vals[-1] - hi) > 1e-9:
+        vals.append(float(hi))
+    return tuple(vals)
+
+
+def parse_sigmas(text) -> tuple:
+    if text is None or str(text).strip() == "":
+        return SIGMAS
+    vals = []
+    for part in str(text).replace(" ", "").split(","):
+        if not part:
+            continue
+        vals.append(float(part))
+    if len(vals) < 2:
+        raise ValueError(f"need ≥2 sigmas, got {vals}")
+    if any(sigma < 0.0 for sigma in vals):
+        raise ValueError(f"sigmas must be ≥0, got {vals}")
+    return tuple(vals)
+
+
+def resolve_sigmas(text, sigma_min, sigma_max, sigma_step) -> tuple:
+    if sigma_step is not None:
+        lo = 0.0 if sigma_min is None else float(sigma_min)
+        hi = 1.0 if sigma_max is None else float(sigma_max)
+        return sigma_grid(lo, hi, float(sigma_step))
+    return parse_sigmas(text)
+
+
+def sweep_filenames(tag: str) -> tuple[str, str, str]:
+    if not tag:
+        return "val_sweep.csv", "val_per_class_iou.json", "scorecard.json"
+    return f"val_sweep_{tag}.csv", f"val_per_class_iou_{tag}.json", f"scorecard_{tag}.json"
 
 
 def method_spec(method: str) -> dict:
@@ -517,6 +591,10 @@ def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
     model.to(device)
     out = cfg_dir(args)
     out.mkdir(parents=True, exist_ok=True)
+    print(
+        json.dumps({"eval_sigmas": list(args.sigmas), "sweep_tag": args.sweep_tag or ""}),
+        flush=True,
+    )
     ann = evaluate_miou(
         model, val_loader, device, 0.0, args.seed, max_images=args.max_eval_images, eval_t=0, eval_mode="normal"
     )
@@ -525,7 +603,7 @@ def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
         json.dumps({**{k: v for k, v in ann.items() if k != "per_class_iou"}, "eval_T": 0}, indent=2) + "\n"
     )
     rows = []
-    for sigma in SIGMAS:
+    for sigma in args.sigmas:
         row = evaluate_miou(
             model,
             val_loader,
@@ -538,11 +616,20 @@ def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
         rows.append(row)
         print(json.dumps({k: v for k, v in row.items() if k != "per_class_iou"}), flush=True)
     csv_rows = [{k: v for k, v in row.items() if k != "per_class_iou"} for row in rows]
-    write_csv(out / "val_sweep.csv", csv_rows)
-    (out / "val_per_class_iou.json").write_text(
+    sweep_csv, per_class_json, scorecard_json = sweep_filenames(args.sweep_tag)
+    write_csv(out / sweep_csv, csv_rows)
+    (out / per_class_json).write_text(
         json.dumps({row["sigma"]: row["per_class_iou"] for row in rows}, indent=2) + "\n"
     )
     match = mapping_card(model)
+    sigma_list = [float(row["sigma"]) for row in csv_rows]
+    named = {
+        0.5: "val_sigma0p5",
+        1.0: "val_sigma1",
+        2.0: "val_sigma2",
+        3.0: "val_sigma3",
+        5.0: "val_sigma5",
+    }
     card = {
         "method": args.method,
         "label": spec["label"],
@@ -562,23 +649,28 @@ def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
         "matched_layers": match.get("n_matched"),
         "unmatched_layers": match.get("n_unmatched"),
         "unmatched_body": match.get("unmatched_body"),
+        "sweep_tag": args.sweep_tag or "",
+        "sigmas": sigma_list,
         "val_ann": float(ann["mIoU"]),
         "val_ann_pixacc": float(ann["pixel_acc"]),
-        "val_clean": metric_at(csv_rows, 0.0),
-        "val_sigma0p5": metric_at(csv_rows, 0.5),
-        "val_sigma1": metric_at(csv_rows, 1.0),
-        "val_sigma2": metric_at(csv_rows, 2.0),
-        "val_sigma3": metric_at(csv_rows, 3.0),
-        "val_sigma5": metric_at(csv_rows, 5.0),
-        "val_auc_full": auc_range(csv_rows, 0.0, 5.0),
-        "val_auc_high": auc_range(csv_rows, HIGH_NOISE_MIN, 5.0),
+        "val_by_sigma": {f"{sigma:g}": metric_at(csv_rows, sigma) for sigma in sigma_list},
+        "val_auc": auc_range(csv_rows, min(sigma_list), max(sigma_list)),
         "val_clean_pixacc": metric_at(csv_rows, 0.0, "pixel_acc"),
-        "val_sigma5_pixacc": metric_at(csv_rows, 5.0, "pixel_acc"),
         "val_clean_fire": next(
             float(r["if_firing_density"]) for r in csv_rows if abs(float(r["sigma"]) - 0.0) < 1e-9
         ),
     }
-    (out / "scorecard.json").write_text(json.dumps(card, indent=2) + "\n")
+    if 0.0 in sigma_list:
+        card["val_clean"] = metric_at(csv_rows, 0.0)
+    for sigma, key in named.items():
+        if any(abs(s - sigma) < 1e-9 for s in sigma_list):
+            card[key] = metric_at(csv_rows, sigma)
+    if min(sigma_list) <= 0.0 and max(sigma_list) >= 5.0 - 1e-9:
+        card["val_auc_full"] = auc_range(csv_rows, 0.0, 5.0)
+    if any(s + 1e-9 >= HIGH_NOISE_MIN for s in sigma_list) and max(sigma_list) >= 5.0 - 1e-9:
+        card["val_auc_high"] = auc_range(csv_rows, HIGH_NOISE_MIN, 5.0)
+        card["val_sigma5_pixacc"] = metric_at(csv_rows, 5.0, "pixel_acc")
+    (out / scorecard_json).write_text(json.dumps(card, indent=2) + "\n")
     print(json.dumps(card, indent=2), flush=True)
     return card
 

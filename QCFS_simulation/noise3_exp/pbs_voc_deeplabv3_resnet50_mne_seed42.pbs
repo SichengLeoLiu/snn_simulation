@@ -30,12 +30,20 @@
 # PY
 #   python QCFS_simulation/noise3_exp/run_voc_deeplabv3_resnet50_mne_seed42.py --self-check
 #
-# Submit (4 jobs):
+# Submit train+0–5 eval (4 jobs):
 #   cd /home/595/sl9144/codes/snn_simulation
 #   export VOC_ROOT=/home/595/sl9144/datasets
 #   for M in original l2wo mne nodetach; do
 #     qsub -N "dlv3_${M}" \
 #       -v VOC_ROOT,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_mne_seed42 \
+#       QCFS_simulation/noise3_exp/pbs_voc_deeplabv3_resnet50_mne_seed42.pbs
+#   done
+#
+# Fine σ∈[0,1] step 0.1, TEST_ONLY, keep the 0–5 sweep:
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   for M in original l2wo mne nodetach; do
+#     qsub -N "dlv3s01_${M}" \
+#       -v VOC_ROOT,VOC_SIGMA_MIN=0,VOC_SIGMA_MAX=1,VOC_SIGMA_STEP=0.1,SWEEP_TAG=s0_1,TEST_ONLY=1,METHOD=${M},SEED=42,OUT_DIR=/scratch/gs14/sl9144/snn_results/voc_deeplabv3_resnet50_mne_seed42 \
 #       QCFS_simulation/noise3_exp/pbs_voc_deeplabv3_resnet50_mne_seed42.pbs
 #   done
 
@@ -49,7 +57,7 @@ mkdir -p "${SCRATCH_LOG}"
 LIVE_LOG="${SCRATCH_LOG}/deeplabv3_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
 exec > "${LIVE_LOG}" 2>&1
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "METHOD=${METHOD} SEED=${SEED} TEST_ONLY=${TEST_ONLY:-0} DRY_RUN=${DRY_RUN:-0}"
+echo "METHOD=${METHOD} SEED=${SEED} TEST_ONLY=${TEST_ONLY:-0} DRY_RUN=${DRY_RUN:-0} VOC_SIGMAS=${VOC_SIGMAS:-} VOC_SIGMA_MIN=${VOC_SIGMA_MIN:-} VOC_SIGMA_MAX=${VOC_SIGMA_MAX:-} VOC_SIGMA_STEP=${VOC_SIGMA_STEP:-} SWEEP_TAG=${SWEEP_TAG:-}"
 
 module purge
 module use /g/data/dk92/apps/Modules/modulefiles
@@ -125,6 +133,21 @@ if [[ "${RETRAIN:-0}" == "1" ]]; then
 fi
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   ARGS+=(--dry-run)
+fi
+if [[ -n "${VOC_SIGMAS:-}" ]]; then
+  ARGS+=(--sigmas "${VOC_SIGMAS}")
+fi
+if [[ -n "${VOC_SIGMA_MIN:-}" ]]; then
+  ARGS+=(--sigma-min "${VOC_SIGMA_MIN}")
+fi
+if [[ -n "${VOC_SIGMA_MAX:-}" ]]; then
+  ARGS+=(--sigma-max "${VOC_SIGMA_MAX}")
+fi
+if [[ -n "${VOC_SIGMA_STEP:-}" ]]; then
+  ARGS+=(--sigma-step "${VOC_SIGMA_STEP}")
+fi
+if [[ -n "${SWEEP_TAG:-}" ]]; then
+  ARGS+=(--sweep-tag "${SWEEP_TAG}")
 fi
 
 python -u noise3_exp/run_voc_deeplabv3_resnet50_mne_seed42.py "${ARGS[@]}"

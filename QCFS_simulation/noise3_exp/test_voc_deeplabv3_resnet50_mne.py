@@ -90,6 +90,15 @@ class DeepLabMNEChecks(unittest.TestCase):
         for left, right in zip(grads[0], grads[1]):
             torch.testing.assert_close(left, right)
 
+    def test_sigma_grid_zero_to_one(self):
+        self.assertEqual(
+            runner.sigma_grid(0.0, 1.0, 0.1),
+            (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+        )
+        self.assertEqual(runner.resolve_sigmas("", None, 1.0, 0.1)[0], 0.0)
+        self.assertEqual(runner.resolve_sigmas("", None, 1.0, 0.1)[-1], 1.0)
+        self.assertEqual(runner.parse_sigmas(""), runner.SIGMAS)
+
     def test_beta_matches_autograd_norm(self):
         model = runner.make_model(0, torch.device("cpu"), load_coco=False)
         report = runner.matched_weight_beta(model)
