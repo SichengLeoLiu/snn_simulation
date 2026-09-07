@@ -24,7 +24,7 @@ from Models.PetVGG import (  # noqa: E402
 )
 from Models.layer import IF  # noqa: E402
 import run_pet_vgg16bn_cls_seg_seed42 as runner  # noqa: E402
-from pet import scores_from_binary_confusion, trimap_to_mask  # noqa: E402
+from pet import ARCHIVES, scores_from_binary_confusion, trimap_to_mask  # noqa: E402
 from utils import collect_weight_layer_matches, summarize_weight_layer_matches  # noqa: E402
 
 
@@ -59,6 +59,24 @@ class PetVGGChecks(unittest.TestCase):
         self.assertEqual(seg_sum["n_matched"], 18)
         self.assertEqual(seg_sum["n_unmatched"], 1)
         self.assertEqual(seg_sum["unmatched_body"], [])
+
+    def test_download_keeps_complete_part_after_wget_exit_3(self):
+        import tempfile
+        from pet import _download_one
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dest = Path(tmpdir) / "images.tar.gz"
+            part = dest.with_suffix(dest.suffix + ".part")
+            part.write_bytes(b"x" * 1_500_000)
+            _download_one(("https://example.invalid/skip",), dest, 1_000_000)
+            self.assertTrue(dest.is_file())
+            self.assertGreaterEqual(dest.stat().st_size, 1_000_000)
+            self.assertFalse(part.exists())
+
+    def test_download_urls_prefer_thor(self):
+        for name, urls, min_bytes in ARCHIVES:
+            self.assertTrue(urls[0].startswith("https://thor.robots.ox.ac.uk/pets/"))
+            self.assertGreater(min_bytes, 1_000_000)
 
     def test_trimap_uncertain_is_ignore(self):
         trimap = np.array([[1, 2, 3], [1, 3, 2]], dtype=np.int16)

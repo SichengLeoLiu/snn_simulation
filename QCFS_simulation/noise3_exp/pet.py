@@ -15,9 +15,25 @@ from voc_ssd import IMAGENET_MEAN, IMAGENET_STD
 
 SIZE = 224
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+# thor first: the vgg.ox.ac.uk URLs 301-redirect, and wget -O then exits 3
+# even after a complete download.
 ARCHIVES = (
-    ("images.tar.gz", ("https://www.robots.ox.ac.uk/~vgg/data/pets/data/images.tar.gz",)),
-    ("annotations.tar.gz", ("https://www.robots.ox.ac.uk/~vgg/data/pets/data/annotations.tar.gz",)),
+    (
+        "images.tar.gz",
+        (
+            "https://thor.robots.ox.ac.uk/pets/images.tar.gz",
+            "https://www.robots.ox.ac.uk/~vgg/data/pets/data/images.tar.gz",
+        ),
+        700_000_000,
+    ),
+    (
+        "annotations.tar.gz",
+        (
+            "https://thor.robots.ox.ac.uk/pets/annotations.tar.gz",
+            "https://www.robots.ox.ac.uk/~vgg/data/pets/data/annotations.tar.gz",
+        ),
+        10_000_000,
+    ),
 )
 
 
@@ -86,43 +102,54 @@ def trimap_to_mask(trimap: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(mask)
 
 
-def _download_one(urls, tar_path: Path) -> None:
+def _complete_download(path: Path, min_bytes: int) -> bool:
+    return path.is_file() and path.stat().st_size >= int(min_bytes)
+
+
+def _download_one(urls, tar_path: Path, min_bytes: int) -> None:
     import shutil
     import subprocess
     import urllib.request
 
-    if tar_path.is_file() and tar_path.stat().st_size > 1_000_000:
+    if _complete_download(tar_path, min_bytes):
         print(f"[PET] using cached {tar_path}", flush=True)
         return
     tar_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = tar_path.with_suffix(tar_path.suffix + ".part")
+    if _complete_download(tmp, min_bytes):
+        print(f"[PET] keeping complete partial {tmp}", flush=True)
+        tmp.replace(tar_path)
+        return
     errors = []
     wget = shutil.which("wget")
     curl = shutil.which("curl")
     for url in urls:
-        tmp = tar_path.with_suffix(tar_path.suffix + ".part")
         print(f"[PET] downloading {url}", flush=True)
         try:
+            code = 0
             if wget:
-                subprocess.run(
+                code = subprocess.run(
                     ["wget", "-c", "--tries=3", f"--user-agent={USER_AGENT}", "-O", str(tmp), url],
-                    check=True,
-                )
+                    check=False,
+                ).returncode
             elif curl:
-                subprocess.run(
+                code = subprocess.run(
                     ["curl", "-L", "--retry", "3", "-A", USER_AGENT, "-o", str(tmp), url],
-                    check=True,
-                )
+                    check=False,
+                ).returncode
             else:
                 request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
                 with urllib.request.urlopen(request, timeout=60) as src, tmp.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
-            if tmp.is_file() and tmp.stat().st_size > 1_000_000:
+            if _complete_download(tmp, min_bytes):
+                if code:
+                    print(f"[PET] wget/curl exit {code} but {tmp.name} is complete", flush=True)
                 tmp.replace(tar_path)
                 return
-            errors.append(f"{url}: downloaded file too small")
+            errors.append(f"{url}: exit={code} size={tmp.stat().st_size if tmp.is_file() else 0}")
         except Exception as exc:
             errors.append(f"{url}: {exc}")
-            if tmp.exists():
+            if tmp.exists() and not _complete_download(tmp, min_bytes):
                 tmp.unlink()
     raise RuntimeError("Pet download failed:\n  " + "\n  ".join(errors))
 
@@ -137,9 +164,9 @@ def download_pet(dest: Path) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     cache = dest / "_pet_tarballs"
     cache.mkdir(parents=True, exist_ok=True)
-    for name, urls in ARCHIVES:
+    for name, urls, min_bytes in ARCHIVES:
         tar_path = cache / name
-        _download_one(urls, tar_path)
+        _download_one(urls, tar_path, min_bytes)
         print(f"[PET] extracting {tar_path}", flush=True)
         with tarfile.open(tar_path, "r") as handle:
             handle.extractall(path=out)
