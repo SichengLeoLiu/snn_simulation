@@ -127,6 +127,15 @@ class DeepLabMNEChecks(unittest.TestCase):
             places=6,
         )
 
+    def test_probe_wrappers_and_energy_identity(self):
+        import run_voc_deeplabv3_probe_seed42 as probe
+
+        card = probe.self_check(torch.device("cpu"))
+        self.assertEqual(card["n_bottlenecks"], 16)
+        self.assertEqual(card["n_aspp_branches"], 5)
+        self.assertEqual(card["n_maxpool"], 0)
+        self.assertTrue(card["energy_identity_ok"])
+
 
 if __name__ == "__main__":
     unittest.main()
