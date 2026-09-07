@@ -16,19 +16,20 @@
 # Same encoder (Conv-BN-IF, AvgPool), ImageNet init, linear readout, L=T=16.
 # Uncertain trimap pixels are ignored. Seed 42. New OUT_DIR.
 #
-# Login node, once:
-#   export PET_ROOT=/home/595/sl9144/datasets
+# Login node, once. Pet is ~1.5GB extracted; $HOME quota is too small.
+#   export PET_ROOT=/scratch/gs14/sl9144/datasets
 #   export TORCH_HOME=${HOME}/.cache/torch
 #   module purge
 #   module use /g/data/dk92/apps/Modules/modulefiles
 #   module load NCI-ai-ml/24.11
+#   rm -rf /home/595/sl9144/datasets/_pet_tarballs
 #   python QCFS_simulation/noise3_exp/run_pet_vgg16bn_cls_seg_seed42.py --download-pet --pet-root "${PET_ROOT}"
 #   python QCFS_simulation/noise3_exp/run_pet_vgg16bn_cls_seg_seed42.py --self-check
 # ImageNet VGG-16 BN must already be cached (same as FCN/SSD).
 #
 # Submit 6 jobs:
 #   cd /home/595/sl9144/codes/snn_simulation
-#   export PET_ROOT=/home/595/sl9144/datasets
+#   export PET_ROOT=/scratch/gs14/sl9144/datasets
 #   for TASK in cls seg; do
 #     for M in l2wo mne nodetach; do
 #       qsub -N "pet_${TASK}_${M}" \
@@ -55,7 +56,7 @@ module purge
 module use /g/data/dk92/apps/Modules/modulefiles
 module load NCI-ai-ml/24.11
 
-export PET_ROOT="${PET_ROOT:-/home/595/sl9144/datasets}"
+export PET_ROOT="${PET_ROOT:-/scratch/gs14/sl9144/datasets}"
 if [[ "${TASK}" == "cls" ]]; then
   export PET_BATCH="${PET_BATCH:-16}"
   export PET_EVAL_BATCH="${PET_EVAL_BATCH:-4}"

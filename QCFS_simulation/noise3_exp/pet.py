@@ -146,7 +146,15 @@ def _download_one(urls, tar_path: Path, min_bytes: int) -> None:
                     print(f"[PET] wget/curl exit {code} but {tmp.name} is complete", flush=True)
                 tmp.replace(tar_path)
                 return
-            errors.append(f"{url}: exit={code} size={tmp.stat().st_size if tmp.is_file() else 0}")
+            size = tmp.stat().st_size if tmp.is_file() else 0
+            errors.append(f"{url}: exit={code} size={size}")
+            if code == 3:
+                raise RuntimeError(
+                    "Pet download stopped with wget exit 3 (usually disk quota). "
+                    f"Incomplete file {tmp} is {size} bytes. "
+                    "Delete _pet_tarballs and download to scratch, e.g. "
+                    "/scratch/gs14/sl9144/datasets, not $HOME."
+                )
         except Exception as exc:
             errors.append(f"{url}: {exc}")
             if tmp.exists() and not _complete_download(tmp, min_bytes):
@@ -170,6 +178,8 @@ def download_pet(dest: Path) -> Path:
         print(f"[PET] extracting {tar_path}", flush=True)
         with tarfile.open(tar_path, "r") as handle:
             handle.extractall(path=out)
+        tar_path.unlink()
+        print(f"[PET] removed tarball {tar_path.name} after extract", flush=True)
     root = pet_root_from(dest)
     if not pet_is_ready(root):
         raise FileNotFoundError(f"Pet download finished but files missing under {dest}")
