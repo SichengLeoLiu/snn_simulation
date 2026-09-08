@@ -115,6 +115,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=LR)
     parser.add_argument("--size", type=int, default=int(os.environ.get("PET_SIZE", str(SIZE))))
     parser.add_argument("--eval-t", type=int, default=int(os.environ.get("PET_EVAL_T", str(TEST_T))))
+    parser.add_argument(
+        "--eval-seed",
+        type=int,
+        default=None,
+        help="RNG seed for the test noise stream. Default: the training seed.",
+    )
     parser.add_argument("--head-if", action="store_true", default=os.environ.get("PET_HEAD_IF", "0") == "1")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--retrain", action="store_true")
@@ -137,6 +143,9 @@ def parse_args() -> argparse.Namespace:
     args.pet_root = Path(os.path.expanduser(str(args.pet_root)))
     args.eval_t = max(0, int(args.eval_t))
     args.size = max(32, int(args.size))
+    if args.eval_seed is None:
+        env_eval = os.environ.get("PET_EVAL_SEED", "").strip()
+        args.eval_seed = int(env_eval) if env_eval else args.seed
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
     if args.summarize or args.self_check or args.download_pet:
@@ -325,7 +334,7 @@ def _fire_handles(model):
 
 @torch.no_grad()
 def evaluate_task(args, model, loader, device, sigma: float, eval_t: int, eval_mode: str) -> dict:
-    seed_all(args.seed)
+    seed_all(int(getattr(args, "eval_seed", args.seed)))
     model.eval()
     model.set_T(eval_t)
     model.set_mode(eval_mode if eval_t > 0 else "normal")
@@ -371,6 +380,7 @@ def evaluate_task(args, model, loader, device, sigma: float, eval_t: int, eval_m
             "seconds": f"{time.time() - t0:.1f}",
             "if_firing_density": f"{fire:.6f}",
             "eval_T": eval_t,
+            "eval_seed": int(getattr(args, "eval_seed", args.seed)),
         }
     )
     return row
@@ -571,6 +581,7 @@ def evaluate_ckpt(args, spec: dict, device, ckpt: Path) -> dict:
         "task": args.task,
         "arch": ARCH,
         "seed": args.seed,
+        "eval_seed": int(getattr(args, "eval_seed", args.seed)),
         "quant_level": LVAL,
         "eval_T": args.eval_t,
         "head_if": args.head_if,

@@ -249,3 +249,16 @@ def count_maxpool2d(root: nn.Module) -> int:
 
 def count_if(root: nn.Module) -> int:
     return sum(isinstance(module, IF) for module in root.modules())
+
+
+def encoder_if_modules(model) -> list[tuple[str, IF]]:
+    return [(name, module) for name, module in model.encoder.named_modules() if isinstance(module, IF)]
+
+
+def decoder_if_modules(model) -> list[tuple[int, str, IF]]:
+    rows = []
+    for index, block in enumerate(model.decoder):
+        for name, module in block.named_modules():
+            if isinstance(module, IF):
+                rows.append((index, f"decoder.{index}.{name}", module))
+    return rows

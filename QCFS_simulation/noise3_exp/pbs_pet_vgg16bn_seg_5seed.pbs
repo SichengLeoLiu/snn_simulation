@@ -1,0 +1,129 @@
+#!/bin/bash
+#PBS -N pet5s
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# Oxford-IIIT Pet VGG16-BN foreground segmentation, 5 training seeds.
+# METHOD: l2wo | mne | nodetach
+# SEED: 40 41 42 43 44
+# Shared test noise: PET_EVAL_SEED=0. New OUT_DIR. Does not overwrite
+# pet_vgg16bn_cls_seg_seed42.
+#
+# Submit 15 jobs:
+#   cd /home/595/sl9144/codes/snn_simulation
+#   export PET_ROOT=/scratch/gs14/sl9144/datasets
+#   for M in l2wo mne nodetach; do
+#     for S in 40 41 42 43 44; do
+#       qsub -N "pet5s_${M}_${S}" \
+#         -v PET_ROOT,METHOD=${M},SEED=${S},PET_EVAL_SEED=0,OUT_DIR=/scratch/gs14/sl9144/snn_results/pet_vgg16bn_seg_5seed \
+#         QCFS_simulation/noise3_exp/pbs_pet_vgg16bn_seg_5seed.pbs
+#     done
+#   done
+#
+# After all jobs:
+#   python QCFS_simulation/noise3_exp/run_pet_vgg16bn_seg_5seed.py --summarize \
+#     --out-root /scratch/gs14/sl9144/snn_results/pet_vgg16bn_seg_5seed
+
+set -euo pipefail
+
+METHOD="${METHOD:?set METHOD=l2wo|mne|nodetach}"
+SEED="${SEED:?set SEED=40|41|42|43|44}"
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/pet_vgg16bn_seg_5seed_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "METHOD=${METHOD} SEED=${SEED} EVAL_SEED=${PET_EVAL_SEED:-0} TEST_ONLY=${TEST_ONLY:-0}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export PET_ROOT="${PET_ROOT:-/scratch/gs14/sl9144/datasets}"
+export PET_BATCH="${PET_BATCH:-8}"
+export PET_EVAL_BATCH="${PET_EVAL_BATCH:-2}"
+export PET_NUM_WORKERS="${PET_NUM_WORKERS:-4}"
+export PET_EPOCHS="${PET_EPOCHS:-40}"
+export PET_EVAL_T="${PET_EVAL_T:-16}"
+export PET_SIZE="${PET_SIZE:-224}"
+export PET_EVAL_SEED="${PET_EVAL_SEED:-0}"
+export PET_PROBE_IMAGES="${PET_PROBE_IMAGES:-400}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+export TORCH_HOME="${TORCH_HOME:-${HOME}/.cache/torch}"
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/pet_vgg16bn_seg_5seed}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "PET_ROOT=${PET_ROOT}"
+echo "PET_EVAL_SEED=${PET_EVAL_SEED}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+
+TRAINVAL="${PET_ROOT}/oxford-iiit-pet/annotations/trainval.txt"
+TRAINVAL_FLAT="${PET_ROOT}/annotations/trainval.txt"
+if [[ ! -f "${TRAINVAL}" && ! -f "${TRAINVAL_FLAT}" ]]; then
+  echo "ERROR: Oxford-IIIT Pet missing under PET_ROOT=${PET_ROOT}"
+  echo "On a login node:"
+  echo "  python ${ROOT}/noise3_exp/run_pet_vgg16bn_cls_seg_seed42.py --download-pet --pet-root ${PET_ROOT}"
+  exit 1
+fi
+
+VGG_CKPT="${TORCH_HOME}/hub/checkpoints/vgg16_bn-6c64b313.pth"
+if [[ ! -f "${VGG_CKPT}" ]]; then
+  echo "ERROR: ImageNet VGG-16 BN cache missing: ${VGG_CKPT}"
+  echo "On a login node: python ~/cache_vgg.py"
+  exit 1
+fi
+
+ARGS=(
+  --method "${METHOD}"
+  --seed "${SEED}"
+  --eval-seed "${PET_EVAL_SEED}"
+  --pet-root "${PET_ROOT}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${PET_BATCH}"
+  --eval-batch-size "${PET_EVAL_BATCH}"
+  --workers "${PET_NUM_WORKERS}"
+  --epochs "${PET_EPOCHS}"
+  --eval-t "${PET_EVAL_T}"
+  --size "${PET_SIZE}"
+  --max-probe-images "${PET_PROBE_IMAGES}"
+)
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+if [[ "${PET_SKIP_PROBE:-0}" == "1" ]]; then
+  ARGS+=(--skip-probe)
+fi
+if [[ "${SELF_CHECK:-0}" == "1" ]]; then
+  ARGS=(--self-check)
+fi
+
+python -u noise3_exp/run_pet_vgg16bn_seg_5seed.py "${ARGS[@]}"
+
+echo "=== ALL DONE $(date) METHOD=${METHOD} SEED=${SEED} ==="
+ls -la "${OUT_DIR}/${METHOD}/seed${SEED}" || ls -la "${OUT_DIR}"

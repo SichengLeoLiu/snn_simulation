@@ -2,6 +2,7 @@
 import math
 import sys
 import unittest
+from argparse import Namespace
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,8 @@ from Models.PetVGG import (  # noqa: E402
     PetVGGSegmentor,
     count_if,
     count_maxpool2d,
+    decoder_if_modules,
+    encoder_if_modules,
 )
 from Models.layer import IF  # noqa: E402
 import run_pet_vgg16bn_cls_seg_seed42 as runner  # noqa: E402
@@ -44,6 +47,9 @@ class PetVGGChecks(unittest.TestCase):
         self.assertEqual(count_if(model), 13 + len(DECODER_CHANNELS))
         self.assertIsInstance(model.classifier, nn.Conv2d)
         self.assertEqual(len(model.decoder), 5)
+        self.assertEqual(len(encoder_if_modules(model)), 13)
+        self.assertEqual(len(decoder_if_modules(model)), 5)
+        self.assertEqual([index for index, _n, _m in decoder_if_modules(model)], [0, 1, 2, 3, 4])
         dummy = torch.zeros(1, 3, 224, 224)
         logits = model(dummy)
         self.assertEqual(tuple(logits.shape), (1, 2, 224, 224))
@@ -97,6 +103,41 @@ class PetVGGChecks(unittest.TestCase):
         self.assertTrue(math.isfinite(cards["seg"]["beta_match"]))
         self.assertEqual(cards["seg_head_if_n_if"], 19)
         self.assertGreater(count_if(PetVGGClassifier(head_if=True)), 13)
+
+
+class PetSeg5SeedChecks(unittest.TestCase):
+    def test_import_does_not_patch_pairing_layout(self):
+        import run_pet_vgg16bn_seg_5seed as seg5
+
+        self.assertIs(runner.cfg_dir, seg5._ORIG_CFG_DIR)
+        ns = Namespace(out_root=Path("/tmp/pair"), task="seg", method="mne")
+        self.assertEqual(runner.cfg_dir(ns), Path("/tmp/pair/seg/mne"))
+
+    def test_five_seed_layout_and_shared_eval_seed(self):
+        import run_pet_vgg16bn_seg_5seed as seg5
+
+        ns = Namespace(out_root=Path("/tmp/five"), method="l2wo", seed=41, head_if=False)
+        self.assertEqual(seg5.cfg_dir(ns), Path("/tmp/five/l2wo/seed41"))
+        self.assertEqual(seg5.EVAL_NOISE_SEED, 0)
+        self.assertEqual(seg5.SEEDS, (40, 41, 42, 43, 44))
+        mean, std = seg5._mean_std([1.0, 3.0])
+        self.assertAlmostEqual(mean, 2.0)
+        self.assertAlmostEqual(std, math.sqrt(2.0))
+
+    def test_five_seed_self_check_and_layout_restore(self):
+        import run_pet_vgg16bn_seg_5seed as seg5
+
+        card = seg5.self_check(torch.device("cpu"))
+        self.assertEqual(card["n_encoder_if"], 13)
+        self.assertEqual(card["n_decoder_if"], 5)
+        self.assertEqual(card["identical_crossing"], 0.0)
+        self.assertGreater(card["shifted_crossing"], 0.0)
+        try:
+            seg5.install_output_layout()
+            self.assertIs(runner.cfg_dir, seg5.cfg_dir)
+        finally:
+            seg5.restore_output_layout()
+        self.assertIs(runner.cfg_dir, seg5._ORIG_CFG_DIR)
 
 
 if __name__ == "__main__":
