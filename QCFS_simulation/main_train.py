@@ -31,6 +31,8 @@ from utils import (
     compute_l2_calibrated_mne_regularization,
     compute_mne_os_bridge_regularization,
     init_mne_os_bridge_grad_scale,
+    configure_task_cov_mne,
+    compute_task_cov_mne_regularization,
     compute_stable_mne_l2_regularization,
     compute_hinge_mne_regularization,
     compute_pc_mne_regularization,
@@ -117,6 +119,7 @@ parser.add_argument(
         "mne_l2_all",
         "calibrated_mne_l2",
         "mne_os_bridge",
+        "task_cov_mne",
         "stable_mne_l2",
         "hinge_mne",
         "pc_mne",
@@ -449,6 +452,78 @@ parser.add_argument(
     help="用 [r-b]_+ / mean([r-b]_+) 分配额外 L2 预算，而不是 α[r̂-τ]_+",
 )
 parser.add_argument(
+    "--task_cov_mode",
+    default="task",
+    choices=("cov", "task"),
+    help="task_cov_mne: cov=omega=1; task=detached logit-margin task weights",
+)
+parser.add_argument(
+    "--task_cov_deploy_T",
+    default=16,
+    type=int,
+    help="Task-Cov calibration SNN timestep count (rate_uniform deployment forward)",
+)
+parser.add_argument(
+    "--task_cov_sigma",
+    default=1.0,
+    type=float,
+    help="Task-Cov paired deployment-forward noise sigma",
+)
+parser.add_argument(
+    "--task_cov_calib_interval",
+    default=100,
+    type=int,
+    help="Refresh deployment covariance every N ANN training steps",
+)
+parser.add_argument(
+    "--task_cov_task_interval",
+    default=10,
+    type=int,
+    help="Refresh detached task weights every N ANN training steps",
+)
+parser.add_argument(
+    "--task_cov_calib_batch_size",
+    default=4,
+    type=int,
+    help="Examples used by each paired T>0 calibration forward",
+)
+parser.add_argument(
+    "--task_cov_ema_rho",
+    default=0.1,
+    type=float,
+    help="EMA update rate for task weights and deployment second moments",
+)
+parser.add_argument(
+    "--task_cov_q_floor",
+    default=0.25,
+    type=float,
+    help="Minimum relative L2 coefficient for covariance-covered weights",
+)
+parser.add_argument(
+    "--task_cov_q_cap",
+    default=0.0,
+    type=float,
+    help="Optional upper cap on Task-Cov q; zero disables clipping",
+)
+parser.add_argument(
+    "--task_cov_margin_floor",
+    default=0.25,
+    type=float,
+    help="Positive denominator floor for normalized correct-class logit margins",
+)
+parser.add_argument(
+    "--task_cov_start_epoch",
+    default=0,
+    type=int,
+    help="Epoch at which Task-Cov allocation starts from alpha=0",
+)
+parser.add_argument(
+    "--task_cov_warmup_epochs",
+    default=0,
+    type=int,
+    help="Linear warmup duration for the Task-Cov allocation alpha",
+)
+parser.add_argument(
     "--mne_layer_map",
     default="legacy",
     choices=("legacy", "resnet"),
@@ -723,11 +798,32 @@ def main():
         model.load_state_dict(remap_legacy_vgg_state_dict(state), strict=True)
         print("init-from: %s" % (init_path,))
 
+    if args.regularizer == "task_cov_mne":
+        if int(args.time) != 0:
+            raise ValueError("task_cov_mne currently requires ANN/QCFS training with -T 0.")
+        configure_task_cov_mne(
+            model,
+            quant_level=args.L,
+            deploy_T=args.task_cov_deploy_T,
+            calibration_sigma=args.task_cov_sigma,
+            mode=args.task_cov_mode,
+            calibration_interval=args.task_cov_calib_interval,
+            task_interval=args.task_cov_task_interval,
+            calibration_batch_size=args.task_cov_calib_batch_size,
+            ema_rho=args.task_cov_ema_rho,
+            q_floor=args.task_cov_q_floor,
+            q_cap=args.task_cov_q_cap,
+            margin_floor=args.task_cov_margin_floor,
+            layer_map=args.mne_layer_map,
+            eps=args.mne_eps,
+        )
+
     reg_loss_fn = None
     calibrated_mne_state = {
         "alpha": float(args.calibrated_mne_alpha),
         "shuffle_counter": 0,
     }
+    task_cov_state = {"alpha": 1.0}
     l2_sp_reference = None
     if args.regularizer == "l2_sp":
         l2_sp_reference = {
@@ -864,6 +960,10 @@ def main():
             clip_max=args.bridge_clip_max,
             alpha=args.bridge_alpha,
             tau=args.bridge_tau,
+        )
+    elif args.regularizer == "task_cov_mne":
+        reg_loss_fn = lambda m, t, q: compute_task_cov_mne_regularization(
+            m, quant_level=(args.L if q is None else q)
         )
     elif args.regularizer == "stable_mne_l2":
         reg_loss_fn = lambda m, t, q: compute_stable_mne_l2_regularization(
@@ -1071,6 +1171,13 @@ def main():
         "gm_d_mean",
         "gm_m_mean",
         "gm_r_mean",
+        "cov_updates",
+        "task_updates",
+        "cov_mean",
+        "omega_mean",
+        "omega_std",
+        "coefficient_mean",
+        "allocation_alpha",
         "mne_grad_match_scale",
         "mne_ref_grad_norm",
         "reg_grad_norm",
@@ -1224,6 +1331,29 @@ def main():
                 str(bool(args.gm_os_use_d)),
                 str(bool(args.gm_os_use_m)),
                 str(bool(args.gm_os_budget_norm)),
+            )
+        )
+    if args.regularizer == "task_cov_mne":
+        logger.info(
+            "task_cov_mne: mode=%s, diagonal channel covariance from paired "
+            "T=%d rate_uniform post-input-IF forwards, sigma=%.4g, cov_every=%d, "
+            "task_every=%d, calib_batch=%d, ema=%.4g, q_floor=%.4g, q_cap=%s, "
+            "margin_floor=%.4g, allocation_start=%d, allocation_warmup=%d, "
+            "layer_map=%s, lambda/BN factors detached, optimizer_wd=0"
+            % (
+                args.task_cov_mode,
+                args.task_cov_deploy_T,
+                args.task_cov_sigma,
+                args.task_cov_calib_interval,
+                args.task_cov_task_interval,
+                args.task_cov_calib_batch_size,
+                args.task_cov_ema_rho,
+                args.task_cov_q_floor,
+                ("none" if args.task_cov_q_cap <= 0 else ("%.4g" % args.task_cov_q_cap)),
+                args.task_cov_margin_floor,
+                args.task_cov_start_epoch,
+                args.task_cov_warmup_epochs,
+                args.mne_layer_map,
             )
         )
     if args.regularizer == "stable_mne_l2":
@@ -1458,6 +1588,15 @@ def main():
         progress = min(1.0, float(epoch - start + 1) / float(warmup))
         return target * progress
 
+    def _epoch_task_cov_alpha(epoch: int) -> float:
+        start = int(args.task_cov_start_epoch)
+        warmup = int(args.task_cov_warmup_epochs)
+        if epoch < start:
+            return 0.0
+        if warmup <= 0:
+            return 1.0
+        return min(1.0, float(epoch - start + 1) / float(warmup))
+
     probe_epochs = set()
     probe_csv_path = None
     probe_batch = None
@@ -1507,6 +1646,9 @@ def main():
     for epoch in range(args.epochs):
         if args.regularizer == "calibrated_mne_l2":
             calibrated_mne_state["alpha"] = _epoch_calibrated_mne_alpha(epoch)
+        if args.regularizer == "task_cov_mne":
+            task_cov_state["alpha"] = _epoch_task_cov_alpha(epoch)
+            model._task_cov_mne_cfg["allocation_alpha"] = task_cov_state["alpha"]
         epoch_reg_coeff = _epoch_reg_coeff(epoch)
         if is_diff1d:
             loss, mae = train_reg(
@@ -1604,6 +1746,26 @@ def main():
                             float(stats.get("p_at_qmax", 0.0)),
                         )
                     )
+            if args.regularizer == "task_cov_mne" and hasattr(model, "_task_cov_mne_stats"):
+                stats = dict(model._task_cov_mne_stats)
+                stats.update(getattr(model, "_task_cov_mne_epoch_stats", {}) or {})
+                logger.info(
+                    "  task_cov_mne: mode=%s alpha=%.4f q_mean=%.6f q_std=%.6f "
+                    "q_range=[%.4g, %.4g] cov_updates=%d task_updates=%d "
+                    "cov_mean=%s omega_mean=%s"
+                    % (
+                        args.task_cov_mode,
+                        float(stats.get("allocation_alpha", task_cov_state["alpha"])),
+                        float(stats.get("q_mean", 1.0)),
+                        float(stats.get("q_std", 0.0)),
+                        float(stats.get("q_min", 1.0)),
+                        float(stats.get("q_max", 1.0)),
+                        int(stats.get("cov_updates", 0)),
+                        int(stats.get("task_updates", 0)),
+                        "%.4g" % float(stats.get("cov_mean", float("nan"))),
+                        "%.4g" % float(stats.get("omega_mean", float("nan"))),
+                    )
+                )
             match_stats = getattr(model, "_mne_grad_match_stats", None)
             if args.regularizer == "mne_l2" and match_stats:
                 logger.info(
@@ -1641,12 +1803,16 @@ def main():
                     epoch, args.epochs, tmp
                 )
             )
-            if args.regularizer in ("calibrated_mne_l2", "mne_l2", "mne_os_bridge") and (
+            if args.regularizer in ("calibrated_mne_l2", "mne_l2", "mne_os_bridge", "task_cov_mne") and (
                 args.regularizer in ("calibrated_mne_l2", "mne_os_bridge")
                 or args.epoch_log_csv.strip()
             ):
-                epoch_stats = getattr(model, "_calibrated_mne_epoch_stats", {})
-                last_stats = getattr(model, "_calibrated_mne_stats", {})
+                if args.regularizer == "task_cov_mne":
+                    epoch_stats = getattr(model, "_task_cov_mne_epoch_stats", {})
+                    last_stats = getattr(model, "_task_cov_mne_stats", {})
+                else:
+                    epoch_stats = getattr(model, "_calibrated_mne_epoch_stats", {})
+                    last_stats = getattr(model, "_calibrated_mne_stats", {})
                 merged = dict(last_stats)
                 merged.update(epoch_stats)
                 match_stats = getattr(model, "_mne_grad_match_stats", {}) or {}
@@ -1657,12 +1823,20 @@ def main():
                         "alpha": float(
                             args.bridge_alpha
                             if args.regularizer == "mne_os_bridge"
-                            else calibrated_mne_state["alpha"]
+                            else (
+                                task_cov_state["alpha"]
+                                if args.regularizer == "task_cov_mne"
+                                else calibrated_mne_state["alpha"]
+                            )
                         ),
                         "q_assignment": (
                             args.bridge_risk_transform
                             if args.regularizer == "mne_os_bridge"
-                            else args.calibrated_mne_q_assignment
+                            else (
+                                args.task_cov_mode
+                                if args.regularizer == "task_cov_mne"
+                                else args.calibrated_mne_q_assignment
+                            )
                         ),
                         "q_mean": float(merged.get("q_mean", 1.0)),
                         "q_mean_pre_norm": float(
@@ -1678,9 +1852,16 @@ def main():
                         "q_os_std": float(merged.get("q_os_std", 0.0)),
                         "p_gt_tau": float(merged.get("p_gt_tau", 0.0)),
                         "p_at_qmax": float(merged.get("p_at_qmax", 0.0)),
-                        "q_cap": float(args.calibrated_mne_q_max),
+                        "q_cap": float(
+                            args.task_cov_q_cap
+                            if args.regularizer == "task_cov_mne"
+                            else args.calibrated_mne_q_max
+                        ),
                         "mean_normalize_q": int(
-                            bool(args.calibrated_mne_mean_normalize_q)
+                            bool(
+                                args.regularizer == "task_cov_mne"
+                                or args.calibrated_mne_mean_normalize_q
+                            )
                         ),
                         "ga_mode": args.calibrated_mne_ga,
                         "ga_kappa_res_mean": float(
@@ -1698,6 +1879,17 @@ def main():
                         "gm_d_mean": float(merged.get("gm_d_mean", 1.0)),
                         "gm_m_mean": float(merged.get("gm_m_mean", 1.0)),
                         "gm_r_mean": float(merged.get("gm_r_mean", 1.0)),
+                        "cov_updates": int(merged.get("cov_updates", 0)),
+                        "task_updates": int(merged.get("task_updates", 0)),
+                        "cov_mean": float(merged.get("cov_mean", float("nan"))),
+                        "omega_mean": float(merged.get("omega_mean", float("nan"))),
+                        "omega_std": float(merged.get("omega_std", float("nan"))),
+                        "coefficient_mean": float(
+                            merged.get("coefficient_mean", float("nan"))
+                        ),
+                        "allocation_alpha": float(
+                            merged.get("allocation_alpha", 1.0)
+                        ),
                         "mne_grad_match_scale": match_stats.get("scale", ""),
                         "mne_ref_grad_norm": match_stats.get("ref_grad_norm", ""),
                         "reg_grad_norm": grads["reg_grad_norm"],

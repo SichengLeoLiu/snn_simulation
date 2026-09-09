@@ -128,12 +128,17 @@ def train(
         else:
             outputs = model(images)
         loss = criterion(outputs, labels)
+        task_cov_cfg = _task_cov_cfg(model)
+        if task_cov_cfg is not None:
+            update_task_cov_mne_stats(model, outputs, labels, images)
         if gm_cfg is not None:
             update_graph_margin_stats(model, loss)
         if reg_loss_fn is not None:
             reg = reg_loss_fn(model, T, quant_level)
             loss = loss + float(reg_coeff) * reg
-            stats = getattr(model, "_calibrated_mne_stats", None)
+            stats = getattr(model, "_task_cov_mne_stats", None)
+            if stats is None:
+                stats = getattr(model, "_calibrated_mne_stats", None)
             if stats is not None:
                 if epoch_acc is None:
                     epoch_acc = {
@@ -186,7 +191,10 @@ def train(
         }
         averaged["q_min"] = epoch_acc["q_min"]
         averaged["q_max"] = epoch_acc["q_max"]
-        model._calibrated_mne_epoch_stats = averaged
+        if _task_cov_cfg(model) is not None:
+            model._task_cov_mne_epoch_stats = averaged
+        else:
+            model._calibrated_mne_epoch_stats = averaged
     return running_loss, 100 * correct / total
 
 
@@ -2335,6 +2343,476 @@ def compute_mne_l2_regularization(
         "grad_match_layer_map": match_to,
     }
     return scale * penalty
+
+
+TASK_COV_MODES = ("cov", "task")
+
+
+def _task_cov_cfg(model):
+    cfg = getattr(model, "_task_cov_mne_cfg", None)
+    return cfg if isinstance(cfg, dict) else None
+
+
+def remove_task_cov_mne_hooks(model) -> None:
+    """Remove forward hooks installed by ``configure_task_cov_mne``."""
+    for handle in getattr(model, "_task_cov_mne_hook_handles", []) or []:
+        handle.remove()
+    model._task_cov_mne_hook_handles = []
+    model._task_cov_capture_inputs = False
+    model._task_cov_input_cache = {}
+
+
+def configure_task_cov_mne(
+    model,
+    quant_level: int,
+    deploy_T: int = 16,
+    calibration_sigma: float = 1.0,
+    mode: str = "task",
+    calibration_interval: int = 100,
+    task_interval: int = 10,
+    calibration_batch_size: int = 4,
+    ema_rho: float = 0.1,
+    q_floor: float = 0.25,
+    q_cap: float = 0.0,
+    margin_floor: float = 0.25,
+    layer_map=None,
+    eps: float = 1e-6,
+) -> dict:
+    """Configure detached deployment-calibrated covariance statistics.
+
+    The regularizer uses the diagonal, channel-stationary approximation
+
+        sum_{c,i,k} omega[c] D[c]^2 E[delta x[i]^2] W[c,i,k]^2 / Delta^2,
+
+    where ``Delta=lambda/L`` and ``delta x`` is measured from paired clean and
+    noisy ``T=deploy_T`` rate-uniform forwards.  It intentionally does not
+    materialize a full convolution-patch covariance matrix.  ``mode='cov'``
+    fixes omega to one; ``mode='task'`` estimates detached omega from a
+    normalized correct-class logit margin.
+    """
+    mode = str(mode).strip().lower()
+    if mode not in TASK_COV_MODES:
+        raise ValueError(f"task covariance mode must be one of {TASK_COV_MODES}, got {mode!r}.")
+    if int(quant_level) <= 0 or int(deploy_T) <= 0:
+        raise ValueError("quant_level and deploy_T must be positive.")
+    if float(calibration_sigma) < 0:
+        raise ValueError("calibration_sigma must be nonnegative.")
+    if int(calibration_interval) <= 0 or int(task_interval) <= 0:
+        raise ValueError("task/covariance update intervals must be positive.")
+    if int(calibration_batch_size) <= 0:
+        raise ValueError("calibration_batch_size must be positive.")
+    if not 0.0 < float(ema_rho) <= 1.0:
+        raise ValueError("ema_rho must be in (0, 1].")
+    if not 0.0 <= float(q_floor) <= 1.0:
+        raise ValueError("q_floor must be in [0, 1].")
+    if float(q_cap) > 0 and float(q_cap) < 1.0:
+        raise ValueError("q_cap must be zero or at least one.")
+    if float(margin_floor) <= 0:
+        raise ValueError("margin_floor must be positive.")
+    if not hasattr(model, "set_T") or not hasattr(model, "set_mode"):
+        raise ValueError("Task-Cov-MNE requires a QCFS model with set_T and set_mode.")
+    if not hasattr(model, "set_first_layer_input_noise_sigma"):
+        raise ValueError("Task-Cov-MNE requires the post-input-IF noise interface.")
+
+    active_map = _layer_map_from_model(model, layer_map)
+    remove_task_cov_mne_hooks(model)
+    module_map = dict(model.named_modules())
+    rows = collect_weight_layer_matches(model, active_map)
+    matched = [row for row in rows if row["matched"]]
+    if not matched:
+        raise ValueError("Task-Cov-MNE found no Conv/Linear-to-IF matches.")
+
+    handles = []
+    for row in matched:
+        name = row["name"]
+        module = module_map[name]
+
+        def _capture_input(_module, inputs, _name=name):
+            if not getattr(model, "_task_cov_capture_inputs", False):
+                return
+            if inputs and torch.is_tensor(inputs[0]):
+                # A detached view is enough: the model does not mutate these
+                # activations in-place, and retaining it avoids a second copy.
+                model._task_cov_input_cache[_name] = inputs[0].detach()
+
+        handles.append(module.register_forward_pre_hook(_capture_input))
+
+    model._task_cov_mne_hook_handles = handles
+    model._task_cov_mne_cov = {}
+    model._task_cov_mne_omega = {}
+    model._task_cov_mne_cfg = {
+        "mode": mode,
+        "quant_level": int(quant_level),
+        "deploy_T": int(deploy_T),
+        "calibration_sigma": float(calibration_sigma),
+        "calibration_interval": int(calibration_interval),
+        "task_interval": int(task_interval),
+        "calibration_batch_size": int(calibration_batch_size),
+        "ema_rho": float(ema_rho),
+        "q_floor": float(q_floor),
+        "q_cap": float(q_cap),
+        "margin_floor": float(margin_floor),
+        "layer_map": active_map,
+        "eps": float(eps),
+        "allocation_alpha": 1.0,
+        "step": 0,
+        "cov_updates": 0,
+        "task_updates": 0,
+    }
+    model._task_cov_mne_stats = {
+        "mode": mode,
+        "q_mean": 1.0,
+        "q_std": 0.0,
+        "q_min": 1.0,
+        "q_max": 1.0,
+        "n_cov_layers": 0,
+        "n_task_ifs": 0,
+        "cov_updates": 0,
+        "task_updates": 0,
+    }
+    return model._task_cov_mne_cfg
+
+
+def _task_cov_ema(store: dict, key: str, value: torch.Tensor, rho: float) -> torch.Tensor:
+    value = value.detach()
+    previous = store.get(key)
+    if previous is None or previous.shape != value.shape or previous.device != value.device:
+        store[key] = value.clone()
+    else:
+        store[key] = (1.0 - float(rho)) * previous + float(rho) * value
+    return store[key]
+
+
+def _task_cov_channel_second_moment(delta: torch.Tensor) -> torch.Tensor | None:
+    """Return E[delta^2] for each input channel or feature dimension."""
+    if delta.dim() < 2:
+        return None
+    reduce_dims = tuple(dim for dim in range(delta.dim()) if dim != 1)
+    if not reduce_dims:
+        return None
+    return delta.detach().pow(2).mean(dim=reduce_dims)
+
+
+def _task_cov_update_task_weights(model, logits, labels, cfg: dict) -> dict:
+    """Estimate detached per-IF task weights from normalized logit margins."""
+    rows = collect_weight_layer_matches(model, cfg["layer_map"])
+    if_entries = {}
+    for row in rows:
+        if row["matched"]:
+            if_entries[row["if_name"]] = row["if_mod"]
+
+    names, acts = [], []
+    for name, if_mod in if_entries.items():
+        z = getattr(if_mod, "last_pre_quant", None)
+        if torch.is_tensor(z) and z.requires_grad:
+            names.append(name)
+            acts.append(z)
+    if not acts or logits.dim() != 2:
+        return {"n_task_ifs": 0, "task_correct_fraction": float("nan")}
+
+    target = logits.gather(1, labels.view(-1, 1)).squeeze(1)
+    class_mask = F.one_hot(labels, num_classes=logits.shape[1]).bool()
+    rival = logits.masked_fill(class_mask, float("-inf")).max(dim=1).values
+    margin = target - rival
+    correct = logits.detach().argmax(dim=1).eq(labels)
+    if not bool(correct.any()):
+        # During the first few updates, retain a defined proxy rather than
+        # silently falling back to a different regularizer.
+        correct = torch.ones_like(correct, dtype=torch.bool)
+    denominator = margin.detach().clamp(min=float(cfg["margin_floor"]))
+    objective = (margin[correct] / denominator[correct]).sum()
+    grads = torch.autograd.grad(objective, acts, retain_graph=True, allow_unused=True)
+
+    omega_store = getattr(model, "_task_cov_mne_omega", {})
+    values = []
+    for name, if_mod, grad in zip(names, (if_entries[name] for name in names), grads):
+        if grad is None:
+            continue
+        grad = grad[correct]
+        if grad.numel() == 0:
+            continue
+        reduce_dims = tuple(dim for dim in range(grad.dim()) if dim != 1)
+        if not reduce_dims:
+            continue
+        lam = if_mod.thresh.detach().to(device=grad.device, dtype=grad.dtype)
+        lam = lam.clamp(min=max(float(cfg["eps"]), 1e-3)).view(-1)[0]
+        delta = lam / float(cfg["quant_level"])
+        omega = grad.detach().pow(2).mean(dim=reduce_dims) * delta.pow(2)
+        if not bool(torch.isfinite(omega).all()):
+            continue
+        values.append(_task_cov_ema(omega_store, name, omega, cfg["ema_rho"]))
+    model._task_cov_mne_omega = omega_store
+    cfg["task_updates"] += 1
+    return {
+        "n_task_ifs": len(values),
+        "task_correct_fraction": float(correct.float().mean().detach()),
+        "omega_mean": float(torch.cat(values).mean().detach()) if values else float("nan"),
+        "omega_std": float(torch.cat(values).std(unbiased=False).detach()) if values else float("nan"),
+    }
+
+
+def _task_cov_capture_deployment_inputs(model, images, cfg: dict) -> dict:
+    """Capture matched layer inputs under the exact rate-uniform noise protocol."""
+    batch_size = min(int(cfg["calibration_batch_size"]), int(images.shape[0]))
+    if batch_size <= 0:
+        return {}
+    calibration_images = images[:batch_size].detach()
+    previous_training = bool(model.training)
+    previous_t = int(getattr(model, "T", 0) or 0)
+    previous_noise = float(getattr(model, "first_layer_input_noise_sigma", 0.0))
+    previous_position = getattr(model, "first_layer_input_noise_position", None)
+    previous_type = getattr(model, "first_layer_input_noise_type", None)
+    previous_modes = [
+        (module, getattr(module, "mode", None))
+        for module in model.modules()
+        if isinstance(module, IF)
+    ]
+
+    def _forward_with_sigma(sigma: float) -> dict:
+        model._task_cov_input_cache = {}
+        model._task_cov_capture_inputs = True
+        model.set_first_layer_input_noise_sigma(float(sigma))
+        try:
+            with torch.no_grad():
+                model(calibration_images)
+            return dict(model._task_cov_input_cache)
+        finally:
+            model._task_cov_capture_inputs = False
+
+    try:
+        model.eval()
+        model.set_T(int(cfg["deploy_T"]))
+        model.set_mode("rate_uniform")
+        if hasattr(model, "set_first_layer_input_noise_position"):
+            model.set_first_layer_input_noise_position("post_input_if")
+        if hasattr(model, "set_first_layer_input_noise_type"):
+            model.set_first_layer_input_noise_type("gaussian")
+        clean = _forward_with_sigma(0.0)
+        noisy = _forward_with_sigma(float(cfg["calibration_sigma"]))
+    finally:
+        model._task_cov_capture_inputs = False
+        model._task_cov_input_cache = {}
+        model.set_first_layer_input_noise_sigma(previous_noise)
+        if previous_position is not None and hasattr(model, "set_first_layer_input_noise_position"):
+            model.set_first_layer_input_noise_position(previous_position)
+        if previous_type is not None and hasattr(model, "set_first_layer_input_noise_type"):
+            model.set_first_layer_input_noise_type(previous_type)
+        model.set_T(previous_t)
+        for module, mode in previous_modes:
+            if mode is not None:
+                module.mode = mode
+        model.train(previous_training)
+
+    second_moments = {}
+    for name, clean_input in clean.items():
+        noisy_input = noisy.get(name)
+        if noisy_input is None or clean_input.shape != noisy_input.shape:
+            continue
+        moment = _task_cov_channel_second_moment(noisy_input - clean_input)
+        if moment is not None and bool(torch.isfinite(moment).all()):
+            second_moments[name] = moment
+    return second_moments
+
+
+def update_task_cov_mne_stats(model, logits, labels, images) -> dict:
+    """Refresh task and deployment-noise caches during a T=0 training step."""
+    cfg = _task_cov_cfg(model)
+    if cfg is None:
+        return {}
+    if int(getattr(model, "T", 0) or 0) != 0:
+        raise ValueError("Task-Cov-MNE is defined for ANN/QCFS training with T=0.")
+
+    cfg["step"] += 1
+    step = int(cfg["step"])
+    summary = {}
+    if cfg["mode"] == "task" and (step - 1) % int(cfg["task_interval"]) == 0:
+        summary.update(_task_cov_update_task_weights(model, logits, labels, cfg))
+    if (step - 1) % int(cfg["calibration_interval"]) == 0:
+        moments = _task_cov_capture_deployment_inputs(model, images, cfg)
+        cov_store = getattr(model, "_task_cov_mne_cov", {})
+        for name, moment in moments.items():
+            _task_cov_ema(cov_store, name, moment, cfg["ema_rho"])
+        model._task_cov_mne_cov = cov_store
+        cfg["cov_updates"] += 1
+        summary["n_cov_layers"] = len(moments)
+        summary["cov_mean"] = (
+            float(torch.cat(list(moments.values())).mean().detach()) if moments else float("nan")
+        )
+
+    previous = getattr(model, "_task_cov_mne_stats", {}) or {}
+    model._task_cov_mne_stats = {
+        **previous,
+        **summary,
+        "mode": cfg["mode"],
+        "cov_updates": int(cfg["cov_updates"]),
+        "task_updates": int(cfg["task_updates"]),
+        "allocation_alpha": float(cfg["allocation_alpha"]),
+    }
+    return model._task_cov_mne_stats
+
+
+def _task_cov_weight_coefficient(row: dict, module_map: dict, cfg: dict, cov_store: dict, omega_store: dict):
+    """Detached diagonal coefficient for one matched Conv/Linear layer."""
+    weight = row["weight"]
+    moment = cov_store.get(row["name"])
+    if moment is None or moment.numel() == 0:
+        return None
+    moment = moment.to(device=weight.device, dtype=weight.dtype)
+    module = module_map[row["name"]]
+    if weight.dim() == 2:
+        if moment.numel() != weight.shape[1]:
+            return None
+        input_factor = moment.view(1, -1)
+    elif weight.dim() >= 3:
+        groups = int(getattr(module, "groups", 1))
+        in_per_group = int(weight.shape[1])
+        if groups == 1:
+            if moment.numel() != in_per_group:
+                return None
+            input_factor = moment.view(1, in_per_group, *([1] * (weight.dim() - 2)))
+        else:
+            if moment.numel() != groups * in_per_group or weight.shape[0] % groups:
+                return None
+            out_per_group = int(weight.shape[0] // groups)
+            grouped = moment.view(groups, in_per_group)
+            grouped = grouped.repeat_interleave(out_per_group, dim=0)
+            input_factor = grouped.view(weight.shape[0], in_per_group, *([1] * (weight.dim() - 2)))
+    else:
+        return None
+
+    eps = float(cfg["eps"])
+    scale_sq = torch.ones((weight.shape[0],), device=weight.device, dtype=weight.dtype)
+    bn_mod = row["bn"]
+    if bn_mod is not None:
+        bn_eps = float(getattr(bn_mod, "eps", eps))
+        gamma = bn_mod.weight.detach().to(device=weight.device, dtype=weight.dtype)
+        var = bn_mod.running_var.detach().to(device=weight.device, dtype=weight.dtype)
+        scale_sq = gamma.pow(2) / (var.clamp(min=bn_eps) + bn_eps)
+    if_mod = row["if_mod"]
+    lam = if_mod.thresh.detach().to(device=weight.device, dtype=weight.dtype)
+    delta = lam.clamp(min=max(eps, 1e-3)).view(-1)[0] / float(cfg["quant_level"])
+    output_shape = [weight.shape[0]] + [1] * (weight.dim() - 1)
+    coefficient = scale_sq.view(*output_shape) * input_factor / (delta.pow(2) + eps)
+    if cfg["mode"] == "task":
+        omega = omega_store.get(row["if_name"])
+        if omega is None or omega.numel() != weight.shape[0]:
+            return None
+        omega = omega.to(device=weight.device, dtype=weight.dtype)
+        coefficient = coefficient * omega.view(*output_shape)
+    if not bool(torch.isfinite(coefficient).all()) or float(coefficient.detach().mean()) <= eps:
+        return None
+    return coefficient.detach()
+
+
+def compute_task_cov_mne_regularization(model, quant_level=None):
+    """Compute the detached diagonal Cov-MNE or Task-Cov-MNE quadratic penalty.
+
+    Coefficients are inferred from paired deployment forwards and task margins,
+    then held fixed while differentiating the current source-ANN weights.  The
+    allocation has parameter-weighted mean one, so ``reg_coeff`` is directly
+    comparable to weights-only L2.  Layers without a valid covariance estimate,
+    including the pre-noise stem and unmatched classifier head, retain q=1.
+    """
+    cfg = _task_cov_cfg(model)
+    if cfg is None:
+        raise ValueError("Task-Cov-MNE has not been configured on this model.")
+    if quant_level is not None and int(quant_level) != int(cfg["quant_level"]):
+        raise ValueError("Task-Cov-MNE quant_level does not match its configured value.")
+    rows = collect_weight_layer_matches(model, cfg["layer_map"])
+    module_map = dict(model.named_modules())
+    cov_store = getattr(model, "_task_cov_mne_cov", {})
+    omega_store = getattr(model, "_task_cov_mne_omega", {})
+
+    weighted, plain = [], []
+    for row in rows:
+        if not row["matched"]:
+            plain.append(row["weight"])
+            continue
+        coefficient = _task_cov_weight_coefficient(
+            row, module_map, cfg, cov_store, omega_store
+        )
+        if coefficient is None:
+            plain.append(row["weight"])
+        else:
+            weighted.append((row, coefficient))
+
+    if not weighted:
+        parameter = next((p for p in model.parameters() if p.requires_grad), None)
+        if parameter is None:
+            return torch.tensor(0.0)
+        penalty = parameter.new_zeros(())
+        for weight in plain:
+            penalty = penalty + weight.pow(2).sum()
+        return 0.5 * penalty
+
+    total_entries = sum(int(row["weight"].numel()) for row, _ in weighted)
+    coefficient_sum = sum(
+        coefficient.sum() * (row["weight"].numel() // coefficient.numel())
+        for row, coefficient in weighted
+    )
+    coefficient_mean = (coefficient_sum / float(total_entries)).detach().clamp(min=cfg["eps"])
+    alpha = float(cfg["allocation_alpha"])
+    q_floor = float(cfg["q_floor"])
+    q_cap = float(cfg["q_cap"])
+
+    penalty = None
+    q_sum = None
+    q_sq_sum = None
+    q_entries = 0
+    q_min = None
+    q_max = None
+    for row, coefficient in weighted:
+        weight = row["weight"]
+        q_alloc = q_floor + (1.0 - q_floor) * (coefficient / coefficient_mean)
+        q = 1.0 + alpha * (q_alloc - 1.0)
+        if q_cap > 0:
+            q = q.clamp(max=q_cap)
+        term = (q * weight.pow(2)).sum()
+        penalty = term if penalty is None else penalty + term
+        multiplier = int(weight.numel() // q.numel())
+        q_sum_term = q.sum() * multiplier
+        q_sq_term = q.pow(2).sum() * multiplier
+        q_sum = q_sum_term if q_sum is None else q_sum + q_sum_term
+        q_sq_sum = q_sq_term if q_sq_sum is None else q_sq_sum + q_sq_term
+        q_entries += int(weight.numel())
+        q_min = q.min() if q_min is None else torch.minimum(q_min, q.min())
+        q_max = q.max() if q_max is None else torch.maximum(q_max, q.max())
+
+    for weight in plain:
+        penalty = penalty + weight.pow(2).sum()
+        count = int(weight.numel())
+        one = weight.new_ones(())
+        q_sum = q_sum + one * count
+        q_sq_sum = q_sq_sum + one * count
+        q_entries += count
+        q_min = torch.minimum(q_min, one)
+        q_max = torch.maximum(q_max, one)
+
+    q_mean = q_sum / float(q_entries)
+    q_std = (q_sq_sum / float(q_entries) - q_mean.pow(2)).clamp(min=0.0).sqrt()
+    omega_values = list(omega_store.values())
+    stats = getattr(model, "_task_cov_mne_stats", {}) or {}
+    model._task_cov_mne_stats = {
+        **stats,
+        "mode": cfg["mode"],
+        "q_mean": float(q_mean.detach()),
+        "q_std": float(q_std.detach()),
+        "q_min": float(q_min.detach()),
+        "q_max": float(q_max.detach()),
+        "coefficient_mean": float(coefficient_mean.detach()),
+        "n_cov_layers": len(weighted),
+        "n_task_ifs": len(omega_values),
+        "omega_mean": (
+            float(torch.cat(omega_values).mean().detach()) if omega_values else float("nan")
+        ),
+        "omega_std": (
+            float(torch.cat(omega_values).std(unbiased=False).detach())
+            if omega_values
+            else float("nan")
+        ),
+        "allocation_alpha": alpha,
+    }
+    return 0.5 * penalty
 
 
 BRIDGE_TRANSFORMS = ("uniform", "raw", "normalized", "clipped", "onesided")
