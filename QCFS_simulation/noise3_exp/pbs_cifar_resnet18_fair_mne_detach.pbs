@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N r18taskcov
+#PBS -N r18fairmne
 #PBS -P gs14
 #PBS -q gpuvolta
 #PBS -l walltime=24:00:00
@@ -10,39 +10,39 @@
 #PBS -l wd
 #PBS -j oe
 
-# P1: ResNet-18 Task-Cov screen. METHOD: cov_mne | task_cov_mne
-# DATASET: cifar10 | cifar100. SEED: 40–44. Shared test noise: EVAL_SEED=0.
-# Do not mix this diagonal empirical covariance experiment with prior GA-MNE.
+# P0: fair ResNet-18 MNE-L2 detach. Do not reuse historical MNE checkpoints.
+# DATASET: cifar10 | cifar100
+# REG_COEFF: 1e-4 | 3e-4 | 5e-4 | 1e-3
+# Shared test noise: EVAL_SEED=0. Val selects rc after the seed-42 grid.
 #
 #   export CIFAR_ROOT=/home/595/sl9144/datasets
 #   for DS in cifar10 cifar100; do
-#     for M in cov_mne task_cov_mne; do
-#       for S in 40 41 42 43 44; do
-#         qsub -N "t${DS#cifar}${M:0:1}${S}" \
-#           -v CIFAR_ROOT,DATASET=${DS},METHOD=${M},SEED=${S},EVAL_SEED=0,OUT_DIR=/scratch/gs14/sl9144/snn_results/cifar_resnet18_task_cov_mne_seed42 \
-#           QCFS_simulation/noise3_exp/pbs_cifar_resnet18_task_cov_mne_seed42.pbs
-#       done
+#     for RC in 1e-4 3e-4 5e-4 1e-3; do
+#       TAG=$(echo "${DS}_${RC}" | sed 's/cifar//;s/-//g')
+#       qsub -N "fm${TAG}" \
+#         -v CIFAR_ROOT,DATASET=${DS},REG_COEFF=${RC},SEED=42,EVAL_SEED=0,OUT_DIR=/scratch/gs14/sl9144/snn_results/cifar_resnet18_fair_mne_detach \
+#         QCFS_simulation/noise3_exp/pbs_cifar_resnet18_fair_mne_detach.pbs
 #     done
 #   done
 
 set -euo pipefail
 
-METHOD="${METHOD:?set METHOD=cov_mne|task_cov_mne}"
-DATASET="${DATASET:-cifar100}"
+DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
+REG_COEFF="${REG_COEFF:?set REG_COEFF=1e-4|3e-4|5e-4|1e-3}"
 SEED="${SEED:-42}"
 EVAL_SEED="${EVAL_SEED:-0}"
-case "${METHOD}" in
-  cov_mne|task_cov_mne) ;;
-  *) echo "ERROR: invalid METHOD=${METHOD}"; exit 2 ;;
-esac
 case "${DATASET}" in
   cifar10|cifar100) ;;
   *) echo "ERROR: invalid DATASET=${DATASET}"; exit 2 ;;
 esac
+case "${REG_COEFF}" in
+  1e-4|3e-4|5e-4|1e-3) ;;
+  *) echo "ERROR: invalid REG_COEFF=${REG_COEFF}"; exit 2 ;;
+esac
 
 SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
 mkdir -p "${SCRATCH_LOG}"
-LIVE_LOG="${SCRATCH_LOG}/r18taskcov_${DATASET}_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+LIVE_LOG="${SCRATCH_LOG}/r18fairmne_${DATASET}_rc${REG_COEFF}_seed${SEED}.${PBS_JOBID:-manual}.out"
 exec > "${LIVE_LOG}" 2>&1
 
 module purge
@@ -65,10 +65,10 @@ else
 fi
 cd "${ROOT}"
 
-OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_resnet18_task_cov_mne_seed42}"
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_resnet18_fair_mne_detach}"
 mkdir -p "${OUT_DIR}"
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "host=$(hostname) date=$(date) DATASET=${DATASET} METHOD=${METHOD} SEED=${SEED} EVAL_SEED=${EVAL_SEED}"
+echo "host=$(hostname) date=$(date) DATASET=${DATASET} REG_COEFF=${REG_COEFF} SEED=${SEED} EVAL_SEED=${EVAL_SEED}"
 echo "ROOT=${ROOT} OUT_DIR=${OUT_DIR}"
 echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
 
@@ -83,7 +83,7 @@ fi
 
 ARGS=(
   --dataset "${DATASET}"
-  --method "${METHOD}"
+  --reg-coeff "${REG_COEFF}"
   --seed "${SEED}"
   --eval-seed "${EVAL_SEED}"
   --out-root "${OUT_DIR}"
@@ -97,5 +97,5 @@ if [[ "${RETRAIN:-0}" == "1" ]]; then
   ARGS+=(--retrain)
 fi
 
-python -u noise3_exp/run_cifar_resnet18_task_cov_mne_seed42.py "${ARGS[@]}"
+python -u noise3_exp/run_cifar_resnet18_fair_mne_detach.py "${ARGS[@]}"
 echo "DONE $(date)"

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """ResNet-18/CIFAR Task-Cov-MNE screen with a fixed two-arm intervention.
 
-The existing L2-wo and historical MNE-L2-detach checkpoints are deliberately
-not retrained here.  This runner adds the two missing controls under the same
-weights-only L2 budget (beta=5e-4):
+The two-arm screen is now 5-seed (40–44) on CIFAR-10/100 with a shared
+test noise stream (eval seed 0). Historical MNE-L2-detach checkpoints are
+still not controls; the fair ResNet-map / val-tuned detach baseline is the
+separate P0 runner.
 
   cov_mne       diagonal propagated input-noise second moment only (omega=1)
   task_cov_mne  the same covariance multiplied by detached task-margin weight
@@ -48,6 +49,8 @@ from utils import get_torch_device  # noqa: E402
 
 ARCH = "resnet18"
 SEED = 42
+SEEDS = (40, 41, 42, 43, 44)
+EVAL_NOISE_SEED = 0
 CALIBRATION_SIGMA = 1.0
 CALIBRATION_INTERVAL = 100
 TASK_INTERVAL = 10
@@ -71,23 +74,30 @@ METHODS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--method", choices=tuple(METHODS), required=True)
+    parser.add_argument("--method", choices=tuple(METHODS), default=None)
     parser.add_argument("--dataset", choices=["cifar10", "cifar100"], default="cifar100")
     parser.add_argument("--seed", type=int, default=SEED)
+    parser.add_argument("--eval-seed", type=int, default=int(os.environ.get("EVAL_SEED", str(EVAL_NOISE_SEED))))
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--batch-size", type=int, default=int(os.environ.get("CIFAR_BATCH", "128")))
     parser.add_argument("--workers", type=int, default=int(os.environ.get("CIFAR_NUM_WORKERS", "8")))
     parser.add_argument("--device", default="auto")
     parser.add_argument("--retrain", action="store_true")
     parser.add_argument("--test-only", action="store_true")
+    parser.add_argument("--summarize", action="store_true")
     parser.add_argument(
         "--out-root",
         type=Path,
         default=ROOT.parent / "important_results" / "cifar_resnet18_task_cov_mne_seed42",
     )
     args = parser.parse_args()
+    args.eval_seed = int(args.eval_seed)
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
+    if args.summarize:
+        return args
+    if args.method is None:
+        parser.error("--method is required unless --summarize")
     return args
 
 
@@ -183,6 +193,7 @@ def scorecard(val_rows, test_rows, args, checkpoint: Path) -> dict:
         "dataset": args.dataset,
         "arch": ARCH,
         "seed": args.seed,
+        "eval_seed": args.eval_seed,
         "regularizer": "task_cov_mne",
         "task_cov_mode": spec["mode"],
         "layer_map": "resnet",
@@ -205,22 +216,77 @@ def scorecard(val_rows, test_rows, args, checkpoint: Path) -> dict:
     return card
 
 
+def _mean_std(values: list[float]) -> tuple[float, float]:
+    mean = sum(values) / len(values)
+    if len(values) == 1:
+        return mean, 0.0
+    var = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+    return mean, var ** 0.5
+
+
+def summarize(out_root: Path) -> None:
+    cards = []
+    for path in sorted(out_root.glob("*/*/seed*/scorecard.json")):
+        cards.append(json.loads(path.read_text()))
+    if not cards:
+        print(f"No scorecards in {out_root}")
+        return
+    grouped = {}
+    for card in cards:
+        grouped.setdefault((card["dataset"], card["method"]), []).append(card)
+    print(f"{'dataset':<10} {'method':<14} {'n':>3} {'test0':>16} {'test5':>16} {'AUC3-5':>16}")
+    rows = []
+    for dataset in ("cifar10", "cifar100"):
+        for method in METHODS:
+            group = grouped.get((dataset, method), [])
+            if not group:
+                print(f"{dataset:<10} {method:<14} MISSING")
+                continue
+            t0m, t0s = _mean_std([float(card["test_clean"]) for card in group])
+            t5m, t5s = _mean_std([float(card["test_sigma5"]) for card in group])
+            hm, hs = _mean_std([float(card["test_auc_high"]) for card in group])
+            print(
+                f"{dataset:<10} {method:<14} {len(group):3d} "
+                f"{t0m:7.2f}±{t0s:<6.2f} {t5m:7.2f}±{t5s:<6.2f} {hm:7.1f}±{hs:<6.1f}"
+            )
+            rows.append(
+                {
+                    "dataset": dataset,
+                    "method": method,
+                    "n_seeds": len(group),
+                    "test_clean_mean": t0m,
+                    "test_clean_std": t0s,
+                    "test_sigma5_mean": t5m,
+                    "test_sigma5_std": t5s,
+                    "test_auc_high_mean": hm,
+                    "test_auc_high_std": hs,
+                }
+            )
+    if rows:
+        write_csv(out_root / "task_cov_5seed_summary.csv", rows)
+        print(f"Wrote {out_root / 'task_cov_5seed_summary.csv'}")
+
+
 def main() -> None:
     args = parse_args()
+    args.out_root.mkdir(parents=True, exist_ok=True)
+    if args.summarize:
+        summarize(args.out_root)
+        return
     out = cfg_dir(args)
     out.mkdir(parents=True, exist_ok=True)
     print(
         f"[INFO] {args.dataset} ResNet-18 {METHODS[args.method]['label']} "
-        f"seed={args.seed}; Ttrain=0, Teval={TEST_T}, rate_uniform, post_input_if",
+        f"seed={args.seed} eval_seed={args.eval_seed}; Ttrain=0, Teval={TEST_T}, rate_uniform, post_input_if",
         flush=True,
     )
     checkpoint = train(args)
     device = get_torch_device(args.device)
     pin_memory = device.type == "cuda"
     model = load_model(checkpoint, device, args.dataset)
-    val_rows = sweep(model, val_loader(args, pin_memory), device, "val", args.seed)
+    val_rows = sweep(model, val_loader(args, pin_memory), device, "val", args.eval_seed)
     write_csv(out / "val_sweep.csv", val_rows)
-    test_rows = sweep(model, test_loader(args, pin_memory), device, "test", args.seed)
+    test_rows = sweep(model, test_loader(args, pin_memory), device, "test", args.eval_seed)
     write_csv(out / "test_sweep.csv", test_rows)
     card = scorecard(val_rows, test_rows, args, checkpoint)
     (out / "scorecard.json").write_text(json.dumps(card, indent=2) + "\n")
