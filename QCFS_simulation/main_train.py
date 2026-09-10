@@ -28,6 +28,7 @@ from utils import (
     configure_cuda_fast,
     compute_mne_l2_regularization,
     compute_mne_l2_all_regularization,
+    compute_mne_l2_unmatched_regularization,
     compute_l2_calibrated_mne_regularization,
     compute_mne_os_bridge_regularization,
     init_mne_os_bridge_grad_scale,
@@ -117,6 +118,7 @@ parser.add_argument(
         "resolution_aware",
         "mne_l2",
         "mne_l2_all",
+        "mne_l2_unmatched",
         "calibrated_mne_l2",
         "mne_os_bridge",
         "task_cov_mne",
@@ -539,6 +541,20 @@ parser.add_argument(
     "layer1,layer2,layer3,layer4,layer5,classifier_head,other.",
 )
 parser.add_argument(
+    "--unmatched_l2_coeff",
+    default=5e-4,
+    type=float,
+    help="η_head for --regularizer=mne_l2_unmatched. Uses (1/2)||W||_F^2 so "
+    "5e-4 matches PyTorch WD=5e-4 on unmatched Conv/Linear weights.",
+)
+parser.add_argument(
+    "--mne_unmatched_scope",
+    default="head",
+    choices=("head", "all"),
+    help="Unmatched Conv/Linear L2 scope: head=classifier/seg/det heads only; "
+    "all=every unmatched Conv/Linear. Never BN, bias, or IF threshold.",
+)
+parser.add_argument(
     "--mne_grad_match_layer_map",
     default="",
     choices=("", "legacy", "resnet"),
@@ -924,6 +940,32 @@ def main():
             fold_bn=(not args.mne_no_bn_fold),
             full_frobenius=args.mne_frobenius,
         )
+    elif args.regularizer == "mne_l2_unmatched":
+        if float(args.reg_coeff) <= 0 and float(args.unmatched_l2_coeff) > 0:
+            raise ValueError("mne_l2_unmatched requires --reg_coeff > 0 (η_MNE).")
+        if float(args.unmatched_l2_coeff) < 0:
+            raise ValueError("--unmatched_l2_coeff must be nonnegative.")
+        reg_loss_fn = lambda m, t, q: compute_mne_l2_unmatched_regularization(
+            m,
+            quant_level=(args.L if q is None else q),
+            eps=args.mne_eps,
+            use_max=args.mne_use_max,
+            detach_lambda=args.mne_detach_lambda,
+            detach_bn_stats=(not args.mne_no_detach_bn_stats),
+            detach_bn_affine=(
+                False if args.mne_no_detach_bn_affine else None
+            ),
+            fold_bn=(not args.mne_no_bn_fold),
+            full_frobenius=args.mne_frobenius,
+            l_ref=args.mne_l_ref,
+            divide_by_lambda=(not args.mne_no_lambda),
+            scale_by_l=(not args.mne_no_l_scale),
+            grad_match_layer_map=args.mne_grad_match_layer_map or None,
+            include_roles=args.mne_include_roles or None,
+            unmatched_scope=args.mne_unmatched_scope,
+            unmatched_coeff=args.unmatched_l2_coeff,
+            mne_coeff=args.reg_coeff,
+        )
     elif args.regularizer == "calibrated_mne_l2":
         def _calibrated_mne_reg(m, t, q):
             calibrated_mne_state["shuffle_counter"] += 1
@@ -1299,6 +1341,20 @@ def main():
                 str(bool(args.mne_detach_lambda)),
                 str(bool(not args.mne_no_detach_bn_stats)),
                 str(bool(not args.mne_no_bn_fold)),
+            )
+        )
+    if args.regularizer == "mne_l2_unmatched":
+        logger.info(
+            "mne_l2_unmatched: matched Conv/Linear -> MNE-L2; unmatched Conv/Linear "
+            "scope=%s -> (1/2)||W||_F^2; BN/bias/IF thresh excluded; "
+            "η_MNE=%.6g η_head=%.6g L=%d detach_lambda=%s layer_map=%s optimizer_wd=0"
+            % (
+                args.mne_unmatched_scope,
+                float(args.reg_coeff),
+                float(args.unmatched_l2_coeff),
+                args.L,
+                str(bool(args.mne_detach_lambda)),
+                args.mne_layer_map,
             )
         )
     if args.regularizer == "calibrated_mne_l2":
@@ -1782,6 +1838,20 @@ def main():
                         float(match_stats.get("matched_grad_norm", float("nan"))),
                     )
                 )
+            unmatched_stats = getattr(model, "_mne_unmatched_stats", None)
+            if args.regularizer == "mne_l2_unmatched" and unmatched_stats:
+                logger.info(
+                    "  mne_unmatched: scope=%s layers=%s n_params=%d "
+                    "η_head=%.6g mix_scale=%.6g unmatched_l2=%.6g"
+                    % (
+                        unmatched_stats.get("scope", args.mne_unmatched_scope),
+                        ",".join(unmatched_stats.get("layers") or []) or "none",
+                        int(unmatched_stats.get("n_params", 0)),
+                        float(unmatched_stats.get("unmatched_coeff", args.unmatched_l2_coeff)),
+                        float(unmatched_stats.get("mix_scale", float("nan"))),
+                        float(unmatched_stats.get("unmatched_l2", float("nan"))),
+                    )
+                )
             _maybe_run_grad_probe(epoch, epoch_reg_coeff)
             if args.regularizer in ("pc_mne", "margin_mne") and hasattr(model, "_pc_mne_stats"):
                 st = model._pc_mne_stats
@@ -1803,7 +1873,13 @@ def main():
                     epoch, args.epochs, tmp
                 )
             )
-            if args.regularizer in ("calibrated_mne_l2", "mne_l2", "mne_os_bridge", "task_cov_mne") and (
+            if args.regularizer in (
+                "calibrated_mne_l2",
+                "mne_l2",
+                "mne_l2_unmatched",
+                "mne_os_bridge",
+                "task_cov_mne",
+            ) and (
                 args.regularizer in ("calibrated_mne_l2", "mne_os_bridge")
                 or args.epoch_log_csv.strip()
             ):

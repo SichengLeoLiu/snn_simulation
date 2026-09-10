@@ -3130,6 +3130,111 @@ def compute_mne_l2_all_regularization(
     return mne + residual
 
 
+UNMATCHED_L2_SCOPES = ("head", "all")
+
+
+def unmatched_weight_rows(model, scope: str = "head", layer_map=None) -> list[dict]:
+    """Conv/Linear rows with no following IF.
+
+    ``scope='head'`` keeps classifier / detection / segmentation heads.
+    ``scope='all'`` keeps every unmatched Conv/Linear. BN affine, bias and
+    IF thresholds are never returned.
+    """
+    scope = str(scope).strip().lower()
+    if scope not in UNMATCHED_L2_SCOPES:
+        raise ValueError(
+            f"unmatched L2 scope must be one of {UNMATCHED_L2_SCOPES}, got {scope!r}."
+        )
+    rows = [
+        row
+        for row in collect_weight_layer_matches(model, layer_map=layer_map)
+        if not row["matched"]
+    ]
+    if scope == "head":
+        return [row for row in rows if row["is_head"]]
+    return rows
+
+
+def compute_mne_l2_unmatched_regularization(
+    model,
+    quant_level: int,
+    eps: float = 1e-6,
+    use_max: bool = False,
+    detach_lambda: bool = False,
+    detach_bn_stats: bool = True,
+    detach_bn_affine=None,
+    normalize_by_fan_in: bool = False,
+    layer_reduction: str = "sum",
+    l_ref=None,
+    fold_bn: bool = True,
+    full_frobenius: bool = False,
+    layer_map=None,
+    grad_match_layer_map=None,
+    include_roles=None,
+    divide_by_lambda: bool = True,
+    scale_by_l: bool = True,
+    unmatched_scope: str = "head",
+    unmatched_coeff: float = 5e-4,
+    mne_coeff: float = 1e-4,
+):
+    """MNE-L2 on IF-matched Conv/Linear plus ordinary L2 on unmatched weights.
+
+      R = R_MNE + (η_head / η_MNE) * (1/2 Σ_{j ∉ S_IF} ||W_j||_F^2)
+
+    The trainer multiplies by ``reg_coeff=η_MNE``, so the unmatched term has
+    gradient ``η_head W`` and matches PyTorch WD=η_head. BN-γ/β, bias and IF
+    thresholds are never regularized. This is not ``mne_l2_all``.
+    """
+    mne = compute_mne_l2_regularization(
+        model,
+        quant_level=quant_level,
+        eps=eps,
+        use_max=use_max,
+        detach_lambda=detach_lambda,
+        detach_bn_stats=detach_bn_stats,
+        detach_bn_affine=detach_bn_affine,
+        normalize_by_fan_in=normalize_by_fan_in,
+        layer_reduction=layer_reduction,
+        l_ref=l_ref,
+        fold_bn=fold_bn,
+        full_frobenius=full_frobenius,
+        layer_map=layer_map,
+        grad_match_layer_map=grad_match_layer_map,
+        include_roles=include_roles,
+        divide_by_lambda=divide_by_lambda,
+        scale_by_l=scale_by_l,
+    )
+    rows = unmatched_weight_rows(model, scope=unmatched_scope, layer_map=layer_map)
+    unmatched = None
+    n_params = 0
+    for row in rows:
+        term = 0.5 * row["weight"].pow(2).sum()
+        unmatched = term if unmatched is None else unmatched + term
+        n_params += int(row["n_params"])
+    eta_head = float(unmatched_coeff)
+    eta_mne = float(mne_coeff)
+    if eta_head < 0:
+        raise ValueError(f"unmatched_coeff must be nonnegative, got {eta_head}.")
+    if eta_head > 0 and eta_mne <= 0:
+        raise ValueError("mne_coeff must be positive when unmatched_coeff > 0.")
+    mix_scale = (eta_head / eta_mne) if eta_head > 0 else 0.0
+    model._mne_unmatched_stats = {
+        "scope": str(unmatched_scope).strip().lower(),
+        "layers": [row["name"] for row in rows],
+        "n_layers": len(rows),
+        "n_params": int(n_params),
+        "unmatched_coeff": eta_head,
+        "mne_coeff": eta_mne,
+        "mix_scale": mix_scale,
+        "unmatched_l2": (
+            float(unmatched.detach().cpu().item()) if unmatched is not None else 0.0
+        ),
+    }
+    if unmatched is None or mix_scale == 0.0:
+        return mne
+    return mne + mix_scale * unmatched
+
+
 def compute_stable_mne_l2_regularization(
     model,
     quant_level: int,
