@@ -2,9 +2,10 @@
 """ResNet-18/CIFAR Task-Cov-MNE screen with a fixed two-arm intervention.
 
 The two-arm screen is now 5-seed (40–44) on CIFAR-10/100 with a shared
-test noise stream (eval seed 0). Historical MNE-L2-detach checkpoints are
-still not controls; the fair ResNet-map / val-tuned detach baseline is the
-separate P0 runner.
+test noise stream (eval seed 0). Extra evaluation noise seeds are written
+under eval_seed{N}/ and must not replace the canonical scorecard.
+Historical MNE-L2-detach checkpoints are still not controls; the fair
+ResNet-map / val-tuned detach baseline is the separate P0 runner.
 
   cov_mne       diagonal propagated input-noise second moment only (omega=1)
   task_cov_mne  the same covariance multiplied by detached task-margin weight
@@ -72,12 +73,26 @@ METHODS = {
 }
 
 
+def parse_seed_list(raw: str) -> list[int]:
+    seeds = []
+    for part in (raw or "").replace(":", ",").replace(" ", ",").split(","):
+        part = part.strip()
+        if part:
+            seeds.append(int(part))
+    return seeds
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--method", choices=tuple(METHODS), default=None)
     parser.add_argument("--dataset", choices=["cifar10", "cifar100"], default="cifar100")
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--eval-seed", type=int, default=int(os.environ.get("EVAL_SEED", str(EVAL_NOISE_SEED))))
+    parser.add_argument(
+        "--extra-eval-seeds",
+        default=os.environ.get("EXTRA_EVAL_SEEDS", ""),
+        help="Comma-separated extra noise seeds written under eval_seed{N}/, not the canonical scorecard",
+    )
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--batch-size", type=int, default=int(os.environ.get("CIFAR_BATCH", "128")))
     parser.add_argument("--workers", type=int, default=int(os.environ.get("CIFAR_NUM_WORKERS", "8")))
@@ -92,6 +107,7 @@ def parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
     args.eval_seed = int(args.eval_seed)
+    args.extra_eval_seeds = parse_seed_list(args.extra_eval_seeds)
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
     if args.summarize:
@@ -111,6 +127,28 @@ def suffix(args) -> str:
 
 def cfg_dir(args) -> Path:
     return args.out_root / args.dataset / config_name(args.method) / f"seed{args.seed}"
+
+
+def eval_dest(out: Path, eval_seed: int, canonical_seed: int) -> Path:
+    if eval_seed == canonical_seed:
+        return out
+    return out / f"eval_seed{eval_seed}"
+
+
+def write_eval(model, args, checkpoint: Path, device, eval_seed: int, dest: Path) -> dict:
+    dest.mkdir(parents=True, exist_ok=True)
+    pin_memory = device.type == "cuda"
+    val_rows = sweep(model, val_loader(args, pin_memory), device, "val", eval_seed)
+    write_csv(dest / "val_sweep.csv", val_rows)
+    test_rows = sweep(model, test_loader(args, pin_memory), device, "test", eval_seed)
+    write_csv(dest / "test_sweep.csv", test_rows)
+    saved = args.eval_seed
+    args.eval_seed = eval_seed
+    card = scorecard(val_rows, test_rows, args, checkpoint)
+    args.eval_seed = saved
+    (dest / "scorecard.json").write_text(json.dumps(card, indent=2) + "\n")
+    print(json.dumps(card, indent=2), flush=True)
+    return card
 
 
 def ckpt_path(args) -> Path:
@@ -224,44 +262,68 @@ def _mean_std(values: list[float]) -> tuple[float, float]:
     return mean, var ** 0.5
 
 
+def _acc_at_csv(path: Path, sigma: float) -> float | None:
+    if not path.is_file():
+        return None
+    import csv
+
+    with path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if abs(float(row["sigma"]) - sigma) < 1e-12:
+                return float(row["accuracy"])
+    return None
+
+
 def summarize(out_root: Path) -> None:
-    cards = []
-    for path in sorted(out_root.glob("*/*/seed*/scorecard.json")):
-        cards.append(json.loads(path.read_text()))
-    if not cards:
-        print(f"No scorecards in {out_root}")
-        return
-    grouped = {}
-    for card in cards:
-        grouped.setdefault((card["dataset"], card["method"]), []).append(card)
-    print(f"{'dataset':<10} {'method':<14} {'n':>3} {'test0':>16} {'test5':>16} {'AUC3-5':>16}")
+    print(f"{'dataset':<10} {'method':<14} {'eval':>4} {'n':>3} {'test0':>16} {'test3':>16} {'test5':>16} {'AUC3-5':>16}")
     rows = []
     for dataset in ("cifar10", "cifar100"):
         for method in METHODS:
-            group = grouped.get((dataset, method), [])
-            if not group:
+            grouped: dict[int, list[dict]] = {}
+            sweeps: dict[int, list[float]] = {}
+            for seed in SEEDS:
+                seed_dir = out_root / dataset / config_name(method) / f"seed{seed}"
+                canonical = seed_dir / "scorecard.json"
+                extras = sorted(seed_dir.glob("eval_seed*/scorecard.json"))
+                paths = ([canonical] if canonical.is_file() else []) + extras
+                for path in paths:
+                    card = json.loads(path.read_text())
+                    eval_seed = int(card["eval_seed"])
+                    grouped.setdefault(eval_seed, []).append(card)
+                    sigma3 = _acc_at_csv(path.parent / "test_sweep.csv", 3.0)
+                    if sigma3 is not None:
+                        sweeps.setdefault(eval_seed, []).append(sigma3)
+            if not grouped:
                 print(f"{dataset:<10} {method:<14} MISSING")
                 continue
-            t0m, t0s = _mean_std([float(card["test_clean"]) for card in group])
-            t5m, t5s = _mean_std([float(card["test_sigma5"]) for card in group])
-            hm, hs = _mean_std([float(card["test_auc_high"]) for card in group])
-            print(
-                f"{dataset:<10} {method:<14} {len(group):3d} "
-                f"{t0m:7.2f}±{t0s:<6.2f} {t5m:7.2f}±{t5s:<6.2f} {hm:7.1f}±{hs:<6.1f}"
-            )
-            rows.append(
-                {
-                    "dataset": dataset,
-                    "method": method,
-                    "n_seeds": len(group),
-                    "test_clean_mean": t0m,
-                    "test_clean_std": t0s,
-                    "test_sigma5_mean": t5m,
-                    "test_sigma5_std": t5s,
-                    "test_auc_high_mean": hm,
-                    "test_auc_high_std": hs,
-                }
-            )
+            for eval_seed in sorted(grouped):
+                group = grouped[eval_seed]
+                t0m, t0s = _mean_std([float(card["test_clean"]) for card in group])
+                t5m, t5s = _mean_std([float(card["test_sigma5"]) for card in group])
+                hm, hs = _mean_std([float(card["test_auc_high"]) for card in group])
+                s3 = sweeps.get(eval_seed, [])
+                t3m, t3s = _mean_std(s3) if s3 else (float("nan"), float("nan"))
+                print(
+                    f"{dataset:<10} {method:<14} {eval_seed:4d} {len(group):3d} "
+                    f"{t0m:7.2f}±{t0s:<6.2f} {t3m:7.2f}±{t3s:<6.2f} "
+                    f"{t5m:7.2f}±{t5s:<6.2f} {hm:7.1f}±{hs:<6.1f}"
+                )
+                rows.append(
+                    {
+                        "dataset": dataset,
+                        "method": method,
+                        "eval_seed": eval_seed,
+                        "n_seeds": len(group),
+                        "test_clean_mean": t0m,
+                        "test_clean_std": t0s,
+                        "test_sigma3_mean": t3m,
+                        "test_sigma3_std": t3s,
+                        "test_sigma5_mean": t5m,
+                        "test_sigma5_std": t5s,
+                        "test_auc_high_mean": hm,
+                        "test_auc_high_std": hs,
+                    }
+                )
     if rows:
         write_csv(out_root / "task_cov_5seed_summary.csv", rows)
         print(f"Wrote {out_root / 'task_cov_5seed_summary.csv'}")
@@ -277,20 +339,28 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     print(
         f"[INFO] {args.dataset} ResNet-18 {METHODS[args.method]['label']} "
-        f"seed={args.seed} eval_seed={args.eval_seed}; Ttrain=0, Teval={TEST_T}, rate_uniform, post_input_if",
+        f"seed={args.seed} eval_seed={args.eval_seed} extra_eval_seeds={args.extra_eval_seeds}; "
+        f"Ttrain=0, Teval={TEST_T}, rate_uniform, post_input_if",
         flush=True,
     )
     checkpoint = train(args)
     device = get_torch_device(args.device)
-    pin_memory = device.type == "cuda"
     model = load_model(checkpoint, device, args.dataset)
-    val_rows = sweep(model, val_loader(args, pin_memory), device, "val", args.eval_seed)
-    write_csv(out / "val_sweep.csv", val_rows)
-    test_rows = sweep(model, test_loader(args, pin_memory), device, "test", args.eval_seed)
-    write_csv(out / "test_sweep.csv", test_rows)
-    card = scorecard(val_rows, test_rows, args, checkpoint)
-    (out / "scorecard.json").write_text(json.dumps(card, indent=2) + "\n")
-    print(json.dumps(card, indent=2), flush=True)
+    canonical = out / "scorecard.json"
+    if canonical.is_file() and not args.retrain:
+        print(f"[SKIP CANONICAL EVAL] {canonical}", flush=True)
+    else:
+        write_eval(model, args, checkpoint, device, args.eval_seed, eval_dest(out, args.eval_seed, args.eval_seed))
+    for extra in args.extra_eval_seeds:
+        if extra == args.eval_seed:
+            continue
+        dest = eval_dest(out, extra, args.eval_seed)
+        extra_card = dest / "scorecard.json"
+        if extra_card.is_file() and not args.retrain:
+            print(f"[SKIP EXTRA EVAL] {extra_card}", flush=True)
+            continue
+        print(f"[EXTRA EVAL] eval_seed={extra} -> {dest}", flush=True)
+        write_eval(model, args, checkpoint, device, extra, dest)
 
 
 if __name__ == "__main__":
