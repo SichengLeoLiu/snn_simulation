@@ -1,0 +1,121 @@
+#!/bin/bash
+#PBS -N vssdhd
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# VOC SSD300-VGG16-BN-IF seed-42: no-detach MNE + unmatched detection-head L2.
+# METHOD: mne_head   (the only train job)
+# l2wo / nodetach are copied from voc_ssd300_five_regs_seed42; do not retrain.
+# Do not submit mne_unmatched (same 12 loc/conf heads as mne_head).
+# η_MNE=1e-4, η_head=5e-4 locked to L2-wo. Do not retune from test.
+#
+#   cd /home/595/sl9144/codes/snn_simulation
+#   git fetch origin codex/task-cov-mne-resnet18
+#   git checkout origin/codex/task-cov-mne-resnet18 -- \
+#     QCFS_simulation/noise3_exp/run_voc_ssd300_five_regs_seed42.py \
+#     QCFS_simulation/noise3_exp/run_voc_ssd300_nodetach_unmatched_head_l2_seed42.py \
+#     QCFS_simulation/noise3_exp/pbs_voc_ssd300_nodetach_unmatched_head_l2_seed42.pbs
+#   export VOC_ROOT=/home/595/sl9144/datasets
+#   OUT=/scratch/gs14/sl9144/snn_results/voc_ssd300_nodetach_unmatched_head_l2_seed42
+#   REUSE=/scratch/gs14/sl9144/snn_results/voc_ssd300_five_regs_seed42
+#   qsub -l walltime=24:00:00 -N vssdhd \
+#     -v VOC_ROOT,METHOD=mne_head,SEED=42,OUT_DIR=${OUT},REUSE_ROOT=${REUSE} \
+#     QCFS_simulation/noise3_exp/pbs_voc_ssd300_nodetach_unmatched_head_l2_seed42.pbs
+
+set -euo pipefail
+
+METHOD="${METHOD:-mne_head}"
+SEED="${SEED:-42}"
+EVAL_SEED="${EVAL_SEED:-42}"
+case "${METHOD}" in
+  mne_head) ;;
+  l2wo|nodetach)
+    echo "ERROR: ${METHOD} is reuse-only from five-regs; do not submit a GPU job"
+    exit 2
+    ;;
+  *) echo "ERROR: invalid METHOD=${METHOD} (use mne_head)"; exit 2 ;;
+esac
+if [[ "${SEED}" != "42" ]]; then
+  echo "ERROR: this screen is seed 42 only (got SEED=${SEED})"
+  exit 2
+fi
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/vssdhd_${METHOD}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "METHOD=${METHOD} SEED=${SEED} TEST_ONLY=${TEST_ONLY:-0}"
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export VOC_ROOT="${VOC_ROOT:-/home/595/sl9144/datasets}"
+export VOC_BATCH="${VOC_BATCH:-16}"
+export VOC_EVAL_BATCH="${VOC_EVAL_BATCH:-8}"
+export VOC_NUM_WORKERS="${VOC_NUM_WORKERS:-8}"
+export VOC_EPOCHS="${VOC_EPOCHS:-80}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+export TORCH_HOME="${TORCH_HOME:-${HOME}/.cache/torch}"
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/voc_ssd300_nodetach_unmatched_head_l2_seed42}"
+REUSE_ROOT="${REUSE_ROOT:-/scratch/gs14/sl9144/snn_results/voc_ssd300_five_regs_seed42}"
+mkdir -p "${OUT_DIR}"
+
+echo "=== host=$(hostname) date=$(date) ==="
+echo "ROOT=${ROOT}"
+echo "OUT_DIR=${OUT_DIR}"
+echo "REUSE_ROOT=${REUSE_ROOT}"
+echo "VOC_ROOT=${VOC_ROOT}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+echo "NOTE: no-detach MNE on IF body + L2 on 12 unmatched loc/conf heads"
+
+if [[ ! -f "${VOC_ROOT}/VOC2007/ImageSets/Main/trainval.txt" \
+   && ! -f "${VOC_ROOT}/VOCdevkit/VOC2007/ImageSets/Main/trainval.txt" ]]; then
+  echo "ERROR: VOC 2007+2012 missing under VOC_ROOT=${VOC_ROOT}"
+  echo "Download on a login node:"
+  echo "  python ${ROOT}/noise3_exp/voc_ssd.py --download --voc-root ${VOC_ROOT}"
+  exit 1
+fi
+
+ARGS=(
+  --method "${METHOD}"
+  --seed "${SEED}"
+  --voc-root "${VOC_ROOT}"
+  --out-root "${OUT_DIR}"
+  --reuse-root "${REUSE_ROOT}"
+  --batch-size "${VOC_BATCH}"
+  --eval-batch-size "${VOC_EVAL_BATCH}"
+  --workers "${VOC_NUM_WORKERS}"
+  --epochs "${VOC_EPOCHS}"
+)
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+
+python -u noise3_exp/run_voc_ssd300_nodetach_unmatched_head_l2_seed42.py "${ARGS[@]}"
+
+echo "=== ALL DONE $(date) METHOD=${METHOD} SEED=${SEED} ==="
+ls -la "${OUT_DIR}/${METHOD}" || ls -la "${OUT_DIR}"

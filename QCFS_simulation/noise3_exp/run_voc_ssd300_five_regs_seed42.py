@@ -54,6 +54,7 @@ from voc_ssd import (  # noqa: E402
 from utils import (  # noqa: E402
     compute_l1_regularization,
     compute_mne_l2_regularization,
+    compute_mne_l2_unmatched_regularization,
     dump_mne_mapping_report,
     get_torch_device,
     seed_all,
@@ -226,6 +227,15 @@ def optimizer_for(model, spec: dict, lr: float):
 def reg_loss(model, spec: dict):
     if spec["regularizer"] == "mne_l2":
         return compute_mne_l2_regularization(model, quant_level=LVAL, **spec["mne_kw"])
+    if spec["regularizer"] == "mne_l2_unmatched":
+        return compute_mne_l2_unmatched_regularization(
+            model,
+            quant_level=LVAL,
+            unmatched_scope=spec.get("unmatched_scope", "head"),
+            unmatched_coeff=spec.get("unmatched_coeff", L2_WD),
+            mne_coeff=spec["reg_coeff"],
+            **spec["mne_kw"],
+        )
     if spec["regularizer"] == "l1":
         return compute_l1_regularization(model)
     return None
