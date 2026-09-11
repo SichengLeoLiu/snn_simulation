@@ -14,7 +14,8 @@ the L2-wo baseline WD=5e-4 so the head constraint is not test-tuned.
 Methods
 -------
     l2wo            reuse L2-wo (eval only)
-    mne             reuse current MNE-L2 detach (eval only)
+    mne             reuse current MNE-L2 (eval only; nodetach ResNet is legacy map)
+    mne_body        train: MNE-L2 on IF body, no unmatched-head L2 (same layer map)
     mne_head        train: MNE on IF body, ordinary L2 on unmatched head
     mne_unmatched   train: MNE on IF body, ordinary L2 on all unmatched
                     Conv/Linear. On ResNet-18/resnet-map and VGG-16/legacy
@@ -24,10 +25,14 @@ Do not retrain the reused L2-wo / MNE directories. Do not pick η from the
 test curve. Shared eval noise: EVAL_SEED=0, T=L=16, rate_uniform, post-IF.
 
 ``--body nodetach`` uses grads into λ and BN γ (``--mne_no_detach_bn_affine``,
-no ``--mne_detach_lambda``) and reuses existing no-detach checkpoints.
-ResNet hybrid training still uses the resnet layer map so it matches the
+no ``--mne_detach_lambda``). ``mne`` reuses existing no-detach checkpoints.
+ResNet hybrid training uses the resnet layer map so it matches the
 detach+head screen; reused ResNet four-regs no-detach was trained with the
-default legacy map.
+default legacy map and is **not** a same-map control.
+
+``mne_body`` trains no-detach MNE-L2 with the architecture layer map and
+**no** unmatched-head L2 (regularizer ``mne_l2``, not ``mne_l2_unmatched``).
+Use that arm for the ResNet same-map gate against ``mne_head``.
 """
 from __future__ import annotations
 
@@ -171,6 +176,7 @@ METHODS = {
         "reuse_key": "l2wo",
         "regularizer": "weight_decay_weights_only",
         "scope": None,
+        "head_l2": False,
     },
     "mne": {
         "label": "MNE-L2",
@@ -178,6 +184,15 @@ METHODS = {
         "reuse_key": "mne",
         "regularizer": "mne_l2",
         "scope": None,
+        "head_l2": False,
+    },
+    "mne_body": {
+        "label": "MNE-L2 body (no unmatched-head L2)",
+        "train": True,
+        "reuse_key": None,
+        "regularizer": "mne_l2",
+        "scope": None,
+        "head_l2": False,
     },
     "mne_head": {
         "label": "MNE-L2 + classifier-head L2",
@@ -185,6 +200,7 @@ METHODS = {
         "reuse_key": None,
         "regularizer": "mne_l2_unmatched",
         "scope": "head",
+        "head_l2": True,
     },
     "mne_unmatched": {
         "label": "MNE-L2 + all-unmatched-weight L2",
@@ -192,6 +208,7 @@ METHODS = {
         "reuse_key": None,
         "regularizer": "mne_l2_unmatched",
         "scope": "all",
+        "head_l2": True,
     },
 }
 
@@ -236,11 +253,12 @@ def parse_args() -> argparse.Namespace:
     args.sigmas = tuple(float(x) for x in str(args.sigmas).split(",") if x.strip())
     args.skip_diag = bool(args.skip_diag or os.environ.get("SKIP_DIAG", "0") == "1")
     if args.out_root is None:
-        folder = (
-            "cifar_mne_nodetach_unmatched_head_l2_seed42"
-            if args.body == "nodetach"
-            else "cifar_mne_unmatched_head_l2_seed42"
-        )
+        if args.body == "nodetach" and args.method == "mne_body":
+            folder = "cifar_resnet18_nodetach_resnetmap_seed42"
+        elif args.body == "nodetach":
+            folder = "cifar_mne_nodetach_unmatched_head_l2_seed42"
+        else:
+            folder = "cifar_mne_unmatched_head_l2_seed42"
         args.out_root = ROOT.parent / "important_results" / folder
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
@@ -276,6 +294,8 @@ def method_label(args) -> str:
     body = "no-detach" if args.body == "nodetach" else "detach"
     if args.method == "mne":
         return f"MNE-L2 {body}"
+    if args.method == "mne_body":
+        return f"MNE-L2 {body} (same-map body, no head L2)"
     if args.method == "mne_head":
         return f"MNE-L2 {body} + classifier-head L2"
     if args.method == "mne_unmatched":
@@ -372,18 +392,12 @@ def load_model(ckpt: Path, device, arch: str, dataset: str):
     return model.to(device).eval()
 
 
-def train(args) -> Path:
+def train_cmd(args) -> list[str]:
     spec = METHODS[args.method]
     if not spec["train"]:
         raise ValueError(f"{args.method} is eval-only reuse")
     out = cfg_dir(args)
     checkpoint = ckpt_path(args)
-    checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    if checkpoint.exists() and not args.retrain:
-        print(f"[SKIP TRAIN] {checkpoint}", flush=True)
-        return checkpoint
-    if args.test_only:
-        raise FileNotFoundError(checkpoint)
     layer_map = ARCH_SPECS[args.arch]["layer_map"]
     cmd = [
         sys.executable,
@@ -402,19 +416,37 @@ def train(args) -> Path:
         "--ckpt-save-mode", "best",
         "--ckpt-dir", str(checkpoint.parent),
         "-suffix", suffix(args),
-        "--regularizer", "mne_l2_unmatched",
+        "--regularizer", spec["regularizer"],
         "--weight_decay", "0",
         "--reg_coeff", str(MNE_RC),
-        "--unmatched_l2_coeff", str(L2_WD),
-        "--mne_unmatched_scope", spec["scope"],
         "--mne_layer_map", layer_map,
         "--mapping_diag_dir", str(out / "mapping_init"),
         "--epoch_log_csv", str(out / "epoch_log.csv"),
     ]
+    if spec["regularizer"] == "mne_l2_unmatched":
+        cmd += [
+            "--unmatched_l2_coeff", str(L2_WD),
+            "--mne_unmatched_scope", spec["scope"],
+        ]
     if args.body == "nodetach":
         cmd.append("--mne_no_detach_bn_affine")
     else:
         cmd.append("--mne_detach_lambda")
+    return cmd
+
+
+def train(args) -> Path:
+    spec = METHODS[args.method]
+    if not spec["train"]:
+        raise ValueError(f"{args.method} is eval-only reuse")
+    checkpoint = ckpt_path(args)
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    if checkpoint.exists() and not args.retrain:
+        print(f"[SKIP TRAIN] {checkpoint}", flush=True)
+        return checkpoint
+    if args.test_only:
+        raise FileNotFoundError(checkpoint)
+    cmd = train_cmd(args)
     print(" ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
     if not checkpoint.exists():
@@ -519,20 +551,23 @@ def scorecard(val_rows, test_rows, args, checkpoint: Path, reused: bool, extra: 
         "detach_bn_affine": bool(detach),
         "unmatched_scope": spec["scope"],
         "reg_coeff": MNE_RC if spec["regularizer"] != "weight_decay_weights_only" else None,
-        "unmatched_l2_coeff": L2_WD if spec["train"] else None,
+        "unmatched_l2_coeff": L2_WD if spec["head_l2"] else None,
         "eta_mne": MNE_RC if spec["regularizer"] != "weight_decay_weights_only" else None,
-        "eta_head": L2_WD if spec["train"] else (L2_WD if args.method == "l2wo" else 0.0),
+        "eta_head": L2_WD if spec["head_l2"] or args.method == "l2wo" else 0.0,
         "weight_decay": L2_WD if args.method == "l2wo" else 0.0,
         "historical_checkpoint_reused": reused,
         "checkpoint": str(checkpoint),
         "selection_uses_test": False,
+        "head_l2": bool(spec["head_l2"]),
+        "same_map_gate": args.method == "mne_body",
         "protocol": {
             "T": TEST_T,
             "L": LVAL,
             "mode": "rate_uniform",
             "noise": "post_input_if gaussian",
-            "eta_head_locked_to_l2wo": True,
+            "eta_head_locked_to_l2wo": bool(spec["head_l2"]),
             "body": args.body,
+            "layer_map": arch["layer_map"],
         },
     }
     if reused and args.body == "nodetach" and args.method == "mne":
@@ -545,6 +580,46 @@ def scorecard(val_rows, test_rows, args, checkpoint: Path, reused: bool, extra: 
     card.update(snn_metrics(test_rows, "test"))
     card.update(extra)
     return card
+
+
+def _check_train_cmd() -> None:
+    ns = argparse.Namespace(
+        arch="resnet18",
+        dataset="cifar100",
+        method="mne_body",
+        seed=42,
+        epochs=EPOCHS,
+        batch_size=128,
+        workers=8,
+        device="cpu",
+        body="nodetach",
+        out_root=ROOT.parent / "important_results" / "cifar_resnet18_nodetach_resnetmap_seed42",
+    )
+    body_cmd = train_cmd(ns)
+    if body_cmd[body_cmd.index("--regularizer") + 1] != "mne_l2":
+        raise AssertionError(f"mne_body must train mne_l2, got {body_cmd}")
+    if body_cmd[body_cmd.index("--mne_layer_map") + 1] != "resnet":
+        raise AssertionError("mne_body ResNet must use resnet map")
+    if "--mne_no_detach_bn_affine" not in body_cmd:
+        raise AssertionError("mne_body nodetach missing --mne_no_detach_bn_affine")
+    if "--mne_detach_lambda" in body_cmd:
+        raise AssertionError("mne_body nodetach must not detach lambda")
+    if "--unmatched_l2_coeff" in body_cmd:
+        raise AssertionError("mne_body must not add unmatched-head L2")
+    ns.method = "mne_head"
+    ns.arch = "vgg16"
+    ns.dataset = "cifar10"
+    ns.out_root = ROOT.parent / "important_results" / "cifar_mne_nodetach_unmatched_head_l2_seed42"
+    head_cmd = train_cmd(ns)
+    if head_cmd[head_cmd.index("--regularizer") + 1] != "mne_l2_unmatched":
+        raise AssertionError("mne_head must train mne_l2_unmatched")
+    if head_cmd[head_cmd.index("--mne_layer_map") + 1] != "legacy":
+        raise AssertionError("VGG mne_head must use legacy map")
+    if head_cmd[head_cmd.index("--unmatched_l2_coeff") + 1] != str(L2_WD):
+        raise AssertionError("mne_head η_head drifted")
+    if "--mne_no_detach_bn_affine" not in head_cmd:
+        raise AssertionError("VGG nodetach head missing no-detach flag")
+    print("[self-check] train_cmd mne_body / mne_head flags ok", flush=True)
 
 
 def self_check() -> None:
@@ -568,6 +643,7 @@ def self_check() -> None:
                 raise AssertionError("all unmatched rows drifted")
             if card["n_unmatched_body"] != 0:
                 print(f"[WARN] unmatched body layers: {card['unmatched_body']}", flush=True)
+    _check_train_cmd()
     print("self-check ok", flush=True)
 
 
@@ -613,12 +689,26 @@ def main() -> None:
     out = cfg_dir(args)
     out.mkdir(parents=True, exist_ok=True)
     layer_map = ARCH_SPECS[args.arch]["layer_map"]
+    spec = METHODS[args.method]
+    eta_head = L2_WD if spec["head_l2"] else 0.0
     print(
         f"[INFO] {args.arch} {args.dataset} {args.method} body={args.body} "
         f"layer_map={layer_map} seed={args.seed} eval_seed={args.eval_seed} "
-        f"η_MNE={MNE_RC} η_head={L2_WD}",
+        f"η_MNE={MNE_RC} η_head={eta_head} regularizer={spec['regularizer']}",
         flush=True,
     )
+    if args.method == "mne_body" and args.arch == "vgg16":
+        print(
+            "[WARN] VGG no-detach body already exists in cifar_vgg16_nodetach_5seed; "
+            "mne_body is the ResNet same-map gate. Continuing anyway.",
+            flush=True,
+        )
+    if args.method == "mne" and args.body == "nodetach" and args.arch == "resnet18":
+        print(
+            "[WARN] reused ResNet no-detach is four-regs legacy map; "
+            "use --method mne_body for the same-map gate.",
+            flush=True,
+        )
     checkpoint, reused = resolve_checkpoint(args)
     device = get_torch_device(args.device)
     pin = device.type == "cuda"
