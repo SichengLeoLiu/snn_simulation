@@ -22,6 +22,12 @@ Methods
 
 Do not retrain the reused L2-wo / MNE directories. Do not pick η from the
 test curve. Shared eval noise: EVAL_SEED=0, T=L=16, rate_uniform, post-IF.
+
+``--body nodetach`` uses grads into λ and BN γ (``--mne_no_detach_bn_affine``,
+no ``--mne_detach_lambda``) and reuses existing no-detach checkpoints.
+ResNet hybrid training still uses the resnet layer map so it matches the
+detach+head screen; reused ResNet four-regs no-detach was trained with the
+default legacy map.
 """
 from __future__ import annotations
 
@@ -82,6 +88,32 @@ SM_FLOOR = 1e-8
 SCRATCH = Path("/scratch/gs14/sl9144/snn_results")
 DEFAULT_DIAG_SIGMAS = (1.0, 3.0, 5.0)
 
+NODETACH_REUSE = {
+    "resnet18": {
+        "mne": (
+            SCRATCH
+            / "cifar_resnet18_four_regs_5seed"
+            / "{dataset}/r18_nodetach/seed{seed}/checkpoints"
+            / "resnet18_L[16]_r18_nodetach_seed{seed}_L16_trainT0.pth"
+        ),
+        "log": SCRATCH / "cifar_resnet18_four_regs_5seed/{dataset}/r18_nodetach/seed{seed}/epoch_log.csv",
+        "trained_layer_map": "legacy",
+    },
+    "vgg16": {
+        "mne": (
+            SCRATCH
+            / "cifar_vgg16_mne_component_ablation_seed42"
+            / "{dataset}/comp_nodetach_fixed/checkpoints"
+            / "vgg16_L[16]_comp_nodetach_fixed_seed42_L16_trainT0.pth"
+        ),
+        "log": (
+            SCRATCH
+            / "cifar_vgg16_mne_component_ablation_seed42/{dataset}/comp_nodetach_fixed/epoch_log.csv"
+        ),
+        "trained_layer_map": "legacy",
+    },
+}
+
 ARCH_SPECS = {
     "resnet18": {
         "layer_map": "resnet",
@@ -141,7 +173,7 @@ METHODS = {
         "scope": None,
     },
     "mne": {
-        "label": "MNE-L2 detach",
+        "label": "MNE-L2",
         "train": False,
         "reuse_key": "mne",
         "regularizer": "mne_l2",
@@ -184,22 +216,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-diag", action="store_true")
     parser.add_argument("--self-check", action="store_true")
     parser.add_argument("--summarize", action="store_true")
+    parser.add_argument(
+        "--body",
+        choices=("detach", "nodetach"),
+        default=os.environ.get("BODY", "detach"),
+        help="IF-body MNE recipe. nodetach = grads into λ and BN γ.",
+    )
     parser.add_argument("--n-streams", type=int, default=int(os.environ.get("N_STREAMS", str(DEFAULT_STREAMS))))
     parser.add_argument(
         "--sigmas",
         default=os.environ.get("DIAG_SIGMAS", "1,3,5"),
         help="comma-separated sigmas for s_m / rho",
     )
-    parser.add_argument(
-        "--out-root",
-        type=Path,
-        default=ROOT.parent / "important_results" / "cifar_mne_unmatched_head_l2_seed42",
-    )
+    parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args()
     args.eval_seed = int(args.eval_seed)
     args.n_streams = int(args.n_streams)
+    args.body = str(args.body).strip().lower()
     args.sigmas = tuple(float(x) for x in str(args.sigmas).split(",") if x.strip())
     args.skip_diag = bool(args.skip_diag or os.environ.get("SKIP_DIAG", "0") == "1")
+    if args.out_root is None:
+        folder = (
+            "cifar_mne_nodetach_unmatched_head_l2_seed42"
+            if args.body == "nodetach"
+            else "cifar_mne_unmatched_head_l2_seed42"
+        )
+        args.out_root = ROOT.parent / "important_results" / folder
     if not args.out_root.is_absolute():
         args.out_root = (ROOT / args.out_root).resolve()
     if args.summarize or args.self_check:
@@ -227,17 +269,32 @@ def ckpt_path(args) -> Path:
     return cfg_dir(args) / "checkpoints" / f"{args.arch}_L[{LVAL}]_{suffix(args)}.pth"
 
 
+def method_label(args) -> str:
+    spec = METHODS[args.method]
+    if args.method == "l2wo":
+        return spec["label"]
+    body = "no-detach" if args.body == "nodetach" else "detach"
+    if args.method == "mne":
+        return f"MNE-L2 {body}"
+    if args.method == "mne_head":
+        return f"MNE-L2 {body} + classifier-head L2"
+    if args.method == "mne_unmatched":
+        return f"MNE-L2 {body} + all-unmatched-weight L2"
+    return spec["label"]
+
+
 def _format_path(path: Path, dataset: str, seed: int) -> Path:
     return Path(str(path).format(dataset=dataset, seed=seed))
 
 
 def reuse_ckpt(args) -> Path:
     spec = METHODS[args.method]
-    arch = ARCH_SPECS[args.arch]
     key = spec["reuse_key"]
     if key is None:
         raise ValueError(f"{args.method} is not a reuse arm")
-    return _format_path(arch["reuse"][key], args.dataset, args.seed)
+    if args.body == "nodetach" and key == "mne":
+        return _format_path(NODETACH_REUSE[args.arch]["mne"], args.dataset, args.seed)
+    return _format_path(ARCH_SPECS[args.arch]["reuse"][key], args.dataset, args.seed)
 
 
 def reuse_log(args) -> Path | None:
@@ -246,7 +303,10 @@ def reuse_log(args) -> Path | None:
     if key is None:
         log = cfg_dir(args) / "epoch_log.csv"
         return log if log.is_file() else None
-    path = _format_path(ARCH_SPECS[args.arch]["log"][key], args.dataset, args.seed)
+    if args.body == "nodetach" and key == "mne":
+        path = _format_path(NODETACH_REUSE[args.arch]["log"], args.dataset, args.seed)
+    else:
+        path = _format_path(ARCH_SPECS[args.arch]["log"][key], args.dataset, args.seed)
     return path if path.is_file() else None
 
 
@@ -347,11 +407,14 @@ def train(args) -> Path:
         "--reg_coeff", str(MNE_RC),
         "--unmatched_l2_coeff", str(L2_WD),
         "--mne_unmatched_scope", spec["scope"],
-        "--mne_detach_lambda",
         "--mne_layer_map", layer_map,
         "--mapping_diag_dir", str(out / "mapping_init"),
         "--epoch_log_csv", str(out / "epoch_log.csv"),
     ]
+    if args.body == "nodetach":
+        cmd.append("--mne_no_detach_bn_affine")
+    else:
+        cmd.append("--mne_detach_lambda")
     print(" ".join(cmd), flush=True)
     subprocess.run(cmd, cwd=ROOT, check=True)
     if not checkpoint.exists():
@@ -440,17 +503,20 @@ def flatten_margin(margin: dict) -> dict:
 def scorecard(val_rows, test_rows, args, checkpoint: Path, reused: bool, extra: dict) -> dict:
     spec = METHODS[args.method]
     arch = ARCH_SPECS[args.arch]
+    detach = args.body != "nodetach"
     card = {
         "config": config_name(args.arch, args.method),
-        "label": spec["label"],
+        "label": method_label(args),
         "method": args.method,
+        "body": args.body,
         "dataset": args.dataset,
         "arch": args.arch,
         "seed": args.seed,
         "eval_seed": args.eval_seed,
         "regularizer": spec["regularizer"],
         "layer_map": arch["layer_map"],
-        "detach_lambda": spec["train"] or args.method == "mne",
+        "detach_lambda": bool(detach) and (spec["train"] or args.method == "mne"),
+        "detach_bn_affine": bool(detach),
         "unmatched_scope": spec["scope"],
         "reg_coeff": MNE_RC if spec["regularizer"] != "weight_decay_weights_only" else None,
         "unmatched_l2_coeff": L2_WD if spec["train"] else None,
@@ -466,8 +532,15 @@ def scorecard(val_rows, test_rows, args, checkpoint: Path, reused: bool, extra: 
             "mode": "rate_uniform",
             "noise": "post_input_if gaussian",
             "eta_head_locked_to_l2wo": True,
+            "body": args.body,
         },
     }
+    if reused and args.body == "nodetach" and args.method == "mne":
+        card["reused_checkpoint_trained_layer_map"] = NODETACH_REUSE[args.arch]["trained_layer_map"]
+        if args.arch == "resnet18":
+            card["resnet_nodetach_reuse_note"] = (
+                "four-regs no-detach used default legacy map; hybrid trains with resnet map"
+            )
     card.update(snn_metrics(val_rows, "val"))
     card.update(snn_metrics(test_rows, "test"))
     card.update(extra)
@@ -541,7 +614,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     layer_map = ARCH_SPECS[args.arch]["layer_map"]
     print(
-        f"[INFO] {args.arch} {args.dataset} {args.method} "
+        f"[INFO] {args.arch} {args.dataset} {args.method} body={args.body} "
         f"layer_map={layer_map} seed={args.seed} eval_seed={args.eval_seed} "
         f"η_MNE={MNE_RC} η_head={L2_WD}",
         flush=True,
