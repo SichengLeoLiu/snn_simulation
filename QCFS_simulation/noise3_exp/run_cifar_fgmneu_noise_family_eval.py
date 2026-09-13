@@ -52,6 +52,15 @@ HOME_QCFS = Path(
         "/home/595/sl9144/codes/snn_simulation/QCFS_simulation",
     )
 )
+# Five-reg VGG ckpts were moved off $HOME. C10 lives under snn_ckpts;
+# C100 under qcfs_checkpoints. Keep both, plus the in-repo copy.
+CKPT_ROOTS = (
+    Path(os.environ["CIFAR_CKPT_ROOT"]) if os.environ.get("CIFAR_CKPT_ROOT") else None,
+    Path("/scratch/gs14/sl9144/snn_ckpts"),
+    Path("/scratch/gs14/sl9144/qcfs_checkpoints"),
+    HOME_QCFS,
+    ROOT,
+)
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
 CIFAR10_STD = (0.2023, 0.1994, 0.2010)
 CIFAR100_MEAN = [n / 255.0 for n in [129.3, 124.1, 112.4]]
@@ -147,26 +156,26 @@ def method_list(method: str) -> list[str]:
     return [method]
 
 
-def mneablate_name(dataset: str, variant: str, seed: int) -> str:
+def mneablate_names(dataset: str, variant: str, seed: int) -> list[str]:
     rc = "rcnone" if variant == "weight_decay_weights_only" else "rc0p0001"
-    return (
-        f"vgg16_L[16]_mneablate_{dataset}_{variant}_{rc}_"
-        f"seed{seed}_L16_trainT0.pth"
-    )
+    stem = f"vgg16_L[16]_mneablate_{dataset}_{variant}_{rc}_seed{seed}_L16"
+    # Seed 43 detach was saved before the trainT0 suffix was added.
+    return [f"{stem}_trainT0.pth", f"{stem}.pth"]
+
+
+def ckpt_roots() -> list[Path]:
+    return [path for path in CKPT_ROOTS if path is not None]
 
 
 def ckpt_candidates(arch: str, dataset: str, method: str, seed: int) -> list[Path]:
     paths: list[Path] = []
-    extra = os.environ.get("CIFAR_CKPT_ROOT")
-    roots = [ROOT, HOME_QCFS]
-    if extra:
-        roots.insert(0, Path(extra))
+    roots = ckpt_roots()
 
     if arch == "vgg16":
         if method == "l2wo":
-            name = mneablate_name(dataset, "weight_decay_weights_only", seed)
             for root in roots:
-                paths.append(root / f"{dataset}-checkpoints" / name)
+                for name in mneablate_names(dataset, "weight_decay_weights_only", seed):
+                    paths.append(root / f"{dataset}-checkpoints" / name)
             if seed == 42:
                 paths.append(
                     SCRATCH
@@ -177,9 +186,9 @@ def ckpt_candidates(arch: str, dataset: str, method: str, seed: int) -> list[Pat
                     / "vgg16_L[16]_comp_l2wo_fixed_seed42_L16_trainT0.pth"
                 )
         elif method == "detach":
-            name = mneablate_name(dataset, "old_detach", seed)
             for root in roots:
-                paths.append(root / f"{dataset}-checkpoints" / name)
+                for name in mneablate_names(dataset, "old_detach", seed):
+                    paths.append(root / f"{dataset}-checkpoints" / name)
             if seed == 42:
                 paths.append(
                     SCRATCH
@@ -380,10 +389,24 @@ def expected_keys(noise_types: list[str], sigmas: list[float]) -> set[tuple[str,
 
 
 def load_existing(path: Path) -> list[dict]:
-    if not path.is_file():
+    if not path.is_file() or path.stat().st_size == 0:
         return []
-    with path.open(newline="", encoding="utf-8") as handle:
-        return list(csv.DictReader(handle))
+    rows = []
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                if not row or not row.get("noise_type") or row.get("sigma") in (None, ""):
+                    continue
+                try:
+                    float(row["sigma"])
+                    float(row["accuracy"])
+                except (TypeError, ValueError):
+                    continue
+                rows.append(row)
+    except (OSError, csv.Error) as exc:
+        print(f"[WARN] ignore unreadable sweep {path}: {exc}", flush=True)
+        return []
+    return rows
 
 
 def write_csv(path: Path, rows: list[dict]) -> None:
@@ -591,10 +614,21 @@ def main() -> int:
         flush=True,
     )
     cards = []
+    failed = 0
     for method in methods:
         for seed in seed_list(args.arch, method, args.seeds):
-            cards.append(eval_one(args, method, seed, loader, device))
+            try:
+                cards.append(eval_one(args, method, seed, loader, device))
+            except Exception as exc:
+                failed += 1
+                print(
+                    f"[ERROR] {args.arch} {args.dataset} {method} seed{seed}: {exc}",
+                    flush=True,
+                )
     summarize(args, cards)
+    if failed:
+        print(f"[DONE WITH ERRORS] failed_cells={failed}", flush=True)
+        return 1
     return 0
 
 
