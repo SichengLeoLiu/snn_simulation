@@ -1,0 +1,134 @@
+#!/bin/bash
+#PBS -N nfam
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=12:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# Matched-variance Gaussian / Laplace / Uniform eval. No retraining.
+# ARCH: vgg16 | resnet18
+# DATASET: cifar10 | cifar100
+# METHOD: l2wo | detach | nodetach | fgmneu | all
+# ResNet detach is seed42 only. Writes a new scratch directory.
+# Do not overwrite training dirs. Do not touch ImageNet jobs.
+#
+# Login:
+#   cd /home/595/sl9144/codes/snn_simulation
+#   git fetch origin codex/task-cov-mne-resnet18
+#   git checkout origin/codex/task-cov-mne-resnet18 -- \
+#     QCFS_simulation/Models/layer.py \
+#     QCFS_simulation/Models/VGG.py \
+#     QCFS_simulation/Models/ResNet.py \
+#     QCFS_simulation/noise3_exp/run_cifar_fgmneu_noise_family_eval.py \
+#     QCFS_simulation/noise3_exp/pbs_cifar_fgmneu_noise_family_eval.pbs
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   python QCFS_simulation/noise3_exp/run_cifar_fgmneu_noise_family_eval.py --self-check
+#   python QCFS_simulation/noise3_exp/run_cifar_fgmneu_noise_family_eval.py \
+#     --arch vgg16 --dataset cifar10 --method all --dry-resolve
+#   PBS=QCFS_simulation/noise3_exp/pbs_cifar_fgmneu_noise_family_eval.pbs
+#   OUT=/scratch/gs14/sl9144/snn_results/cifar_fgmneu_noise_family
+#   for ARCH in vgg16 resnet18; do
+#     for DS in cifar10 cifar100; do
+#       for METHOD in l2wo detach nodetach fgmneu; do
+#         TAG="${ARCH:0:1}${DS#cifar}${METHOD:0:3}"
+#         qsub -N "nf${TAG}" -l walltime=12:00:00 \
+#           -v CIFAR_ROOT,ARCH=${ARCH},DATASET=${DS},METHOD=${METHOD},OUT_DIR=${OUT} \
+#           ${PBS}
+#       done
+#     done
+#   done
+
+set -euo pipefail
+
+ARCH="${ARCH:?set ARCH=vgg16|resnet18}"
+DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
+METHOD="${METHOD:-all}"
+EVAL_SEED="${EVAL_SEED:-0}"
+SEEDS="${SEEDS:-40 41 42 43 44}"
+NOISE_TYPES="${NOISE_TYPES:-gaussian laplace uniform}"
+SIGMAS="${SIGMAS:-0 1 2 3 5}"
+case "${ARCH}" in
+  vgg16|resnet18) ;;
+  *) echo "ERROR: invalid ARCH=${ARCH}"; exit 2 ;;
+esac
+case "${DATASET}" in
+  cifar10|cifar100) ;;
+  *) echo "ERROR: invalid DATASET=${DATASET}"; exit 2 ;;
+esac
+case "${METHOD}" in
+  l2wo|detach|nodetach|fgmneu|all) ;;
+  *) echo "ERROR: invalid METHOD=${METHOD}"; exit 2 ;;
+esac
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/nfam_${ARCH}_${DATASET}_${METHOD}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_fgmneu_noise_family}"
+mkdir -p "${OUT_DIR}"
+
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "host=$(hostname) date=$(date) ARCH=${ARCH} DATASET=${DATASET} METHOD=${METHOD}"
+echo "ROOT=${ROOT} OUT_DIR=${OUT_DIR} EVAL_SEED=${EVAL_SEED}"
+echo "SEEDS=${SEEDS} NOISE_TYPES=${NOISE_TYPES} SIGMAS=${SIGMAS}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+echo "NOTE: eval only; do not retrain; do not write training dirs"
+
+if [[ "${DATASET}" == "cifar100" && ! -f "${CIFAR_ROOT}/cifar-100-python/meta" ]]; then
+  echo "ERROR: CIFAR-100 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+if [[ "${DATASET}" == "cifar10" && ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+  echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+
+# shellcheck disable=SC2206
+SEED_ARR=(${SEEDS})
+# shellcheck disable=SC2206
+TYPE_ARR=(${NOISE_TYPES})
+# shellcheck disable=SC2206
+SIGMA_ARR=(${SIGMAS})
+
+python -u noise3_exp/run_cifar_fgmneu_noise_family_eval.py --self-check
+
+python -u noise3_exp/run_cifar_fgmneu_noise_family_eval.py \
+  --arch "${ARCH}" \
+  --dataset "${DATASET}" \
+  --method "${METHOD}" \
+  --seeds "${SEED_ARR[@]}" \
+  --noise-types "${TYPE_ARR[@]}" \
+  --sigmas "${SIGMA_ARR[@]}" \
+  --eval-seed "${EVAL_SEED}" \
+  --batch-size "${CIFAR_BATCH}" \
+  --workers "${CIFAR_NUM_WORKERS}" \
+  --out-root "${OUT_DIR}"
+
+echo "DONE $(date)"
+ls -la "${OUT_DIR}/${DATASET}/${ARCH}/${METHOD}" 2>/dev/null || true

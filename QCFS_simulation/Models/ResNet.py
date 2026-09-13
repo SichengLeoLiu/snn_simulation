@@ -117,10 +117,7 @@ class ResNet(nn.Module):
         self.first_layer_input_noise_sigma = max(0.0, float(sigma))
 
     def set_first_layer_input_noise_type(self, noise_type="gaussian"):
-        nt = str(noise_type).strip().lower()
-        if nt not in ("gaussian", "pink"):
-            raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
-        self.first_layer_input_noise_type = nt
+        self.first_layer_input_noise_type = normalize_first_layer_noise_type(noise_type)
 
     def set_first_layer_input_noise_position(self, position="post_input_if"):
         pos = str(position).strip().lower()
@@ -141,8 +138,13 @@ class ResNet(nn.Module):
         sigma = self.first_layer_input_noise_sigma
         if sigma <= 0:
             return x
-        noise = torch.randn_like(x)
-        return x + noise * sigma
+        nt = normalize_first_layer_noise_type(self.first_layer_input_noise_type)
+        if nt == "pink":
+            # Historical ResNet path ignored type and used iid Gaussian.
+            nt = "gaussian"
+        if nt == "gaussian":
+            return x + torch.randn_like(x) * sigma
+        return x + sample_matched_variance_noise(x, sigma, nt)
 
     def get_firing_rate(self, save_to_file=None, experiment_name=None):
         """the percentage of 1s out of a spike tensor

@@ -54,11 +54,11 @@ def _pink_noise_like(x, T):
 def _inject_noise_tensor(x, sigma, noise_type, T):
     if sigma <= 0:
         return x
-    if noise_type == "pink":
+    nt = normalize_first_layer_noise_type(noise_type)
+    if nt == "pink":
         noise = _pink_noise_like(x, T) if T > 0 else torch.randn_like(x)
-    else:
-        noise = torch.randn_like(x)
-    return x + noise * sigma
+        return x + noise * sigma
+    return x + sample_matched_variance_noise(x, sigma, nt)
 
 
 # Noise injection sites for VGG layer1 (Conv -> BN -> IF ...):
@@ -272,11 +272,8 @@ class VGG(nn.Module):
         self.first_layer_input_noise_sigma = max(0.0, float(sigma))
 
     def set_first_layer_input_noise_type(self, noise_type="gaussian"):
-        """设置第一层输入噪声类型：gaussian | pink。"""
-        nt = str(noise_type).strip().lower()
-        if nt not in ("gaussian", "pink"):
-            raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
-        self.first_layer_input_noise_type = nt
+        """设置第一层输入噪声类型：gaussian | laplace | uniform | pink。"""
+        self.first_layer_input_noise_type = normalize_first_layer_noise_type(noise_type)
 
     def set_first_layer_input_noise_position(self, position="post_input_if"):
         pos = str(position).strip().lower()
@@ -453,10 +450,7 @@ class VGG_woBN(nn.Module):
         self.first_layer_input_noise_sigma = max(0.0, float(sigma))
 
     def set_first_layer_input_noise_type(self, noise_type="gaussian"):
-        nt = str(noise_type).strip().lower()
-        if nt not in ("gaussian", "pink"):
-            raise ValueError("noise_type 必须为 gaussian 或 pink，收到: %s" % (noise_type,))
-        self.first_layer_input_noise_type = nt
+        self.first_layer_input_noise_type = normalize_first_layer_noise_type(noise_type)
 
     def set_first_layer_input_noise_position(self, position="post_input_if"):
         pos = str(position).strip().lower()

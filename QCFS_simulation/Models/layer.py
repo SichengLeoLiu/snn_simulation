@@ -1,7 +1,62 @@
+import math
 import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+# First-layer additive families. Gaussian / Laplace / Uniform are matched
+# to the same target variance σ². Pink is generated elsewhere (VGG only).
+FIRST_LAYER_NOISE_TYPES = ("gaussian", "laplace", "uniform", "pink")
+MATCHED_VARIANCE_NOISE_TYPES = ("gaussian", "laplace", "uniform")
+_NOISE_TYPE_ALIASES = {
+    "gaussian": "gaussian",
+    "gauss": "gaussian",
+    "normal": "gaussian",
+    "iid": "gaussian",
+    "white": "gaussian",
+    "laplace": "laplace",
+    "laplacian": "laplace",
+    "uniform": "uniform",
+    "unif": "uniform",
+    "pink": "pink",
+}
+
+
+def normalize_first_layer_noise_type(noise_type):
+    nt = str(noise_type).strip().lower()
+    if nt not in _NOISE_TYPE_ALIASES:
+        raise ValueError(
+            "noise_type 必须为 gaussian | laplace | uniform | pink，收到: %s"
+            % (noise_type,)
+        )
+    return _NOISE_TYPE_ALIASES[nt]
+
+
+def sample_matched_variance_noise(x, sigma, noise_type="gaussian"):
+    """Zero-mean additive noise with Var = σ² for gaussian / laplace / uniform.
+
+    Laplace(0, b) uses b = σ/√2 so 2b² = σ².
+    Uniform[-a, a] uses a = σ√3 so a²/3 = σ².
+    Gaussian is N(0, σ²), i.e. randn_like(x) * σ.
+    """
+    sigma = float(sigma)
+    if sigma <= 0:
+        return torch.zeros_like(x)
+    nt = normalize_first_layer_noise_type(noise_type)
+    if nt == "gaussian":
+        return torch.randn_like(x) * sigma
+    if nt == "laplace":
+        # Inverse-CDF of Laplace(0, 1), then scale by b = σ/√2.
+        u = torch.rand_like(x).clamp_(min=1e-6, max=1.0 - 1e-6) - 0.5
+        unit = -u.sign() * torch.log1p(-2.0 * u.abs())
+        return unit * (sigma / math.sqrt(2.0))
+    if nt == "uniform":
+        half_width = sigma * math.sqrt(3.0)
+        return (torch.rand_like(x) * 2.0 - 1.0) * half_width
+    raise ValueError(
+        "sample_matched_variance_noise 只支持 gaussian | laplace | uniform，收到: %s"
+        % (nt,)
+    )
 
 class MergeTemporalDim(nn.Module):
     def __init__(self, T):
