@@ -56,6 +56,7 @@ from utils import (
     compute_threshold_normalized_l2_regularization,
     compute_l2_sp_regularization,
 )
+from lambda_grow import compute_lambda_grow_regularization
 
 DATASET_CHOICES = ["mnist", "fashion_mnist", "cifar10", "cifar100", "imagenet", "diff1d"]
 
@@ -140,6 +141,7 @@ parser.add_argument(
         "elastic_net_all",
         "scale_l2",
         "weight_decay_weights_only",
+        "l2wo_lambda_grow",
         "group_lasso",
         "spectral_norm",
         "orthogonal",
@@ -852,7 +854,11 @@ def main():
     is_diff1d = log_ds == "diff1d"
 
     def _optimizer_weight_decay(regularizer: str, weight_decay: float) -> float:
-        if regularizer in ("weight_decay", "weight_decay_weights_only"):
+        if regularizer in (
+            "weight_decay",
+            "weight_decay_weights_only",
+            "l2wo_lambda_grow",
+        ):
             return weight_decay
         if regularizer in ("mne_l2", "stable_mne_l2", "hinge_mne", "spectral_mne", "conv_mne_l2") and weight_decay > 0:
             return weight_decay
@@ -860,7 +866,7 @@ def main():
         return 0.0
 
     optimizer_parameters = model.parameters()
-    if args.regularizer == "weight_decay_weights_only":
+    if args.regularizer in ("weight_decay_weights_only", "l2wo_lambda_grow"):
         decay_ids = {
             id(module.weight)
             for module in model.modules()
@@ -1166,6 +1172,10 @@ def main():
             reference_weights=l2_sp_reference,
             T=t,
             quant_level=q,
+        )
+    elif args.regularizer == "l2wo_lambda_grow":
+        reg_loss_fn = lambda m, t, q: compute_lambda_grow_regularization(
+            m, T=t, quant_level=q
         )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
@@ -1523,6 +1533,13 @@ def main():
     if args.regularizer == "weight_decay_weights_only":
         logger.info(
             "weight_decay_weights_only: conv_linear_weights=True, bias_bn_if=False"
+        )
+    if args.regularizer == "l2wo_lambda_grow":
+        logger.info(
+            "l2wo_lambda_grow: conv_linear_weights=True, R=-mean(log λ), "
+            "eta_lambda=%.6g, optimizer_wd=%.6g",
+            args.reg_coeff,
+            args.weight_decay,
         )
     if args.regularizer == "spectral_norm":
         logger.info(
