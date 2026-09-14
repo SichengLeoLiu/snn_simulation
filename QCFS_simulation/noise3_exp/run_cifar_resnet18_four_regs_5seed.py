@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CIFAR ResNet-18 5-seed: L2-all, L2-wo, MNE-L2 detach, no-detach, One-sided.
+"""CIFAR ResNet-18 5-seed: L2-all, L2-wo, L1-wo, MNE-L2 detach, no-detach, One-sided.
 
 Protocol matches the VGG envelope/onesided runs:
   ANN train T=0, 300 epochs, lr=0.1, L=16
@@ -8,6 +8,7 @@ Protocol matches the VGG envelope/onesided runs:
 
 Coefficients (CIFAR VGG five-regs / frozen onesided):
   L2-all / L2-wo : optimizer WD = 5e-4
+  L1-wo          : regularizer=l1, rc = 1e-5, Conv/Linear weights only
   MNE-L2 detach  : mne_l2, detach λ, rc = 1e-4
   no-detach MNE  : same formula, grads into λ and BN γ, rc = 1e-4
   One-sided      : α=4, τ=0.5, r_max=8, β=5e-4, warmup 30/50
@@ -53,6 +54,7 @@ from utils import get_torch_device  # noqa: E402
 ARCH = "resnet18"
 SEEDS = (40, 41, 42, 43, 44)
 L2_WD = 5e-4
+L1_RC = 1e-5
 MNE_RC = 1e-4
 
 METHODS = {
@@ -68,6 +70,13 @@ METHODS = {
         "regularizer": "weight_decay_weights_only",
         "weight_decay": L2_WD,
         "reg_coeff": None,
+        "extra": [],
+    },
+    "l1wo": {
+        "label": "L1-wo",
+        "regularizer": "l1",
+        "weight_decay": 0.0,
+        "reg_coeff": L1_RC,
         "extra": [],
     },
     "mne": {
