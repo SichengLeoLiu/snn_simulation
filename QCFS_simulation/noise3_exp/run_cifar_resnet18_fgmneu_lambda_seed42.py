@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CIFAR ResNet-18 seed-42 ∇λ-only FG-MNE-U screen.
+"""CIFAR ResNet-18 ∇λ-only FG-MNE-U, seeds 40–44.
 
 Same locked hybrid as VGG A4 λ-only:
   unmatched L2 on (η_U=5e-4, scope=head)
@@ -7,10 +7,13 @@ Same locked hybrid as VGG A4 λ-only:
   residual-aware map, η_MNE=1e-4
   T=L=16, EVAL_SEED=0, post_input_if
 
+One job = one (dataset, seed). Seed 42 may already be queued; do not
+resubmit it. Writes beside seed 42 under the same scratch tree.
+
 Do not retune. Do not overwrite FG-MNE-U / detach+head / ImageNet trees.
-Compare against existing seed-42:
-  detach+U   cifar_mne_unmatched_head_l2_seed42
-  FG-MNE-U   cifar_mne_nodetach_unmatched_head_l2_seed42
+Compare against:
+  detach+U   cifar_mne_unmatched_head_l2_seed42  (seed 42)
+  FG-MNE-U   cifar_mne_nodetach_unmatched_head_l2_seed42  (5-seed)
 """
 from __future__ import annotations
 
@@ -50,6 +53,7 @@ from utils import get_torch_device  # noqa: E402
 ARCH = "resnet18"
 LAYER_MAP = "resnet"
 SEED = 42
+SEEDS = (40, 41, 42, 43, 44)
 METHOD = "lambda"
 
 
@@ -169,7 +173,20 @@ def self_check() -> None:
         raise AssertionError("λ-only must keep γ detached")
     if GRAD_FLAGS[METHOD]:
         raise AssertionError("λ-only extra flags must be empty")
+    seeded = argparse.Namespace(**{**vars(ns), "seed": 40})
+    cmd40 = train_cmd(seeded)
+    if cmd40[cmd40.index("--seed") + 1] != "40":
+        raise AssertionError("5-seed jobs must pass --seed")
     print("[self-check] ResNet-18 ∇λ-only flags ok", flush=True)
+
+
+def _mean_std(xs: list[float]) -> tuple[float, float]:
+    n = len(xs)
+    mean = sum(xs) / n
+    if n < 2:
+        return mean, 0.0
+    var = sum((x - mean) ** 2 for x in xs) / (n - 1)
+    return mean, var ** 0.5
 
 
 def summarize(out_root: Path) -> None:
@@ -180,12 +197,20 @@ def summarize(out_root: Path) -> None:
     if not cards:
         print(f"No scorecards in {out_root}")
         return
-    print(f"{'dataset':<10} {'clean':>7} {'s5':>7} {'aucH':>8}")
+    print(f"{'dataset':<10} {'seed':>5} {'clean':>7} {'s5':>7} {'aucH':>8}")
+    grouped: dict[str, list[dict]] = {}
     for card in cards:
         print(
-            f"{card['dataset']:<10} {card['test_clean']:7.2f} "
-            f"{card['test_sigma5']:7.2f} {card['test_auc_high']:8.2f}"
+            f"{card['dataset']:<10} {card.get('seed', '?'):>5} "
+            f"{card['test_clean']:7.2f} {card['test_sigma5']:7.2f} "
+            f"{card['test_auc_high']:8.2f}"
         )
+        grouped.setdefault(str(card["dataset"]), []).append(card)
+    print(f"\n{'dataset':<10} {'n':>3} {'clean':>11} {'s5':>11}")
+    for dataset, rows in grouped.items():
+        c, cs = _mean_std([float(r["test_clean"]) for r in rows])
+        s, ss = _mean_std([float(r["test_sigma5"]) for r in rows])
+        print(f"{dataset:<10} {len(rows):>3} {c:6.2f}±{cs:<4.2f} {s:6.2f}±{ss:<4.2f}")
 
 
 def main() -> None:
