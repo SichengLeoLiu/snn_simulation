@@ -1,7 +1,7 @@
 import os
 import torch
 from torchvision import datasets, transforms
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 
 from Preprocess.augment import Cutout
 
@@ -248,6 +248,89 @@ def GetCifar100(batchsize, num_workers=8, pin_memory=True):
         pin_memory=pin_memory,
     )
     return train_dataloader, test_dataloader
+
+
+def cifar_holdout_indices(n_train: int, val_size: int, split_seed: int):
+    """Match noise3_exp val_loader: first val_size of randperm(split_seed)."""
+    if val_size <= 0 or val_size >= n_train:
+        raise ValueError("val_size must be in (0, n_train), got %s / %s" % (val_size, n_train))
+    generator = torch.Generator().manual_seed(int(split_seed))
+    perm = torch.randperm(int(n_train), generator=generator).tolist()
+    return perm[:val_size], perm[val_size:]
+
+
+def make_cifar_holdout_loaders(
+    dataset_name,
+    batch_size,
+    val_size=5000,
+    split_seed=0,
+    num_workers=8,
+    pin_memory=True,
+):
+    """Train on 45k, select on 5k holdout, keep official 10k test.
+
+    The 5k indices match ``VAL_SPLIT_SEED=0`` / ``VAL_SIZE=5000`` used by
+    the SNN val sweeps, so selection data is never in the training set.
+    """
+    name = str(dataset_name).lower().replace("-", "").replace("_", "")
+    aa = _cifar_pil_autoaugment()
+    root = os.path.expanduser(CIFAR_ROOT)
+    if name in ("cifar10", "cifa10"):
+        mean = (0.4914, 0.4822, 0.4465)
+        std = (0.2023, 0.1994, 0.2010)
+        download = _require_or_download_cifar(root, _cifar10_available(root), "CIFAR10")
+        cls = datasets.CIFAR10
+    elif name == "cifar100":
+        mean = [n / 255.0 for n in [129.3, 124.1, 112.4]]
+        std = [n / 255.0 for n in [68.2, 65.4, 70.4]]
+        download = _require_or_download_cifar(root, _cifar100_available(root), "CIFAR100")
+        cls = datasets.CIFAR100
+    else:
+        raise ValueError("make_cifar_holdout_loaders only supports cifar10/cifar100, got %s" % dataset_name)
+
+    trans_t = transforms.Compose(
+        [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            aa,
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+            Cutout(n_holes=1, length=16),
+        ]
+    )
+    trans = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+        ]
+    )
+    train_aug = cls(root, train=True, transform=trans_t, download=download)
+    train_eval = cls(root, train=True, transform=trans, download=False)
+    test_data = cls(root, train=False, transform=trans, download=False)
+    test_loader = DataLoader(
+        test_data,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+
+    val_idx, train_idx = cifar_holdout_indices(len(train_aug), int(val_size), int(split_seed))
+    train_loader = DataLoader(
+        Subset(train_aug, train_idx),
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    val_loader = DataLoader(
+        Subset(train_eval, val_idx),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
+    return train_loader, val_loader, test_loader
 
 
 class Diff1DDataset(Dataset):

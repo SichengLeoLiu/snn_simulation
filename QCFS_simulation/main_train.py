@@ -10,6 +10,7 @@ from Models import modelpool
 from Models.VGG import remap_legacy_vgg_state_dict
 from Models.spike_temporal_adjust import SPIKE_SCHEDULE_MODES
 from Preprocess import datapool
+from Preprocess.getdataloader import make_cifar_holdout_loaders
 from grad_probe import (
     append_probe_csv,
     parse_probe_epochs,
@@ -703,7 +704,32 @@ parser.add_argument(
     default="best",
     type=str,
     choices=["best", "last"],
-    help="checkpoint 保存策略：best=验证集最优（默认），last=仅保存最后一个 epoch",
+    help=(
+        "checkpoint 保存策略：best=按 --ckpt-select-split 上的最优 ANN acc "
+        "（默认 official test）；last=仅保存最后一个 epoch"
+    ),
+)
+parser.add_argument(
+    "--ckpt-select-split",
+    default="test",
+    type=str,
+    choices=["test", "val"],
+    help=(
+        "best 模式用来选 epoch 的集合：test=official test（旧行为）；"
+        "val=CIFAR 固定 45k/5k holdout（与 SNN val_loader 同一划分）"
+    ),
+)
+parser.add_argument(
+    "--val-holdout",
+    default=5000,
+    type=int,
+    help="--ckpt-select-split val 时从 CIFAR train 划出的 holdout 张数",
+)
+parser.add_argument(
+    "--val-split-seed",
+    default=0,
+    type=int,
+    help="CIFAR holdout randperm seed；须与 noise3_exp VAL_SPLIT_SEED=0 一致",
 )
 parser.add_argument(
     "--ckpt-dir",
@@ -763,12 +789,36 @@ def main():
     configure_cuda_fast(device)
 
     ds = args.dataset.lower()
-    train_loader, test_loader = datapool(
-        args.dataset,
-        args.batch_size,
-        num_workers=args.workers,
-        pin_memory=(device.type == "cuda"),
-    )
+    pin_memory = device.type == "cuda"
+    val_loader = None
+    if args.ckpt_select_split == "val":
+        ds_key = ds.replace("-", "").replace("_", "")
+        if ds_key not in ("cifar10", "cifa10", "cifar100"):
+            raise ValueError(
+                "--ckpt-select-split val is only implemented for cifar10/cifar100"
+            )
+        train_loader, val_loader, test_loader = make_cifar_holdout_loaders(
+            args.dataset,
+            args.batch_size,
+            val_size=int(args.val_holdout),
+            split_seed=int(args.val_split_seed),
+            num_workers=args.workers,
+            pin_memory=pin_memory,
+        )
+        select_loader = val_loader
+        select_split_name = "Val"
+    else:
+        train_loader, test_loader = datapool(
+            args.dataset,
+            args.batch_size,
+            num_workers=args.workers,
+            pin_memory=pin_memory,
+        )
+        select_loader = test_loader
+        select_split_name = "Test"
+    n_train = len(train_loader.dataset)
+    n_select = len(select_loader.dataset)
+    n_test = len(test_loader.dataset)
 
     arch = _resolved_model_name(args.dataset, args.model)
     if arch != args.model:
@@ -1184,6 +1234,8 @@ def main():
     )
     best_acc = 0.0
     best_rmse = float("inf")
+    best_epoch = -1
+    best_test_acc = 0.0
 
     identifier = arch
     identifier += "_L[%d]" % (args.L,)
@@ -1240,6 +1292,10 @@ def main():
         "ann_test_acc",
         "train_loss",
     ]
+    if args.ckpt_select_split == "val":
+        insert_at = epoch_log_fields.index("ann_test_acc")
+        epoch_log_fields.insert(insert_at, "ann_val_acc")
+        epoch_log_fields.extend(["ckpt_select_split", "ckpt_is_best"])
 
     def _append_epoch_log(row: dict) -> None:
         write_header = not os.path.exists(epoch_log_csv)
@@ -1567,6 +1623,12 @@ def main():
             logger.info(
                 "CIFAR 建议: -lr 0.1 -wd 5e-4 --epochs 300 -b 128"
             )
+    if val_loader is not None:
+        logger.info(
+            "Independent ckpt select: train=%d val=%d test=%d split_seed=%d "
+            "(save on val ANN acc; official test is logged only)"
+            % (n_train, n_select, n_test, int(args.val_split_seed))
+        )
     if is_diff1d:
         logger.info(
             "diff1d：回归 y=x1-x2（数据上 x1>=x2）；Linear 无 bias、写死差分；指标为 RMSE"
@@ -1884,21 +1946,42 @@ def main():
                     )
                 )
             scheduler.step()
-            tmp = val(model, test_loader, T=args.time, device=device)
-            logger.info(
-                "Epoch:[{}/{}]\t Test acc={:.3f}\n".format(
-                    epoch, args.epochs, tmp
+            select_acc = val(model, select_loader, T=args.time, device=device)
+            if val_loader is None:
+                test_acc = select_acc
+                logger.info(
+                    "Epoch:[{}/{}]\t Test acc={:.3f}\n".format(
+                        epoch, args.epochs, test_acc
+                    )
                 )
+            else:
+                test_acc = val(model, test_loader, T=args.time, device=device)
+                logger.info(
+                    "Epoch:[{}/{}]\t Val acc={:.3f}\t Test acc={:.3f}\n".format(
+                        epoch, args.epochs, select_acc, test_acc
+                    )
+                )
+            is_better = best_acc < select_acc
+            if is_better:
+                best_acc = select_acc
+                best_epoch = epoch
+                best_test_acc = test_acc
+            write_epoch_log = bool(args.epoch_log_csv.strip()) or (
+                args.regularizer in (
+                    "calibrated_mne_l2",
+                    "mne_l2",
+                    "mne_l2_unmatched",
+                    "mne_os_bridge",
+                    "task_cov_mne",
+                )
+                and args.regularizer in ("calibrated_mne_l2", "mne_os_bridge")
             )
-            if args.regularizer in (
+            if write_epoch_log and args.regularizer in (
                 "calibrated_mne_l2",
                 "mne_l2",
                 "mne_l2_unmatched",
                 "mne_os_bridge",
                 "task_cov_mne",
-            ) and (
-                args.regularizer in ("calibrated_mne_l2", "mne_os_bridge")
-                or args.epoch_log_csv.strip()
             ):
                 if args.regularizer == "task_cov_mne":
                     epoch_stats = getattr(model, "_task_cov_mne_epoch_stats", {})
@@ -1990,14 +2073,26 @@ def main():
                         "ce_grad_norm": grads["ce_grad_norm"],
                         "reg_ce_ratio": grads["reg_ce_ratio"],
                         "ann_train_acc": acc,
-                        "ann_test_acc": tmp,
+                        "ann_val_acc": select_acc if val_loader is not None else "",
+                        "ann_test_acc": test_acc,
                         "train_loss": loss,
+                        "ckpt_select_split": args.ckpt_select_split,
+                        "ckpt_is_best": int(is_better),
+                    }
+                )
+            elif args.epoch_log_csv.strip():
+                _append_epoch_log(
+                    {
+                        "epoch": epoch,
+                        "ann_train_acc": acc,
+                        "ann_val_acc": select_acc if val_loader is not None else "",
+                        "ann_test_acc": test_acc,
+                        "train_loss": loss,
+                        "ckpt_select_split": args.ckpt_select_split,
+                        "ckpt_is_best": int(is_better),
                     }
                 )
 
-            is_better = best_acc < tmp
-            if is_better:
-                best_acc = tmp
             should_save = (
                 (args.ckpt_save_mode == "best" and is_better)
                 or (args.ckpt_save_mode == "last" and epoch == args.epochs - 1)
@@ -2006,6 +2101,23 @@ def main():
                 filename = os.path.join(log_dir, "%s.pth" % (identifier,))
                 print("Saving model to %s" % (filename,))
                 torch.save(model.state_dict(), filename)
+                if val_loader is not None:
+                    selection = {
+                        "epoch": int(epoch),
+                        "ckpt_save_mode": args.ckpt_save_mode,
+                        "ckpt_select_split": args.ckpt_select_split,
+                        "select_acc": float(select_acc),
+                        "ann_test_acc": float(test_acc),
+                        "n_train": int(n_train),
+                        "n_select": int(n_select),
+                        "n_test": int(n_test),
+                        "val_holdout": int(args.val_holdout),
+                        "val_split_seed": int(args.val_split_seed),
+                    }
+                    sel_path = os.path.join(log_dir, "%s_selection.json" % (identifier,))
+                    with open(sel_path, "w", encoding="utf-8") as handle:
+                        json.dump(selection, handle, indent=2)
+                        handle.write("\n")
             if epoch in extra_save:
                 snap = os.path.join(log_dir, "%s_ep%d.pth" % (identifier, epoch))
                 print("Saving snapshot to %s" % (snap,))
@@ -2014,6 +2126,12 @@ def main():
     if is_diff1d:
         logger.info("Best Test RMSE={:.6f}".format(best_rmse))
         _log_diff1d_param_values(model, logger)
+    elif val_loader is not None:
+        logger.info(
+            "Best {} acc={:.3f} (epoch {}); official test acc={:.3f}".format(
+                select_split_name, best_acc, best_epoch, best_test_acc
+            )
+        )
     else:
         logger.info("Best Test acc={:.3f}".format(best_acc))
 
