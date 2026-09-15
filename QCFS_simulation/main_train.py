@@ -732,6 +732,24 @@ parser.add_argument(
     help="CIFAR holdout randperm seed；须与 noise3_exp VAL_SPLIT_SEED=0 一致",
 )
 parser.add_argument(
+    "--train-noise-sigma",
+    default=0.0,
+    type=float,
+    help="ANN 训练时在 --train-noise-position 注入的 Gaussian σ；0=关闭。选 epoch 仍用干净 ANN acc",
+)
+parser.add_argument(
+    "--train-noise-type",
+    default="gaussian",
+    type=str,
+    help="--train-noise-sigma>0 时的噪声类型（与评估协议一致，默认 gaussian）",
+)
+parser.add_argument(
+    "--train-noise-position",
+    default="post_input_if",
+    type=str,
+    help="训练噪声注入位置，默认 post_input_if",
+)
+parser.add_argument(
     "--ckpt-dir",
     default="",
     type=str,
@@ -850,6 +868,12 @@ def main():
     model.set_T(args.time)
     if hasattr(model, "set_spike_schedule"):
         model.set_spike_schedule(args.spike_schedule)
+    if float(args.train_noise_sigma) > 0:
+        if not hasattr(model, "set_first_layer_input_noise_sigma"):
+            raise ValueError("--train-noise-sigma requires first-layer noise injection")
+        model.set_first_layer_input_noise_position(args.train_noise_position)
+        model.set_first_layer_input_noise_type(args.train_noise_type)
+        model.set_first_layer_input_noise_sigma(0.0)
 
     log_ds = "diff1d" if ds.replace("_", "") in ("diff1d", "toydiff1d") else ds
     log_dir = args.ckpt_dir.strip() or ("%s-checkpoints" % log_ds)
@@ -1629,6 +1653,16 @@ def main():
             "(save on val ANN acc; official test is logged only)"
             % (n_train, n_select, n_test, int(args.val_split_seed))
         )
+    if float(args.train_noise_sigma) > 0:
+        logger.info(
+            "ANN noise-injection train: sigma=%s type=%s pos=%s "
+            "(forward noisy; checkpoint selection uses clean ANN acc)"
+            % (
+                args.train_noise_sigma,
+                args.train_noise_type,
+                args.train_noise_position,
+            )
+        )
     if is_diff1d:
         logger.info(
             "diff1d：回归 y=x1-x2（数据上 x1>=x2）；Linear 无 bias、写死差分；指标为 RMSE"
@@ -1824,6 +1858,8 @@ def main():
                 print("Saving model to %s" % (filename,))
                 torch.save(model.state_dict(), filename)
         else:
+            if float(args.train_noise_sigma) > 0:
+                model.set_first_layer_input_noise_sigma(float(args.train_noise_sigma))
             loss, acc = train(
                 model,
                 device,
@@ -1835,6 +1871,8 @@ def main():
                 reg_loss_fn=reg_loss_fn,
                 reg_coeff=epoch_reg_coeff,
             )
+            if float(args.train_noise_sigma) > 0:
+                model.set_first_layer_input_noise_sigma(0.0)
             logger.info(
                 "Epoch:[{}/{}]\t loss={:.5f}\t acc={:.3f}".format(
                     epoch, args.epochs, loss, acc

@@ -1,0 +1,128 @@
+#!/bin/bash
+#PBS -N unibase
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=12:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# Unify CIFAR baseline eval onto EVAL_SEED=0.
+# DATASET: cifar10 | cifar100
+# ARCH: vgg16 | resnet18
+# METHOD: l2all | l2wo | l1wo | noiseinj
+# l2all/l2wo/l1wo: reuse existing ckpts, loop seeds 40-44, no retrain.
+# noiseinj: train L2-wo + ANN Gaussian sigma=1 at post_input_if, default seed 42.
+# Do not retune. Do not overwrite five-regs / four-regs / ImageNet trees.
+#
+#   cd /home/595/sl9144/codes/snn_simulation
+#   git fetch origin codex/task-cov-mne-resnet18
+#   git checkout origin/codex/task-cov-mne-resnet18 -- \
+#     QCFS_simulation/main_train.py \
+#     QCFS_simulation/noise3_exp/run_cifar_unified_baseline_evalseed0.py \
+#     QCFS_simulation/noise3_exp/pbs_cifar_unified_baseline_evalseed0.pbs
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   python QCFS_simulation/noise3_exp/run_cifar_unified_baseline_evalseed0.py --self-check
+#   PBS=QCFS_simulation/noise3_exp/pbs_cifar_unified_baseline_evalseed0.pbs
+#   OUT=/scratch/gs14/sl9144/snn_results/cifar_unified_baseline_evalseed0
+
+set -euo pipefail
+
+DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
+ARCH="${ARCH:?set ARCH=vgg16|resnet18}"
+METHOD="${METHOD:?set METHOD=l2all|l2wo|l1wo|noiseinj}"
+EVAL_SEED="${EVAL_SEED:-0}"
+TRAIN_SIGMA="${TRAIN_SIGMA:-1.0}"
+SEED="${SEED:-42}"
+SEEDS="${SEEDS:-40 41 42 43 44}"
+case "${DATASET}" in
+  cifar10|cifar100) ;;
+  *) echo "ERROR: invalid DATASET=${DATASET}"; exit 2 ;;
+esac
+case "${ARCH}" in
+  vgg16|resnet18) ;;
+  *) echo "ERROR: invalid ARCH=${ARCH}"; exit 2 ;;
+esac
+case "${METHOD}" in
+  l2all|l2wo|l1wo|noiseinj) ;;
+  *) echo "ERROR: invalid METHOD=${METHOD}"; exit 2 ;;
+esac
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/unibase_${ARCH}_${METHOD}_${DATASET}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_unified_baseline_evalseed0}"
+mkdir -p "${OUT_DIR}"
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "host=$(hostname) date=$(date) ARCH=${ARCH} METHOD=${METHOD} DATASET=${DATASET}"
+echo "ROOT=${ROOT} OUT_DIR=${OUT_DIR} EVAL_SEED=${EVAL_SEED} TRAIN_SIGMA=${TRAIN_SIGMA}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+echo "NOTE: eval-seed-0 baseline reeval; l2all/l2wo/l1wo reuse ckpts; noiseinj trains L2-wo+sigma=1"
+
+if [[ "${DATASET}" == "cifar10" && ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+  echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+if [[ "${DATASET}" == "cifar100" && ! -f "${CIFAR_ROOT}/cifar-100-python/meta" ]]; then
+  echo "ERROR: CIFAR-100 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+
+ARGS=(
+  --arch "${ARCH}"
+  --dataset "${DATASET}"
+  --method "${METHOD}"
+  --eval-seed "${EVAL_SEED}"
+  --train-sigma "${TRAIN_SIGMA}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${CIFAR_BATCH}"
+  --workers "${CIFAR_NUM_WORKERS}"
+)
+if [[ "${METHOD}" == "noiseinj" ]]; then
+  ARGS+=(--seed "${SEED}")
+else
+  # shellcheck disable=SC2206
+  SEED_ARR=(${SEEDS})
+  ARGS+=(--seeds "${SEED_ARR[@]}")
+fi
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+if [[ "${FORCE:-0}" == "1" ]]; then
+  ARGS+=(--force)
+fi
+if [[ "${DRY_RESOLVE:-0}" == "1" ]]; then
+  ARGS+=(--dry-resolve)
+fi
+
+python -u noise3_exp/run_cifar_unified_baseline_evalseed0.py "${ARGS[@]}"
+echo "DONE $(date) ARCH=${ARCH} METHOD=${METHOD} DATASET=${DATASET}"
+ls -la "${OUT_DIR}/${DATASET}/${ARCH}_${METHOD}" || true
