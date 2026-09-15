@@ -13,16 +13,17 @@ Protocol
   locked η_MNE=1e-4, η_U=5e-4; do not retune
   T=L=16, EVAL_SEED=0, rate_uniform, post_input_if
 
-Methods (all four belong on the same table)
-------------------------------------------
+Methods for the VGG independent-ckpt table
+-----------------------------------------
   l2wo     optimizer weights-only WD=5e-4
-  detach   MNE + unmatched-head L2, ∇λ=0 ∇γ=0
+  l1wo     L1 on Conv/Linear weights, rc=1e-5
   lambda   MNE + unmatched-head L2, ∇λ=✓ ∇γ=0   (paper method)
-  fgmneu   MNE + unmatched-head L2, ∇λ=✓ ∇γ=✓   (FG-MNE-U)
 
-Architectures: vgg16 (legacy map), resnet18 (residual-aware map).
-One job = one (dataset, arch, method). Writes a new scratch tree.
-Do not overwrite existing λ-only / FG-MNE-U / ImageNet trees.
+``detach`` / ``fgmneu`` remain in the CLI only so already-queued jobs
+do not crash; do not submit them. ResNet is not part of this table.
+
+Writes a new scratch tree. Do not overwrite existing λ-only / FG-MNE-U /
+ImageNet trees.
 """
 from __future__ import annotations
 
@@ -40,7 +41,9 @@ for path in (ROOT, EXP):
         sys.path.insert(0, str(path))
 
 ARCHS = ("vgg16", "resnet18")
-METHODS = ("l2wo", "detach", "lambda", "fgmneu")
+SUBMIT_ARCHS = ("vgg16",)
+SUBMIT_METHODS = ("l2wo", "l1wo", "lambda")
+METHODS = ("l2wo", "l1wo", "lambda", "detach", "fgmneu")
 DATASETS = ("cifar10", "cifar100")
 SEED = 42
 EVAL_NOISE_SEED = 0
@@ -50,6 +53,7 @@ LVAL = 16
 TEST_T = 16
 MNE_RC = 1e-4
 L2_WD = 5e-4
+L1_RC = 1e-5
 VAL_SIZE = 5000
 VAL_SPLIT_SEED = 0
 LAYER_MAP = {"vgg16": "legacy", "resnet18": "resnet"}
@@ -60,14 +64,16 @@ GRAD_FLAGS = {
 }
 LABELS = {
     "l2wo": "L2-wo",
-    "detach": "detach+U",
+    "l1wo": "L1-wo",
     "lambda": r"∇λ only + unmatched L2",
+    "detach": "detach+U",
     "fgmneu": "FG-MNE-U",
 }
 NABLA = {
     "l2wo": (False, False),
-    "detach": (False, False),
+    "l1wo": (False, False),
     "lambda": (False, True),
+    "detach": (False, False),
     "fgmneu": (True, True),
 }
 
@@ -148,6 +154,13 @@ def train_cmd(args) -> list[str]:
         cmd += [
             "--regularizer", "weight_decay_weights_only",
             "--weight_decay", str(L2_WD),
+        ]
+        return cmd
+    if args.method == "l1wo":
+        cmd += [
+            "--regularizer", "l1",
+            "--weight_decay", "0",
+            "--reg_coeff", str(L1_RC),
         ]
         return cmd
     cmd += [
@@ -244,6 +257,16 @@ def self_check() -> None:
                     if "mne_l2_unmatched" in joined:
                         raise AssertionError("l2wo must not use unmatched MNE")
                     continue
+                if method == "l1wo":
+                    if cmd[cmd.index("--regularizer") + 1] != "l1":
+                        raise AssertionError("l1wo regularizer")
+                    if cmd[cmd.index("--reg_coeff") + 1] != str(L1_RC):
+                        raise AssertionError("l1wo rc must stay 1e-5")
+                    if cmd[cmd.index("--weight_decay") + 1] != "0":
+                        raise AssertionError("l1wo must not use optimizer WD")
+                    if "mne_l2_unmatched" in joined:
+                        raise AssertionError("l1wo must not use unmatched MNE")
+                    continue
                 if cmd[cmd.index("--regularizer") + 1] != "mne_l2_unmatched":
                     raise AssertionError(f"{method}: keep unmatched L2")
                 if cmd[cmd.index("--unmatched_l2_coeff") + 1] != str(L2_WD):
@@ -270,6 +293,11 @@ def self_check() -> None:
                         raise AssertionError("FG-MNE-U must update γ")
                     if "--mne_detach_lambda" in cmd:
                         raise AssertionError("FG-MNE-U must not detach λ")
+    for arch in SUBMIT_ARCHS:
+        for method in SUBMIT_METHODS:
+            ns = _ns(arch=arch, method=method)
+            if "vgg16_" not in str(ckpt_path(ns)):
+                raise AssertionError("submit table must stay on vgg16")
     print("[self-check] independent-ckpt 45k/5k flags ok", flush=True)
 
 
@@ -377,15 +405,16 @@ def main() -> None:
         "dataset": args.dataset,
         "seed": args.seed,
         "eval_seed": args.eval_seed,
-        "regularizer": (
-            "weight_decay_weights_only" if args.method == "l2wo" else "mne_l2_unmatched"
-        ),
+        "regularizer": {
+            "l2wo": "weight_decay_weights_only",
+            "l1wo": "l1",
+        }.get(args.method, "mne_l2_unmatched"),
         "layer_map": LAYER_MAP[args.arch],
-        "unmatched_scope": None if args.method == "l2wo" else "head",
+        "unmatched_scope": None if args.method in ("l2wo", "l1wo") else "head",
         "nabla_gamma": nabla_gamma,
         "nabla_lambda": nabla_lambda,
-        "reg_coeff": None if args.method == "l2wo" else MNE_RC,
-        "unmatched_l2_coeff": 0.0 if args.method == "l2wo" else L2_WD,
+        "reg_coeff": { "l2wo": None, "l1wo": L1_RC }.get(args.method, MNE_RC),
+        "unmatched_l2_coeff": 0.0 if args.method in ("l2wo", "l1wo") else L2_WD,
         "weight_decay": L2_WD if args.method == "l2wo" else 0.0,
         "checkpoint": str(checkpoint),
         "selection_uses_test": False,

@@ -10,12 +10,13 @@
 #PBS -l wd
 #PBS -j oe
 
-# CIFAR independent checkpoint selection, seed 42, V100.
+# CIFAR independent checkpoint selection, seed 42, V100, VGG-16 only.
 # Train 45k / select 5k holdout ANN acc. Official test is logged only.
 # DATASET: cifar10 | cifar100
-# ARCH: vgg16 | resnet18
-# METHOD: l2wo | detach | lambda | fgmneu
+# ARCH: vgg16
+# METHOD: l2wo | l1wo | lambda
 # Locked eta. Do not retune. Do not overwrite existing result trees.
+# Do not submit detach, fgmneu, or resnet18 here.
 #
 #   cd /home/595/sl9144/codes/snn_simulation
 #   git fetch origin codex/task-cov-mne-resnet18
@@ -29,27 +30,22 @@
 #   OUT=/scratch/gs14/sl9144/snn_results/cifar_independent_ckpt_seed42
 #   for DS in cifar10 cifar100; do
 #     TAG=${DS#cifar}
-#     for ARCH in vgg16 resnet18; do
-#       ATAG=v16
-#       if [[ ${ARCH} == resnet18 ]]; then ATAG=r18; fi
-#       for METHOD in l2wo detach lambda fgmneu; do
-#         MTAG=${METHOD}
-#         if [[ ${METHOD} == l2wo ]]; then MTAG=l2w; fi
-#         if [[ ${METHOD} == detach ]]; then MTAG=det; fi
-#         if [[ ${METHOD} == lambda ]]; then MTAG=lam; fi
-#         if [[ ${METHOD} == fgmneu ]]; then MTAG=fgm; fi
-#         qsub -N "ic${TAG}_${ATAG}_${MTAG}" -l walltime=36:00:00 \
-#           -v CIFAR_ROOT,DATASET=${DS},ARCH=${ARCH},METHOD=${METHOD},OUT_DIR=${OUT} \
-#           ${PBS}
-#       done
+#     for METHOD in l2wo l1wo lambda; do
+#       MTAG=${METHOD}
+#       if [[ ${METHOD} == l2wo ]]; then MTAG=l2w; fi
+#       if [[ ${METHOD} == l1wo ]]; then MTAG=l1w; fi
+#       if [[ ${METHOD} == lambda ]]; then MTAG=lam; fi
+#       qsub -N "ic${TAG}_v16_${MTAG}" -l walltime=36:00:00 \
+#         -v CIFAR_ROOT,DATASET=${DS},ARCH=vgg16,METHOD=${METHOD},OUT_DIR=${OUT} \
+#         ${PBS}
 #     done
 #   done
 
 set -euo pipefail
 
 DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
-ARCH="${ARCH:?set ARCH=vgg16|resnet18}"
-METHOD="${METHOD:?set METHOD=l2wo|detach|lambda|fgmneu}"
+ARCH="${ARCH:?set ARCH=vgg16}"
+METHOD="${METHOD:?set METHOD=l2wo|l1wo|lambda}"
 SEED="${SEED:-42}"
 EVAL_SEED="${EVAL_SEED:-0}"
 case "${DATASET}" in
@@ -57,11 +53,19 @@ case "${DATASET}" in
   *) echo "ERROR: invalid DATASET=${DATASET}"; exit 2 ;;
 esac
 case "${ARCH}" in
-  vgg16|resnet18) ;;
+  vgg16) ;;
+  resnet18)
+    echo "ERROR: independent-ckpt table is VGG-16 only; do not submit ${ARCH}"
+    exit 2
+    ;;
   *) echo "ERROR: invalid ARCH=${ARCH}"; exit 2 ;;
 esac
 case "${METHOD}" in
-  l2wo|detach|lambda|fgmneu) ;;
+  l2wo|l1wo|lambda) ;;
+  detach|fgmneu)
+    echo "ERROR: ${METHOD} is not in the VGG independent-ckpt table"
+    exit 2
+    ;;
   *) echo "ERROR: invalid METHOD=${METHOD}"; exit 2 ;;
 esac
 
