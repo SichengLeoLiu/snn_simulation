@@ -7,6 +7,7 @@ Same-map ResNet comparison. Coefficients locked to the ImageNet L2-wo budget:
     detach    train MNE-L2, resnet map, detach λ/γ, rc=1e-4
     nodetach  train MNE-L2, resnet map, grads into λ and BN γ
     fgmneu    train FG-MNE-U: no-detach MNE + unmatched-head L2, η_U=1e-4
+    lambda    train ∇λ-only + unmatched-head L2; γ stays detached; η_U=1e-4
 
 Do not reuse the five-regs old_detach checkpoint in the main table: it used
 the default legacy map. Do not retune rc or η_U from the test curve.
@@ -68,8 +69,9 @@ L2WO_MATRIX_CANDIDATES = [
         f"_mode_{IF_MODE}_schedule_normal_seed_{SEED}.csv"
     ),
 ]
-METHOD_ORDER = ["l2wo", "detach", "nodetach", "fgmneu"]
-TRAIN_METHODS = ("detach", "nodetach", "fgmneu")
+METHOD_ORDER = ["l2wo", "detach", "nodetach", "fgmneu", "lambda"]
+TRAIN_METHODS = ("detach", "nodetach", "fgmneu", "lambda")
+UNMATCHED_METHODS = ("l2wo", "fgmneu", "lambda")
 
 
 def parse_args() -> argparse.Namespace:
@@ -152,6 +154,21 @@ def method_specs() -> dict:
             "train": True,
             "train_args": [
                 "--mne_no_detach_bn_affine",
+                "--mne_layer_map",
+                LAYER_MAP,
+                "--unmatched_l2_coeff",
+                str(L2_WD),
+                "--mne_unmatched_scope",
+                "head",
+            ],
+        },
+        "lambda": {
+            "label": r"$\nabla\lambda$ only + unmatched L2",
+            "regularizer": "mne_l2_unmatched",
+            "weight_decay": 0.0,
+            "reg_coeff": MNE_RC,
+            "train": True,
+            "train_args": [
                 "--mne_layer_map",
                 LAYER_MAP,
                 "--unmatched_l2_coeff",
@@ -427,7 +444,9 @@ def write_scorecard(method: str, spec: dict, ckpt: Path, curve: dict, args) -> N
         "regularizer": spec["regularizer"],
         "layer_map": LAYER_MAP if method != "l2wo" else "n/a",
         "eta_mne": None if method == "l2wo" else MNE_RC,
-        "eta_u": L2_WD if method in ("l2wo", "fgmneu") else 0.0,
+        "eta_u": L2_WD if method in UNMATCHED_METHODS else 0.0,
+        "nabla_gamma": method in ("nodetach", "fgmneu"),
+        "nabla_lambda": method in ("nodetach", "fgmneu", "lambda"),
         "checkpoint": str(ckpt),
         "test_clean": clean,
         "test_sigma5": s5,
@@ -498,6 +517,7 @@ def aggregate(args, specs: dict) -> None:
         "detach": dict(label=r"MNE detach", color="#E69F00", ls="--"),
         "nodetach": dict(label=r"MNE no-detach", color="#6A3D9A", ls="-"),
         "fgmneu": dict(label=r"FG-MNE-U", color="#D55E00", ls="-"),
+        "lambda": dict(label=r"$\nabla\lambda$ only", color="#0072B2", ls="-"),
     }
     fig, ax = plt.subplots(figsize=(8.8, 5.8), dpi=220)
     for method in METHOD_ORDER:
@@ -568,6 +588,11 @@ def self_check() -> None:
     assert "--mne_layer_map" in det
     nd = train_cmd(args, "nodetach", specs["nodetach"])
     assert "--mne_no_detach_bn_affine" in nd and "--mne_detach_lambda" not in nd
+    lam = train_cmd(args, "lambda", specs["lambda"])
+    assert lam[lam.index("--regularizer") + 1] == "mne_l2_unmatched"
+    assert lam[lam.index("--unmatched_l2_coeff") + 1] == str(L2_WD)
+    assert "--mne_no_detach_bn_affine" not in lam
+    assert "--mne_detach_lambda" not in lam
     assert specs["l2wo"]["train"] is False
     print("[self-check] ImageNet FG-MNE-U flags ok", flush=True)
 
@@ -589,7 +614,7 @@ def main() -> None:
         if method in TRAIN_METHODS:
             print(
                 f"[INFO] train FG-MNE family method={method} map={LAYER_MAP} "
-                f"η_MNE={MNE_RC} η_U={L2_WD if method == 'fgmneu' else 0.0}",
+                f"η_MNE={MNE_RC} η_U={L2_WD if method in ('fgmneu', 'lambda') else 0.0}",
                 flush=True,
             )
         ckpt = train_one(args, method, spec)
@@ -603,7 +628,7 @@ def main() -> None:
                         "method": method,
                         "layer_map": LAYER_MAP if method != "l2wo" else "n/a",
                         "eta_mne": None if method == "l2wo" else MNE_RC,
-                        "eta_u": L2_WD if method in ("l2wo", "fgmneu") else 0.0,
+                        "eta_u": L2_WD if method in UNMATCHED_METHODS else 0.0,
                         "checkpoint": str(ckpt),
                     },
                     indent=2,

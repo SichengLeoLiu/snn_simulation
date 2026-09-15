@@ -1,0 +1,118 @@
+#!/bin/bash
+#PBS -N vlam5
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=36:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR VGG-16 ∇λ-only + unmatched L2, 5-seed completion.
+# SEED: 40 41 43 44. Seed 42 already trained as fgl10 / fgl100.
+# Same locked η as FG-MNE-U / A4. Legacy map. EVAL_SEED=0.
+# Writes into cifar_fgmneu_grad_ablation_seed42/.../vgg16_fgmneu_lambda/seed{S}.
+# Do not retune. Do not resubmit seed 42. Do not submit ∇γ. Do not touch ImageNet.
+#
+#   cd /home/595/sl9144/codes/snn_simulation
+#   git fetch origin codex/task-cov-mne-resnet18
+#   git checkout origin/codex/task-cov-mne-resnet18 -- \
+#     QCFS_simulation/noise3_exp/run_cifar_fgmneu_grad_ablation_seed42.py \
+#     QCFS_simulation/noise3_exp/pbs_cifar_vgg16_fgmneu_lambda_5seed.pbs
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   PBS=QCFS_simulation/noise3_exp/pbs_cifar_vgg16_fgmneu_lambda_5seed.pbs
+#   OUT=/scratch/gs14/sl9144/snn_results/cifar_fgmneu_grad_ablation_seed42
+#   for DS in cifar10 cifar100; do
+#     TAG=${DS#cifar}
+#     for S in 40 41 43 44; do
+#       qsub -N "vlam${TAG}s${S}" -l walltime=36:00:00 \
+#         -v CIFAR_ROOT,DATASET=${DS},SEED=${S},OUT_DIR=${OUT} ${PBS}
+#     done
+#   done
+
+set -euo pipefail
+
+DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
+SEED="${SEED:?set SEED=40|41|43|44}"
+EVAL_SEED="${EVAL_SEED:-0}"
+GRAD="lambda"
+SKIP_DIAG="${SKIP_DIAG:-1}"
+case "${DATASET}" in
+  cifar10|cifar100) ;;
+  *) echo "ERROR: invalid DATASET=${DATASET}"; exit 2 ;;
+esac
+case "${SEED}" in
+  40|41|43|44) ;;
+  42)
+    echo "ERROR: seed 42 already trained as fgl10/fgl100; do not resubmit"
+    exit 2
+    ;;
+  *) echo "ERROR: invalid SEED=${SEED} (use 40 41 43 44)"; exit 2 ;;
+esac
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/vgg_lambda_${DATASET}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_fgmneu_grad_ablation_seed42}"
+mkdir -p "${OUT_DIR}"
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "host=$(hostname) date=$(date) DATASET=${DATASET} GRAD=${GRAD} SEED=${SEED} EVAL_SEED=${EVAL_SEED}"
+echo "ROOT=${ROOT} OUT_DIR=${OUT_DIR} SKIP_DIAG=${SKIP_DIAG}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+echo "NOTE: VGG ∇λ-only + unmatched L2; γ still detached; 5-seed completion; do not retune; do not touch ImageNet"
+
+if [[ "${DATASET}" == "cifar10" && ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+  echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+if [[ "${DATASET}" == "cifar100" && ! -f "${CIFAR_ROOT}/cifar-100-python/meta" ]]; then
+  echo "ERROR: CIFAR-100 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+
+ARGS=(
+  --dataset "${DATASET}"
+  --grad "${GRAD}"
+  --seed "${SEED}"
+  --eval-seed "${EVAL_SEED}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${CIFAR_BATCH}"
+  --workers "${CIFAR_NUM_WORKERS}"
+)
+if [[ "${SKIP_DIAG}" == "1" ]]; then
+  ARGS+=(--skip-diag)
+fi
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+
+python -u noise3_exp/run_cifar_fgmneu_grad_ablation_seed42.py "${ARGS[@]}"
+echo "DONE $(date) DATASET=${DATASET} SEED=${SEED}"
+ls -la "${OUT_DIR}/${DATASET}/vgg16_fgmneu_lambda/seed${SEED}" || true

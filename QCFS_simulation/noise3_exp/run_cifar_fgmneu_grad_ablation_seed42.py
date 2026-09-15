@@ -332,6 +332,13 @@ def self_check() -> None:
     det = train_cmd(ns)
     if "--mne_detach_lambda" not in det or "--mne_no_detach_bn_affine" in det:
         raise AssertionError(f"detach flags wrong: {det}")
+    ns.seed = 40
+    ns.grad = "lambda"
+    lam40 = train_cmd(ns)
+    if lam40[lam40.index("--seed") + 1] != "40":
+        raise AssertionError("5-seed λ-only jobs must pass --seed")
+    if f"seed{40}" not in str(ckpt_path(ns)):
+        raise AssertionError("5-seed λ-only must write seed40 beside seed42")
     print("[self-check] FG-MNE-U grad flags ok", flush=True)
 
 
