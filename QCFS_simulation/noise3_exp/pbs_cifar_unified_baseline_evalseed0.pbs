@@ -25,7 +25,7 @@
 #     QCFS_simulation/noise3_exp/run_cifar_unified_baseline_evalseed0.py \
 #     QCFS_simulation/noise3_exp/pbs_cifar_unified_baseline_evalseed0.pbs
 #   export CIFAR_ROOT=/home/595/sl9144/datasets
-#   python QCFS_simulation/noise3_exp/run_cifar_unified_baseline_evalseed0.py --self-check
+#   python3 QCFS_simulation/noise3_exp/run_cifar_unified_baseline_evalseed0.py --self-check
 #   PBS=QCFS_simulation/noise3_exp/pbs_cifar_unified_baseline_evalseed0.pbs
 #   OUT=/scratch/gs14/sl9144/snn_results/cifar_unified_baseline_evalseed0
 

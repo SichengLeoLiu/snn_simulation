@@ -202,6 +202,13 @@ def ckpt_candidates(arch: str, dataset: str, method: str, seed: int) -> list[Pat
                 / "checkpoints"
                 / "vgg16_L[16]_comp_l2wo_fixed_seed42_L16_trainT0.pth"
             )
+        if method == "l1wo":
+            strict = (
+                f"vgg16_L[16]_strict_seed{seed}_schemeC_noout_l1_l16_vgg16_rc1em05.pth"
+            )
+            for root in roots:
+                paths.append(root / f"{dataset}-checkpoints" / strict)
+                paths.append(root / dataset / strict)
         return _unique(paths)
     if method == "l1wo":
         rel = Path("cifar_resnet18_l1wo_5seed") / dataset / "r18_l1wo" / f"seed{seed}" / "checkpoints" / f"resnet18_L[16]_r18_l1wo_seed{seed}_L16_trainT0.pth"
@@ -490,7 +497,10 @@ def self_check() -> None:
         raise AssertionError("VGG L2-all must resolve five-regs weight_decay ckpts")
     vgg_l1 = " ".join(str(p) for p in ckpt_candidates("vgg16", "cifar100", "l1wo", 40))
     if "l1_rc1em05" not in vgg_l1:
-        raise AssertionError("VGG L1-wo must resolve five-regs l1 ckpts")
+        raise AssertionError("VGG CIFAR-100 L1-wo must resolve five-regs l1 ckpts")
+    vgg_l1_c10 = " ".join(str(p) for p in ckpt_candidates("vgg16", "cifar10", "l1wo", 40))
+    if "schemeC_noout_l1" not in vgg_l1_c10:
+        raise AssertionError("CIFAR-10 VGG L1-wo uses strict_seed schemeC names")
     r18_l1 = str(ckpt_candidates("resnet18", "cifar10", "l1wo", 42)[0])
     if "cifar_resnet18_l1wo_5seed" not in r18_l1:
         raise AssertionError("ResNet L1-wo lives in cifar_resnet18_l1wo_5seed")
@@ -532,7 +542,13 @@ def eval_one(args, seed: int) -> None:
         checkpoint = train_noiseinj(args, seed)
         reused = False
     else:
-        checkpoint = resolve_ckpt(args.arch, args.dataset, args.method, seed)
+        try:
+            checkpoint = resolve_ckpt(args.arch, args.dataset, args.method, seed)
+        except FileNotFoundError as exc:
+            if args.dry_run or args.dry_resolve:
+                print(f"[MISSING] {exc}", flush=True)
+                return
+            raise
         reused = True
         print(f"[REUSE] {checkpoint}", flush=True)
     if args.dry_run or args.dry_resolve:
