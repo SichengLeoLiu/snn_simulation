@@ -1,0 +1,109 @@
+#!/bin/bash
+#PBS -N lamlscale
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=36:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR seed-42 nabla-lambda-only at L=T in {4,8,32}.
+# Locked eta. VGG legacy / ResNet residual map. EVAL_SEED=0.
+# Train T=0, eval T=L. Do not train L=16. New tree only.
+#
+#   PBS=QCFS_simulation/noise3_exp/pbs_cifar_fgmneu_lambda_lscale_seed42.pbs
+#   OUT=/scratch/gs14/sl9144/snn_results/cifar_fgmneu_lambda_lscale_seed42
+
+set -euo pipefail
+
+ARCH="${ARCH:?set ARCH=vgg16|resnet18}"
+DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
+QUANT_L="${QUANT_L:?set QUANT_L=4|8|32}"
+SEED="${SEED:-42}"
+EVAL_SEED="${EVAL_SEED:-0}"
+case "${ARCH}" in
+  vgg16|resnet18) ;;
+  *) echo "ERROR: invalid ARCH=${ARCH}"; exit 2 ;;
+esac
+case "${DATASET}" in
+  cifar10|cifar100) ;;
+  *) echo "ERROR: invalid DATASET=${DATASET}"; exit 2 ;;
+esac
+case "${QUANT_L}" in
+  4|8|32) ;;
+  16)
+    echo "ERROR: L=16 lambda-only already exists; refuse to train"
+    exit 2
+    ;;
+  *) echo "ERROR: invalid QUANT_L=${QUANT_L}"; exit 2 ;;
+esac
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/lamlscale_${ARCH}_${DATASET}_L${QUANT_L}_seed${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_fgmneu_lambda_lscale_seed42}"
+mkdir -p "${OUT_DIR}"
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "host=$(hostname) date=$(date) ARCH=${ARCH} DATASET=${DATASET} L=T=${QUANT_L}"
+echo "ROOT=${ROOT} OUT_DIR=${OUT_DIR} SEED=${SEED} EVAL_SEED=${EVAL_SEED}"
+echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
+echo "NOTE: lambda-only L-scale; train T=0 eval T=L; do not retune; do not touch L=16/ImageNet"
+
+if [[ "${DATASET}" == "cifar10" && ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+  echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+if [[ "${DATASET}" == "cifar100" && ! -f "${CIFAR_ROOT}/cifar-100-python/meta" ]]; then
+  echo "ERROR: CIFAR-100 missing under CIFAR_ROOT=${CIFAR_ROOT}"
+  exit 1
+fi
+
+ARGS=(
+  --arch "${ARCH}"
+  --dataset "${DATASET}"
+  --quant-L "${QUANT_L}"
+  --seed "${SEED}"
+  --eval-seed "${EVAL_SEED}"
+  --out-root "${OUT_DIR}"
+  --batch-size "${CIFAR_BATCH}"
+  --workers "${CIFAR_NUM_WORKERS}"
+)
+if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+  ARGS+=(--test-only)
+fi
+if [[ "${RETRAIN:-0}" == "1" ]]; then
+  ARGS+=(--retrain)
+fi
+if [[ "${FORCE:-0}" == "1" ]]; then
+  ARGS+=(--force)
+fi
+
+python3 -u noise3_exp/run_cifar_fgmneu_lambda_lscale_seed42.py "${ARGS[@]}"
+echo "DONE $(date) ARCH=${ARCH} DATASET=${DATASET} L=${QUANT_L}"
+ls -la "${OUT_DIR}/${DATASET}" || true
+
