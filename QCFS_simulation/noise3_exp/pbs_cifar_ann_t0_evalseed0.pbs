@@ -1,8 +1,8 @@
 #!/bin/bash
-#PBS -N annt0eval
+#PBS -N annt0pan
 #PBS -P gs14
 #PBS -q gpuvolta
-#PBS -l walltime=04:00:00
+#PBS -l walltime=08:00:00
 #PBS -l ncpus=12
 #PBS -l ngpus=1
 #PBS -l mem=80GB
@@ -11,11 +11,9 @@
 #PBS -j oe
 
 # T=0 ANN eval of already-trained CIFAR checkpoints.
-# DATASET: cifar10 | cifar100
-# ARCH: vgg16 | resnet18
-# METHOD: l2all | l2wo | l1wo | lambda
-# Reuse existing ckpts, loop seeds 40-44, no retrain.
-# Writes a NEW tree. Do not overwrite T=16 unified / lambda / ImageNet trees.
+# One GPU = one panel: DATASET x ARCH, looping l2all/l2wo/l1wo/lambda and seeds 40-44.
+# Submit 4 jobs. Optional METHOD=... restricts to one method.
+# Reuse existing ckpts, no retrain. New tree only.
 #
 #   cd /home/595/sl9144/codes/snn_simulation
 #   git fetch origin
@@ -31,7 +29,6 @@ set -euo pipefail
 
 DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
 ARCH="${ARCH:?set ARCH=vgg16|resnet18}"
-METHOD="${METHOD:?set METHOD=l2all|l2wo|l1wo|lambda}"
 EVAL_SEED="${EVAL_SEED:-0}"
 SEEDS="${SEEDS:-40 41 42 43 44}"
 case "${DATASET}" in
@@ -42,14 +39,16 @@ case "${ARCH}" in
   vgg16|resnet18) ;;
   *) echo "ERROR: invalid ARCH=${ARCH}"; exit 2 ;;
 esac
-case "${METHOD}" in
-  l2all|l2wo|l1wo|lambda) ;;
-  *) echo "ERROR: invalid METHOD=${METHOD}"; exit 2 ;;
-esac
+if [[ -n "${METHOD:-}" ]]; then
+  case "${METHOD}" in
+    l2all|l2wo|l1wo|lambda) ;;
+    *) echo "ERROR: invalid METHOD=${METHOD}"; exit 2 ;;
+  esac
+fi
 
 SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
 mkdir -p "${SCRATCH_LOG}"
-LIVE_LOG="${SCRATCH_LOG}/annt0_${ARCH}_${METHOD}_${DATASET}.${PBS_JOBID:-manual}.out"
+LIVE_LOG="${SCRATCH_LOG}/annt0_${ARCH}_${DATASET}${METHOD:+_${METHOD}}.${PBS_JOBID:-manual}.out"
 exec > "${LIVE_LOG}" 2>&1
 
 module purge
@@ -75,10 +74,10 @@ cd "${ROOT}"
 OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_ann_t0_evalseed0}"
 mkdir -p "${OUT_DIR}"
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "host=$(hostname) date=$(date) ARCH=${ARCH} METHOD=${METHOD} DATASET=${DATASET}"
+echo "host=$(hostname) date=$(date) ARCH=${ARCH} DATASET=${DATASET} METHOD=${METHOD:-all4}"
 echo "ROOT=${ROOT} OUT_DIR=${OUT_DIR} EVAL_SEED=${EVAL_SEED} T=0"
 echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
-echo "NOTE: ANN T=0 eval-only; reuse existing ckpts; do not train"
+echo "NOTE: ANN T=0 eval-only; one GPU per (dataset, arch); reuse ckpts; do not train"
 
 if [[ "${DATASET}" == "cifar10" && ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
   echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
@@ -94,13 +93,15 @@ SEED_ARR=(${SEEDS})
 ARGS=(
   --arch "${ARCH}"
   --dataset "${DATASET}"
-  --method "${METHOD}"
   --eval-seed "${EVAL_SEED}"
   --seeds "${SEED_ARR[@]}"
   --out-root "${OUT_DIR}"
   --batch-size "${CIFAR_BATCH}"
   --workers "${CIFAR_NUM_WORKERS}"
 )
+if [[ -n "${METHOD:-}" ]]; then
+  ARGS+=(--method "${METHOD}")
+fi
 if [[ "${FORCE:-0}" == "1" ]]; then
   ARGS+=(--force)
 fi
@@ -109,6 +110,5 @@ if [[ "${DRY_RESOLVE:-0}" == "1" ]]; then
 fi
 
 python3 -u noise3_exp/run_cifar_ann_t0_evalseed0.py "${ARGS[@]}"
-echo "DONE $(date) ARCH=${ARCH} METHOD=${METHOD} DATASET=${DATASET}"
-ls -la "${OUT_DIR}/${DATASET}/${ARCH}_${METHOD}" || true
-
+echo "DONE $(date) ARCH=${ARCH} DATASET=${DATASET} METHOD=${METHOD:-all4}"
+ls -la "${OUT_DIR}/${DATASET}" || true

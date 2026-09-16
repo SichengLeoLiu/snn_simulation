@@ -8,7 +8,8 @@ unified tree, λ-only trees, FG-MNE-U, ImageNet, or historical five-regs.
 Locked eval: EVAL_SEED=0, post_input_if Gaussian, σ ∈ {0,1,2,3,5}.
 σ=0 is the ANN number for tables. The σ sweep is the ANN robustness curve.
 
-Writes /scratch/.../cifar_ann_t0_evalseed0
+Writes /scratch/.../cifar_ann_t0_evalseed0. Gadi default is 4 GPUs:
+one job per (dataset, arch), looping all four methods and seeds 40-44.
 """
 from __future__ import annotations
 
@@ -73,6 +74,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--arch", choices=ARCHS, default=None)
     parser.add_argument("--dataset", choices=DATASETS, default=None)
     parser.add_argument("--method", choices=METHODS, default=None)
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="One process: both datasets, both archs, all four methods. Prefer 4 GPU panels.",
+    )
     parser.add_argument("--seeds", nargs="+", type=int, default=list(DEFAULT_SEEDS))
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--sigmas", nargs="+", type=float, default=list(DEFAULT_SIGMAS))
@@ -96,12 +102,16 @@ def parse_args() -> argparse.Namespace:
     args.sigmas = sorted({float(s) for s in args.sigmas})
     if args.self_check or args.summarize:
         return args
-    if args.arch is None or args.dataset is None or args.method is None:
-        parser.error("--arch --dataset --method are required unless --self-check/--summarize")
     if args.seed is not None:
         args.seeds = [int(args.seed)]
     else:
         args.seeds = [int(s) for s in args.seeds]
+    if args.all:
+        if args.arch is not None or args.dataset is not None or args.method is not None:
+            parser.error("--all cannot be combined with --arch/--dataset/--method")
+        return args
+    if args.arch is None or args.dataset is None:
+        parser.error("--arch and --dataset are required unless --all/--self-check/--summarize")
     return args
 
 
@@ -178,6 +188,11 @@ def self_check() -> None:
         raise AssertionError("ResNet λ-only must reuse the existing lambda tree")
     if TEST_T == 16:
         raise AssertionError("must not silently fall back to SNN T=16")
+    n_panels = len(DATASETS) * len(ARCHS)
+    if n_panels != 4:
+        raise AssertionError(f"expected 4 GPU panels, got {n_panels}")
+    if len(METHODS) != 4:
+        raise AssertionError("each panel must loop four methods")
     print("[self-check] ANN T=0 eval-only flags ok", flush=True)
 
 
@@ -267,13 +282,32 @@ def main() -> None:
         summarize(args.out_root)
         return
     args.out_root.mkdir(parents=True, exist_ok=True)
+    if args.all:
+        combos = [
+            (dataset, arch, method)
+            for dataset in DATASETS
+            for arch in ARCHS
+            for method in METHODS
+        ]
+    else:
+        methods = METHODS if args.method is None else (args.method,)
+        combos = [(args.dataset, args.arch, method) for method in methods]
     print(
-        f"[INFO] ANN T=0 {args.arch} {args.method} {args.dataset} "
-        f"seeds={args.seeds} eval_seed={args.eval_seed} sigmas={args.sigmas}",
+        f"[INFO] ANN T=0 combos={len(combos)} seeds={args.seeds} "
+        f"eval_seed={args.eval_seed} sigmas={args.sigmas}",
         flush=True,
     )
-    for seed in args.seeds:
-        eval_one(args, seed)
+    for dataset, arch, method in combos:
+        args.dataset = dataset
+        args.arch = arch
+        args.method = method
+        print(
+            f"[INFO] ANN T=0 {args.arch} {args.method} {args.dataset} "
+            f"seeds={args.seeds}",
+            flush=True,
+        )
+        for seed in args.seeds:
+            eval_one(args, seed)
 
 
 if __name__ == "__main__":
