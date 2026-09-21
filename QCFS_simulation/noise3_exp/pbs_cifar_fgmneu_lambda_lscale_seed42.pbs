@@ -15,8 +15,9 @@
 # Train T=0, eval T=L. Do not train L=16. New tree only.
 #
 # DATASET=cifar10|cifar100|both
-#   both -> run C10 on GPU0 and C100 on GPU1 in one job.
-#   qsub with: -l ncpus=24,ngpus=2,mem=160GB -v DATASET=both,...
+#   both -> C10 then C100 on the same GPU (sequential). Use 1 GPU.
+#   PARALLEL_BOTH=1 + ngpus>=2 -> C10/C100 in parallel on GPU0/1.
+#   qsub: -l ncpus=12,ngpus=1,mem=80GB -v DATASET=both,...
 #
 #   PBS=QCFS_simulation/noise3_exp/pbs_cifar_fgmneu_lambda_lscale_seed42.pbs
 #   OUT=/scratch/gs14/sl9144/snn_results/cifar_fgmneu_lambda_lscale_seed42
@@ -118,20 +119,27 @@ run_one() {
 }
 
 if [[ "${DATASET}" == "both" ]]; then
-  if [[ "${PBS_NGPUS:-1}" -lt 2 ]]; then
-    echo "ERROR: DATASET=both needs ngpus>=2 (qsub -l ncpus=24,ngpus=2,mem=160GB)"
-    exit 2
-  fi
-  run_one cifar10 0 &
-  pid10=$!
-  run_one cifar100 1 &
-  pid100=$!
-  status=0
-  wait "${pid10}" || status=1
-  wait "${pid100}" || status=1
-  if [[ "${status}" -ne 0 ]]; then
-    echo "ERROR: one or both dataset workers failed"
-    exit 1
+  if [[ "${PARALLEL_BOTH:-0}" == "1" ]]; then
+    if [[ "${PBS_NGPUS:-1}" -lt 2 ]]; then
+      echo "ERROR: PARALLEL_BOTH=1 needs ngpus>=2"
+      exit 2
+    fi
+    echo "[MODE] DATASET=both parallel on GPU0/GPU1"
+    run_one cifar10 0 &
+    pid10=$!
+    run_one cifar100 1 &
+    pid100=$!
+    status=0
+    wait "${pid10}" || status=1
+    wait "${pid100}" || status=1
+    if [[ "${status}" -ne 0 ]]; then
+      echo "ERROR: one or both dataset workers failed"
+      exit 1
+    fi
+  else
+    echo "[MODE] DATASET=both sequential on GPU0 (cifar10 then cifar100)"
+    run_one cifar10 0
+    run_one cifar100 0
   fi
 else
   run_one "${DATASET}" 0

@@ -14,7 +14,8 @@
 # Locked: FG-MNE-U η_MNE=1e-4 η_U=5e-4; L1-wo rc=1e-5. Do not retune.
 # Default arch=vgg16. Do not train L=16.
 # DATASET: cifar10 | cifar100 | both
-#   both -> C10 on GPU0, C100 on GPU1 (qsub -l ncpus=24,ngpus=2,mem=160GB)
+#   both -> C10 then C100 on same GPU (sequential). Use 1 GPU / 80GB.
+#   PARALLEL_BOTH=1 + ngpus>=2 -> parallel on GPU0/1.
 # Multi-seed: set OUT_DIR per seed (cfg_dir has no seed folder).
 
 set -euo pipefail
@@ -117,20 +118,27 @@ run_one() {
 }
 
 if [[ "${DATASET}" == "both" ]]; then
-  if [[ "${PBS_NGPUS:-1}" -lt 2 ]]; then
-    echo "ERROR: DATASET=both needs ngpus>=2 (qsub -l ncpus=24,ngpus=2,mem=160GB)"
-    exit 2
-  fi
-  run_one cifar10 0 &
-  pid10=$!
-  run_one cifar100 1 &
-  pid100=$!
-  status=0
-  wait "${pid10}" || status=1
-  wait "${pid100}" || status=1
-  if [[ "${status}" -ne 0 ]]; then
-    echo "ERROR: one or both dataset workers failed"
-    exit 1
+  if [[ "${PARALLEL_BOTH:-0}" == "1" ]]; then
+    if [[ "${PBS_NGPUS:-1}" -lt 2 ]]; then
+      echo "ERROR: PARALLEL_BOTH=1 needs ngpus>=2"
+      exit 2
+    fi
+    echo "[MODE] DATASET=both parallel on GPU0/GPU1"
+    run_one cifar10 0 &
+    pid10=$!
+    run_one cifar100 1 &
+    pid100=$!
+    status=0
+    wait "${pid10}" || status=1
+    wait "${pid100}" || status=1
+    if [[ "${status}" -ne 0 ]]; then
+      echo "ERROR: one or both dataset workers failed"
+      exit 1
+    fi
+  else
+    echo "[MODE] DATASET=both sequential on GPU0 (cifar10 then cifar100)"
+    run_one cifar10 0
+    run_one cifar100 0
   fi
 else
   run_one "${DATASET}" 0
