@@ -269,8 +269,15 @@ def eval_trained(args, checkpoint: Path) -> None:
     device = get_torch_device(args.device)
     pin = device.type == "cuda"
     model = load_snn(checkpoint, device, args.arch, args.dataset, quant_l)
-    if int(getattr(model, "T", -1)) != quant_l or int(getattr(model, "L", -1)) != quant_l:
-        raise RuntimeError(f"expected T=L={quant_l}, got T={getattr(model,'T',None)} L={getattr(model,'L',None)}")
+    # ResNet/VGG keep L on IF modules, not model.L; T is on the root model.
+    from Models.layer import IF
+
+    if_ls = [int(m.L) for m in model.modules() if isinstance(m, IF)]
+    if int(getattr(model, "T", -1)) != quant_l or not if_ls or any(L != quant_l for L in if_ls):
+        raise RuntimeError(
+            f"expected T=L={quant_l}, got T={getattr(model, 'T', None)} "
+            f"IF.L={sorted(set(if_ls)) if if_ls else None}"
+        )
     val_rows = sweep(
         model,
         val_loader(args, pin),
