@@ -10,33 +10,17 @@
 #PBS -l wd
 #PBS -j oe
 
-# CIFAR seed-42 FG-MNE-U / L1-wo at L=T in {4,8,32}.
+# CIFAR FG-MNE-U / L1-wo at L=T in {4,8,32}.
 # Locked: FG-MNE-U η_MNE=1e-4 η_U=5e-4; L1-wo rc=1e-5. Do not retune.
-# Default arch=vgg16 to match existing L2 lscale. Do not train L=16.
-# New directory only. Do not overwrite l2/mne lscale, four-regs, or ImageNet.
-#
-#   cd /home/595/sl9144/codes/snn_simulation
-#   git fetch origin codex/task-cov-mne-resnet18
-#   git checkout origin/codex/task-cov-mne-resnet18 -- \
-#     QCFS_simulation/noise3_exp/run_cifar_fgmneu_l1_lscale_seed42.py \
-#     QCFS_simulation/noise3_exp/pbs_cifar_fgmneu_l1_lscale_seed42.pbs
-#   export CIFAR_ROOT=/home/595/sl9144/datasets
-#   PBS=QCFS_simulation/noise3_exp/pbs_cifar_fgmneu_l1_lscale_seed42.pbs
-#   OUT=/scratch/gs14/sl9144/snn_results/cifar_fgmneu_l1_lscale_seed42
-#   for DS in cifar10 cifar100; do
-#     TAG=${DS#cifar}
-#     for M in fgmneu l1wo; do
-#       for L in 4 8 32; do
-#         qsub -N "fl${TAG}${M}_L${L}" -l walltime=24:00:00 \
-#           -v CIFAR_ROOT,DATASET=${DS},METHOD=${M},QUANT_L=${L},OUT_DIR=${OUT} ${PBS}
-#       done
-#     done
-#   done
+# Default arch=vgg16. Do not train L=16.
+# DATASET: cifar10 | cifar100 | both
+#   both -> C10 on GPU0, C100 on GPU1 (qsub -l ncpus=24,ngpus=2,mem=160GB)
+# Multi-seed: set OUT_DIR per seed (cfg_dir has no seed folder).
 
 set -euo pipefail
 
 ARCH="${ARCH:-vgg16}"
-DATASET="${DATASET:?set DATASET=cifar10|cifar100}"
+DATASET="${DATASET:?set DATASET=cifar10|cifar100|both}"
 METHOD="${METHOD:?set METHOD=fgmneu|l1wo}"
 QUANT_L="${QUANT_L:?set QUANT_L=4|8|32}"
 SEED="${SEED:-42}"
@@ -46,7 +30,7 @@ case "${ARCH}" in
   *) echo "ERROR: invalid ARCH=${ARCH}"; exit 2 ;;
 esac
 case "${DATASET}" in
-  cifar10|cifar100) ;;
+  cifar10|cifar100|both) ;;
   *) echo "ERROR: invalid DATASET=${DATASET}"; exit 2 ;;
 esac
 case "${METHOD}" in
@@ -93,36 +77,64 @@ mkdir -p "${OUT_DIR}"
 echo "LIVE_LOG=${LIVE_LOG}"
 echo "host=$(hostname) date=$(date) ARCH=${ARCH} DATASET=${DATASET} METHOD=${METHOD} L=${QUANT_L} SEED=${SEED}"
 echo "ROOT=${ROOT} OUT_DIR=${OUT_DIR}"
+echo "ngpus=${PBS_NGPUS:-?} ncpus=${PBS_NCPUS:-?}"
 echo "git=$(git -C "${ROOT}/.." rev-parse --short HEAD 2>/dev/null || true)"
 echo "NOTE: locked η; do not retune; do not write l2/mne lscale or ImageNet dirs"
 
-if [[ "${DATASET}" == "cifar10" && ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
+if [[ ! -f "${CIFAR_ROOT}/cifar-10-batches-py/batches.meta" ]]; then
   echo "ERROR: CIFAR-10 missing under CIFAR_ROOT=${CIFAR_ROOT}"
   exit 1
 fi
-if [[ "${DATASET}" == "cifar100" && ! -f "${CIFAR_ROOT}/cifar-100-python/meta" ]]; then
+if [[ ! -f "${CIFAR_ROOT}/cifar-100-python/meta" ]]; then
   echo "ERROR: CIFAR-100 missing under CIFAR_ROOT=${CIFAR_ROOT}"
   exit 1
 fi
 
-ARGS=(
-  --arch "${ARCH}"
-  --dataset "${DATASET}"
-  --method "${METHOD}"
-  --quant-L "${QUANT_L}"
-  --seed "${SEED}"
-  --out-root "${OUT_DIR}"
-  --batch-size "${CIFAR_BATCH}"
-  --workers "${CIFAR_NUM_WORKERS}"
-)
-if [[ "${TEST_ONLY:-0}" == "1" ]]; then
-  ARGS+=(--test-only)
-fi
-if [[ "${RETRAIN:-0}" == "1" ]]; then
-  ARGS+=(--retrain)
-fi
+run_one() {
+  local ds="$1"
+  local gpu="$2"
+  local log="${SCRATCH_LOG}/fglscale_${ARCH}_${ds}_${METHOD}_L${QUANT_L}_seed${SEED}.${PBS_JOBID:-manual}.gpu${gpu}.out"
+  local args=(
+    --arch "${ARCH}"
+    --dataset "${ds}"
+    --method "${METHOD}"
+    --quant-L "${QUANT_L}"
+    --seed "${SEED}"
+    --out-root "${OUT_DIR}"
+    --batch-size "${CIFAR_BATCH}"
+    --workers "${CIFAR_NUM_WORKERS}"
+  )
+  if [[ "${TEST_ONLY:-0}" == "1" ]]; then
+    args+=(--test-only)
+  fi
+  if [[ "${RETRAIN:-0}" == "1" ]]; then
+    args+=(--retrain)
+  fi
+  echo "[LAUNCH] ds=${ds} gpu=${gpu} log=${log}"
+  CUDA_VISIBLE_DEVICES="${gpu}" python -u noise3_exp/run_cifar_fgmneu_l1_lscale_seed42.py "${args[@]}" \
+    >"${log}" 2>&1
+  echo "[DONE] ds=${ds} gpu=${gpu}"
+}
 
-python -u noise3_exp/run_cifar_fgmneu_l1_lscale_seed42.py "${ARGS[@]}"
+if [[ "${DATASET}" == "both" ]]; then
+  if [[ "${PBS_NGPUS:-1}" -lt 2 ]]; then
+    echo "ERROR: DATASET=both needs ngpus>=2 (qsub -l ncpus=24,ngpus=2,mem=160GB)"
+    exit 2
+  fi
+  run_one cifar10 0 &
+  pid10=$!
+  run_one cifar100 1 &
+  pid100=$!
+  status=0
+  wait "${pid10}" || status=1
+  wait "${pid100}" || status=1
+  if [[ "${status}" -ne 0 ]]; then
+    echo "ERROR: one or both dataset workers failed"
+    exit 1
+  fi
+else
+  run_one "${DATASET}" 0
+fi
 
 echo "DONE $(date) ${DATASET} ${ARCH} ${METHOD} L=${QUANT_L}"
-ls -la "${OUT_DIR}/${DATASET}/${ARCH}_${METHOD}_L${QUANT_L}" || true
+ls -la "${OUT_DIR}/cifar10" "${OUT_DIR}/cifar100" 2>/dev/null || true
