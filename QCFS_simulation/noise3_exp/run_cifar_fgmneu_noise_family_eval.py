@@ -13,7 +13,8 @@ Families share the same target standard deviation σ:
 Protocol: T=L=16, rate_uniform, post_input_if, EVAL_SEED=0.
 Report official test only. σ grid default 0,1,2,3,5.
 
-ResNet detach is same-map seed42 only. Do not invent 5-seed detach.
+ResNet detach uses fair MNE-D (resnet map, rc=1e-4) under
+cifar_resnet18_fair_mne_detach; all seeds 40–44 are valid once trained.
 """
 from __future__ import annotations
 
@@ -136,17 +137,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def seed_list(arch: str, method: str, seeds: list[int]) -> list[int]:
-    if arch == "resnet18" and method == "detach":
-        keep = [s for s in seeds if s == 42]
-        if 42 not in seeds:
-            keep = [42]
-        extra = [s for s in seeds if s != 42]
-        if extra:
-            print(
-                f"[NOTE] ResNet detach is seed42 only; skip seeds {extra}",
-                flush=True,
-            )
-        return keep or [42]
+    del arch, method  # all requested seeds are eligible; missing ckpts fail at resolve
     return list(seeds)
 
 

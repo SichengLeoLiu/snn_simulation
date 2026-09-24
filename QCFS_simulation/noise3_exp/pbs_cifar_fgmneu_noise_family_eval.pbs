@@ -14,8 +14,8 @@
 # ARCH: vgg16 | resnet18
 # DATASET: cifar10 | cifar100
 # METHOD: l2wo | detach | nodetach | fgmneu | all
-# ResNet detach is seed42 only. Writes a new scratch directory.
-# Do not overwrite training dirs. Do not touch ImageNet jobs.
+# ResNet detach = fair MNE-D (rc=1e-4, resnet map); seeds 40-44 OK.
+# Writes cifar_fgmneu_noise_family (not training dirs). No ImageNet.
 #
 # Login:
 #   cd /home/595/sl9144/codes/snn_simulation
