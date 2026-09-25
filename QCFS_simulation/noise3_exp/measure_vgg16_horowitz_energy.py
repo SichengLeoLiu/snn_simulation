@@ -132,6 +132,11 @@ def resolve_checkpoint(dataset: str, method: str, seed: int, args) -> Path:
     spec = METHODS[method]
     if spec["variant"] == "tamneu":
         return _ta_checkpoint(dataset, args.arch, seed, args.L)
+    if args.arch == "resnet18" and method in ("l2", "l2_wo", "l1"):
+        from run_cifar_unified_baseline_evalseed0 import resolve_ckpt
+
+        key = {"l2": "l2all", "l2_wo": "l2wo", "l1": "l1wo"}[method]
+        return resolve_ckpt(args.arch, dataset, key, seed)
     ckpt_args = SimpleNamespace(
         arch=args.arch,
         L=args.L,
