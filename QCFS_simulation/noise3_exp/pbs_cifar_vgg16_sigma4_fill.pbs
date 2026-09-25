@@ -10,7 +10,9 @@
 #PBS -l wd
 #PBS -j oe
 
-# Insert sigma=4 into existing VGG-16 CIFAR-10 sweeps. Eval only.
+# Insert sigma=4 into existing sweeps. Eval only.
+# ARCH=vgg16|resnet18  DATASET=cifar10|cifar100
+# Default is vgg16 cifar10, including TA-MNE-U cells.
 
 set -euo pipefail
 
@@ -37,8 +39,12 @@ else
 fi
 cd "${ROOT}"
 
-echo "host=$(hostname) date=$(date)"
+ARCH="${ARCH:-vgg16}"
+DATASET="${DATASET:-cifar10}"
+echo "host=$(hostname) date=$(date) ARCH=${ARCH} DATASET=${DATASET}"
 python3 -u noise3_exp/run_cifar_vgg16_sigma4_fill.py \
+  --arch "${ARCH}" \
+  --dataset "${DATASET}" \
   --batch-size "${CIFAR_BATCH}" \
   --workers "${CIFAR_NUM_WORKERS}"
 echo "DONE $(date)"

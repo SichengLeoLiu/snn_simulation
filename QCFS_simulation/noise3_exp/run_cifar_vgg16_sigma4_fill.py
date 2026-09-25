@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Insert the missing post-IF sigma=4 point into existing VGG-16 CIFAR-10 sweeps.
+"""Insert the missing post-IF sigma=4 point into existing CIFAR sweeps.
 
 Does not retrain and does not repeat sigma in {0,1,2,3,5}. Cells that already
-contain sigma=4 (the 0.25-step L=T scans, and TA-MNE-U at L=T=16) are skipped.
+contain sigma=4 are skipped.
 
-Fills:
-  L=16, T=16, seeds 40-44: L2-all, L2-wo, L1-wo
-  L=16, T=4 and T=8, seeds 40-44: L2-all, L2-wo, L1-wo, TA-MNE-U
-  L=T in {4,8,32}, seed 42: TA-MNE-U
+Default (vgg16, cifar10) also fills TA-MNE-U at L=16 T=4/8 and at L=T in {4,8,32}.
+Other arch/dataset pairs fill L2-all, L2-wo, and L1-wo only:
+  L=16, T=16, seeds 40-44
+  L=16, T=4 and T=8, seeds 40-44
 """
 from __future__ import annotations
 
@@ -23,16 +23,18 @@ for path in (ROOT, EXP):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from run_cifar_l16_t48_evalseed0 import load_snn as load_snn_l16  # noqa: E402
 from run_cifar_unified_baseline_evalseed0 import (  # noqa: E402
     EVAL_SEED,
     get_torch_device,
+    resolve_ckpt,
     sweep,
     test_loader,
     val_loader,
 )
 from run_cifar_vgg16_lt_grid_cifar10 import (  # noqa: E402
+    load_snn as load_snn_vgg,
     resolve_checkpoint,
-    load_snn,
 )
 
 SCRATCH = Path("/scratch/gs14/sl9144/snn_results")
@@ -40,7 +42,44 @@ SIGMA = 4.0
 SEEDS = (40, 41, 42, 43, 44)
 
 
-def cells() -> list[tuple[str, int, int, int, Path]]:
+def three_reg_cells(arch: str, dataset: str) -> list[tuple[str, int, int, int, Path]]:
+    rows = []
+    for method in ("l2all", "l2wo", "l1wo"):
+        for seed in SEEDS:
+            rows.append(
+                (
+                    method,
+                    16,
+                    16,
+                    seed,
+                    SCRATCH
+                    / "cifar_unified_baseline_evalseed0"
+                    / dataset
+                    / f"{arch}_{method}"
+                    / f"seed{seed}",
+                )
+            )
+            for test_t in (4, 8):
+                rows.append(
+                    (
+                        method,
+                        16,
+                        test_t,
+                        seed,
+                        SCRATCH
+                        / "cifar_l16_t48_evalseed0"
+                        / dataset
+                        / f"{arch}_{method}"
+                        / f"seed{seed}"
+                        / f"T{test_t}",
+                    )
+                )
+    return rows
+
+
+def cells(arch: str, dataset: str) -> list[tuple[str, int, int, int, Path]]:
+    if not (arch == "vgg16" and dataset == "cifar10"):
+        return three_reg_cells(arch, dataset)
     rows = []
     for method in ("l2all", "l2wo", "l1wo"):
         for seed in SEEDS:
@@ -124,16 +163,17 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--arch", default="vgg16", choices=("vgg16", "resnet18"))
+    parser.add_argument("--dataset", default="cifar10", choices=("cifar10", "cifar100"))
     parser.add_argument("--batch-size", type=int, default=int(os.environ.get("CIFAR_BATCH", "128")))
     parser.add_argument("--workers", type=int, default=int(os.environ.get("CIFAR_NUM_WORKERS", "8")))
     parser.add_argument("--device", default="auto")
     parser.add_argument("--eval-seed", type=int, default=EVAL_SEED)
     parser.add_argument("--dry-resolve", action="store_true")
     args = parser.parse_args()
-    args.dataset = "cifar10"
     device = None
     pin = False
-    for method, quant_l, test_t, seed, out in cells():
+    for method, quant_l, test_t, seed, out in cells(args.arch, args.dataset):
         test_csv = out / "test_sweep.csv"
         val_csv = out / "val_sweep.csv"
         if has_sigma(test_csv) and has_sigma(val_csv):
@@ -142,9 +182,13 @@ def main() -> None:
         if not test_csv.is_file() or not val_csv.is_file():
             print(f"[MISSING SWEEP] {out}", flush=True)
             continue
-        checkpoint = resolve_checkpoint("cifar10", method, quant_l, seed)
+        if args.arch == "vgg16" and method == "lambda":
+            checkpoint = resolve_checkpoint(args.dataset, method, quant_l, seed)
+        else:
+            checkpoint = resolve_ckpt(args.arch, args.dataset, method, seed)
         print(
-            f"[SIGMA4] {method} L={quant_l} T={test_t} seed{seed}\n       {checkpoint}",
+            f"[SIGMA4] {args.arch} {args.dataset} {method} L={quant_l} T={test_t} seed{seed}\n"
+            f"       {checkpoint}",
             flush=True,
         )
         if args.dry_resolve:
@@ -152,7 +196,10 @@ def main() -> None:
         if device is None:
             device = get_torch_device(args.device)
             pin = device.type == "cuda"
-        model = load_snn(checkpoint, device, "cifar10", quant_l, test_t)
+        if args.arch == "vgg16" and method == "lambda":
+            model = load_snn_vgg(checkpoint, device, args.dataset, quant_l, test_t)
+        else:
+            model = load_snn_l16(checkpoint, device, args.arch, args.dataset, test_t)
         val_rows = sweep(model, val_loader(args, pin), device, "val", args.eval_seed, [SIGMA])
         test_rows = sweep(model, test_loader(args, pin), device, "test", args.eval_seed, [SIGMA])
         insert_sigma(val_csv, val_rows[0])
