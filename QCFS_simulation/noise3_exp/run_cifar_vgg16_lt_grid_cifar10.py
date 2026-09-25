@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fill missing VGG-16 CIFAR-10 (L, T) noise cells. Eval only.
+"""Fill missing VGG-16 CIFAR (L, T) noise cells. Eval only.
 
 Existing diagonals stay put (T=L). L=16 T=4/8 already exist.
 This runner only evaluates the unchecked cells:
@@ -58,7 +58,7 @@ SIGMAS = (0.0, 1.0, 2.0, 3.0, 4.0, 5.0)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", default="cifar10", choices=("cifar10",))
+    parser.add_argument("--dataset", default="cifar10", choices=("cifar10", "cifar100"))
     parser.add_argument("--arch", default="vgg16", choices=("vgg16",))
     parser.add_argument("--quant-L", type=int, choices=tuple(MISSING), required=False)
     parser.add_argument("--method", choices=METHODS, default=None)
@@ -70,12 +70,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-resolve", action="store_true")
-    parser.add_argument(
-        "--out-root",
-        type=Path,
-        default=SCRATCH / "cifar_vgg16_lt_grid_cifar10",
-    )
+    parser.add_argument("--out-root", type=Path, default=None)
     args = parser.parse_args()
+    if args.out_root is None:
+        args.out_root = SCRATCH / f"cifar_vgg16_lt_grid_{args.dataset}"
     if args.quant_L is None:
         parser.error("--quant-L is required")
     args.quant_L = int(args.quant_L)
