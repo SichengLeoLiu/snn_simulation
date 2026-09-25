@@ -1,0 +1,44 @@
+#!/bin/bash
+#PBS -N v16s4
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=06:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# Insert sigma=4 into existing VGG-16 CIFAR-10 sweeps. Eval only.
+
+set -euo pipefail
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/v16s4.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+echo "host=$(hostname) date=$(date)"
+python3 -u noise3_exp/run_cifar_vgg16_sigma4_fill.py \
+  --batch-size "${CIFAR_BATCH}" \
+  --workers "${CIFAR_NUM_WORKERS}"
+echo "DONE $(date)"

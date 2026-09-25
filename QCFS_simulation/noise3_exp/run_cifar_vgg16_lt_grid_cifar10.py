@@ -11,7 +11,7 @@ This runner only evaluates the unchecked cells:
 
 Methods: L2-all, L2-wo, L1-wo, TA-MNE-U.
 Protocol matches the L=16 T=4/8 jobs: rate_uniform, post-IF Gaussian,
-EVAL_SEED=0, sigma in {0,1,2,3,5}. Do not retrain.
+EVAL_SEED=0, sigma in {0,1,2,3,4,5}. Do not retrain.
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ MISSING = {
     16: (32,),
     32: (4, 8, 16),
 }
-SIGMAS = (0.0, 1.0, 2.0, 3.0, 5.0)
+SIGMAS = (0.0, 1.0, 2.0, 3.0, 4.0, 5.0)
 
 
 def parse_args() -> argparse.Namespace:
@@ -176,10 +176,22 @@ def load_snn(ckpt: Path, device, dataset: str, quant_l: int, test_t: int):
     return model
 
 
+def _csv_has_sigma(path: Path, sigma: float = 4.0) -> bool:
+    if not path.is_file():
+        return False
+    import csv
+
+    with path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if abs(float(row["sigma"]) - sigma) < 1e-6:
+                return True
+    return False
+
+
 def eval_one(args, method: str, seed: int, test_t: int, checkpoint: Path) -> None:
     out = cfg_dir(args, method, seed, test_t)
     card_path = out / "scorecard.json"
-    if card_path.is_file() and not args.force:
+    if card_path.is_file() and _csv_has_sigma(out / "test_sweep.csv") and not args.force:
         print(f"[SKIP] {card_path}", flush=True)
         return
     print(f"[EVAL] L={args.quant_L} T={test_t} {method} seed{seed}\n       {checkpoint}", flush=True)
