@@ -1,0 +1,37 @@
+#!/bin/bash
+#PBS -N v16_pcross
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=01:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# CIFAR-10 VGG-16, L=T=16. S, p_cross, output RMS.
+# One training seed per job. Noise seed is locked inside the script.
+#   SEED=40|41|42|43|44
+
+set -euo pipefail
+
+SEED="${SEED:?set SEED}"
+DATASET="${DATASET:-cifar10}"
+OUT="${OUT:-/scratch/gs14/sl9144/snn_results/cifar_vgg16_pcross_l16_cifar10}"
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/v16pcross_${DATASET}_s${SEED}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "SEED=${SEED}"
+
+module load NCI-ai-ml/24.11
+cd /home/595/sl9144/codes/snn_simulation
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+
+python3 -u QCFS_simulation/noise3_exp/run_cifar_vgg16_pcross_diag.py \
+  --dataset "${DATASET}" \
+  --seeds "${SEED}" \
+  --out-root "${OUT}"

@@ -517,6 +517,17 @@ def analyze_one(method: str, ckpt: Path, loader, args, device) -> list[dict]:
                 }
             )
         row.update(act_stats.get(if_name, {}))
+        lam = float(row.get("lambda", float("nan")))
+        m_eff = float(row.get("m_eff", float("nan")))
+        delta = lam / float(args.L) if args.L and math.isfinite(lam) else float("nan")
+        row["delta"] = delta
+        row["S"] = (
+            m_eff / (delta * delta)
+            if math.isfinite(m_eff) and math.isfinite(delta) and delta != 0.0
+            else float("nan")
+        )
+        row["p_cross"] = row.get("p_e_empirical", float("nan"))
+        row["output_perturbation_rms"] = row.get("sigma_eff", float("nan"))
         rows.append(row)
         print(
             f"  [{layer_index:02d}] {if_name:16s} λ={row['lambda']:.4f} "
