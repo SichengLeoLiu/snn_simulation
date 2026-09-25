@@ -1,0 +1,76 @@
+#!/bin/bash
+#PBS -N ta_e
+#PBS -P gs14
+#PBS -q gpuvolta
+#PBS -l walltime=08:00:00
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=80GB
+#PBS -l storage=gdata/dk92+scratch/gs14+gdata/gs14
+#PBS -l wd
+#PBS -j oe
+
+# TA-MNE-U Horowitz energy. Test only. Do not retrain.
+# ARCH: vgg16 | resnet18
+# ANN T=0 plus SNN T=4,8,16. Seeds 40-44. CIFAR-10 then CIFAR-100.
+#
+#   cd /home/595/sl9144/codes/snn_simulation
+#   export CIFAR_ROOT=/home/595/sl9144/datasets
+#   PBS=QCFS_simulation/noise3_exp/pbs_cifar_tamneu_horowitz_energy.pbs
+#   OUT=/scratch/gs14/sl9144/snn_results/cifar_tamneu_horowitz_energy
+#   for ARCH in vgg16 resnet18; do
+#     qsub -N "tae_${ARCH}" -l walltime=08:00:00 \
+#       -v CIFAR_ROOT,ARCH=${ARCH},OUT_DIR=${OUT} "$PBS"
+#   done
+
+set -euo pipefail
+
+ARCH="${ARCH:?set ARCH=vgg16|resnet18}"
+case "${ARCH}" in
+  vgg16|resnet18) ;;
+  *) echo "ERROR: invalid ARCH=${ARCH}"; exit 2 ;;
+esac
+
+SCRATCH_LOG="${SCRATCH_LOG:-/scratch/gs14/sl9144/logs}"
+mkdir -p "${SCRATCH_LOG}"
+LIVE_LOG="${SCRATCH_LOG}/ta_energy_${ARCH}.${PBS_JOBID:-manual}.out"
+exec > "${LIVE_LOG}" 2>&1
+
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
+module load NCI-ai-ml/24.11
+
+export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export CIFAR_BATCH="${CIFAR_BATCH:-128}"
+export CIFAR_NUM_WORKERS="${CIFAR_NUM_WORKERS:-8}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  ROOT="${REPO}/QCFS_simulation"
+elif [[ -f "${REPO}/main_train.py" ]]; then
+  ROOT="${REPO}"
+else
+  ROOT="/home/595/sl9144/codes/snn_simulation/QCFS_simulation"
+fi
+cd "${ROOT}"
+
+OUT_DIR="${OUT_DIR:-/scratch/gs14/sl9144/snn_results/cifar_tamneu_horowitz_energy}"
+mkdir -p "${OUT_DIR}"
+echo "LIVE_LOG=${LIVE_LOG}"
+echo "host=$(hostname) date=$(date) ARCH=${ARCH} OUT_DIR=${OUT_DIR}"
+
+python -u noise3_exp/measure_vgg16_horowitz_energy.py \
+  --arch "${ARCH}" \
+  --datasets cifar10 cifar100 \
+  --methods tamneu \
+  --seeds 40 41 42 43 44 \
+  --time-steps 4 8 16 \
+  --batch-size "${CIFAR_BATCH}" \
+  --workers "${CIFAR_NUM_WORKERS}" \
+  --max-samples 0 \
+  --out-dir "${OUT_DIR}"
+
+echo "DONE $(date)"
+ls -la "${OUT_DIR}"

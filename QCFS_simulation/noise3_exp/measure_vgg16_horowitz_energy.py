@@ -66,7 +66,14 @@ METHODS = {
         "rc": 1e-4,
         "label": "MNE-L2",
     },
+    "tamneu": {
+        "variant": "tamneu",
+        "rc": 1e-4,
+        "label": "TA-MNE-U",
+    },
 }
+
+SCRATCH_RESULTS = Path("/scratch/gs14/sl9144/snn_results")
 
 
 def parse_args() -> argparse.Namespace:
@@ -99,8 +106,32 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _ta_checkpoint(dataset: str, arch: str, seed: int, quant_l: int) -> Path:
+    if arch == "vgg16":
+        tree = "cifar_fgmneu_grad_ablation_seed42"
+        folder = "vgg16_fgmneu_lambda"
+    elif arch == "resnet18":
+        tree = "cifar_resnet18_fgmneu_lambda_seed42"
+        folder = "resnet18_fgmneu_lambda"
+    else:
+        raise ValueError(f"TA-MNE-U energy is not wired for arch={arch}")
+    name = f"{arch}_L[{quant_l}]_{folder}_seed{seed}_L{quant_l}_trainT0.pth"
+    relative = Path(dataset) / folder / f"seed{seed}" / "checkpoints" / name
+    candidates = (
+        SCRATCH_RESULTS / tree / relative,
+        ROOT.parent / "important_results" / tree / relative,
+    )
+    for path in candidates:
+        if path.is_file():
+            return path
+    tried = "\n".join(f"  {path}" for path in candidates)
+    raise FileNotFoundError(f"TA-MNE-U checkpoint missing:\n{tried}")
+
+
 def resolve_checkpoint(dataset: str, method: str, seed: int, args) -> Path:
     spec = METHODS[method]
+    if spec["variant"] == "tamneu":
+        return _ta_checkpoint(dataset, args.arch, seed, args.L)
     ckpt_args = SimpleNamespace(
         arch=args.arch,
         L=args.L,
@@ -319,7 +350,9 @@ def load_model(dataset: str, ckpt: Path, device: torch.device, args) -> nn.Modul
     state = torch.load(ckpt, map_location="cpu")
     if isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
-    model.load_state_dict(remap_legacy_vgg_state_dict(state), strict=True)
+    if args.arch.startswith("vgg"):
+        state = remap_legacy_vgg_state_dict(state)
+    model.load_state_dict(state, strict=True)
     return model.to(device).eval()
 
 
@@ -354,7 +387,8 @@ def main() -> None:
                     model.set_T(time_steps)
                     model.set_L(args.L)
                     model.set_mode("normal" if time_steps <= 0 else "rate_uniform")
-                    model.set_spike_schedule("normal")
+                    if hasattr(model, "set_spike_schedule"):
+                        model.set_spike_schedule("normal")
                     model.set_first_layer_input_noise_sigma(0.0)
                     result = evaluate(
                         model,
@@ -387,11 +421,12 @@ def main() -> None:
                     torch.cuda.empty_cache()
 
     summary = aggregate(raw_rows)
-    write_csv(args.out_dir / "vgg16_horowitz_energy_raw.csv", raw_rows)
-    write_csv(args.out_dir / "vgg16_horowitz_energy_summary.csv", summary)
+    stem = f"{args.arch}_horowitz_energy"
+    write_csv(args.out_dir / f"{stem}_raw.csv", raw_rows)
+    write_csv(args.out_dir / f"{stem}_summary.csv", summary)
     print_table(summary)
-    print(f"Wrote {args.out_dir / 'vgg16_horowitz_energy_raw.csv'}")
-    print(f"Wrote {args.out_dir / 'vgg16_horowitz_energy_summary.csv'}")
+    print(f"Wrote {args.out_dir / f'{stem}_raw.csv'}")
+    print(f"Wrote {args.out_dir / f'{stem}_summary.csv'}")
 
 
 if __name__ == "__main__":
