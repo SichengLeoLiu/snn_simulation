@@ -25,11 +25,22 @@ mkdir -p "${SCRATCH_LOG}"
 LIVE_LOG="${SCRATCH_LOG}/v16pcross_${DATASET}_s${SEED}.${PBS_JOBID:-manual}.out"
 exec > "${LIVE_LOG}" 2>&1
 echo "LIVE_LOG=${LIVE_LOG}"
-echo "SEED=${SEED}"
+echo "SEED=${SEED} DATASET=${DATASET}"
 
+module purge
+module use /g/data/dk92/apps/Modules/modulefiles
 module load NCI-ai-ml/24.11
-cd /home/595/sl9144/codes/snn_simulation
+
 export CIFAR_ROOT="${CIFAR_ROOT:-/home/595/sl9144/datasets}"
+export OMP_NUM_THREADS=1
+export PYTHONUNBUFFERED=1
+
+REPO="${PBS_O_WORKDIR:-/home/595/sl9144/codes/snn_simulation}"
+if [[ -d "${REPO}/QCFS_simulation" ]]; then
+  cd "${REPO}"
+else
+  cd /home/595/sl9144/codes/snn_simulation
+fi
 
 python3 -u QCFS_simulation/noise3_exp/run_cifar_vgg16_pcross_diag.py \
   --dataset "${DATASET}" \
